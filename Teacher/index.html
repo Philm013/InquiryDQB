@@ -1,0 +1,3070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>InquiryDQB | Teacher Console</title>
+    
+    <!-- PWA MANIFEST -->
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIklucXVpcnlEUUIiLAogICJzaG9ydF9uYW1lIjogIkRRQiIsCiAgInN0YXJ0X3VybCI6ICIuIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjMTExODI3IiwKICAidGhlbWVfY29xvciI6ICIjMTExODI3IiwKICAiaWNvbnMiOiBbCiAgICB7CiAgICAgICJzcmMiOiAiaHR0cHM6Ly91aS1hdmF0YXJzLmNvbS9hcGkvP25hbWU9RFFCJmJhY2tncm91bmQ9NjM2NmYxJmNvbG9yPWZmZiZzaXplPTE5MiIsCiAgICAgICJzaXplcyI6ICIxOTJ4MTkyIiwKICAgICAgInR5cGUiOiAiaW1hZ2UvcG5nIgogICAgfQogIF0KfQ==">
+
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #111827; --grid: #1f2937; --text: #f3f4f6; --accent: #6366f1; 
+            --panel: #1f2937; --panel-border: #374151;
+            --shadow: 0 10px 15px -3px rgba(0,0,0,0.5);
+            --font-ui: 'Nunito', sans-serif; --font-hand: 'Patrick Hand', cursive;
+        }
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; user-select: none; }
+        input, textarea { user-select: text; }
+        body { margin: 0; overflow: hidden; background: var(--bg); font-family: var(--font-ui); color: var(--text); height: 100vh; touch-action: none; }
+
+        /* --- LAYOUT --- */
+        #app { display: none; width: 100vw; height: 100vh; }
+
+        /* SIDEBAR */
+        #sidebar { 
+            width: 320px; background: var(--panel); border-right: 1px solid var(--panel-border); 
+            z-index: 2000; display: flex; flex-direction: column; transition: 0.3s; 
+            box-shadow: 4px 0 15px rgba(0,0,0,0.3); position: absolute; height: 100%; top:0; left:0;
+        }
+        #sidebar.closed { transform: translateX(-100%); }
+        
+        #sidebar .in-txt {
+            background: #374151;
+            border: 1px solid #4b5563;
+            color: var(--text);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        #sidebar .in-txt:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+        
+        /* VIEWPORT */
+        #viewport { flex: 1; position: relative; overflow: hidden; background: var(--bg); cursor: default; touch-action: none; width: 100vw; height: 100vh; }
+        #viewport.panning { cursor: grab; }
+        #viewport.panning:active { cursor: grabbing; }
+        #viewport.drawing { cursor: crosshair; }
+
+        #world { position: absolute; top:0; left:0; transform-origin: 0 0; will-change: transform; }
+        #bg-grid { position: absolute; inset:0; pointer-events: none; background-image: radial-gradient(#374151 2px, transparent 2px); background-size: 24px 24px; opacity: 0.5; }
+
+        /* MINIMAP */
+        #minimap-container {
+            position: absolute; /* Will be adjusted by JS */
+            z-index: 1500;
+            padding: 8px;
+            touch-action: none;
+        }
+        #minimap {
+            width: 100%; height: 100%;
+            background: rgba(31, 41, 55, 0.9);
+            border: 1px solid #4b5563;
+            border-radius: 12px;
+            cursor: crosshair;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            backdrop-filter: blur(4px);
+            position: relative;
+        }
+        #minimap-drag-handle {
+            position: absolute; left: -4px; top: -4px; right: -4px; bottom: -4px;
+            cursor: grab;
+        }
+        #minimap-resize-handle {
+            position: absolute;
+            right: 0; bottom: 0;
+            width: 20px; height: 20px;
+            cursor: nwse-resize;
+            z-index: 1501;
+        }
+        #minimap-resize-handle::after {
+            content: '';
+            position: absolute;
+            right: 4px; bottom: 4px;
+            width: 8px; height: 8px;
+            border-bottom: 2px solid rgba(255,255,255,0.5);
+            border-right: 2px solid rgba(255,255,255,0.5);
+        }
+
+
+        /* LAYERS */
+        svg { overflow: visible; }
+        #ink-layer { position:absolute; inset:0; pointer-events:none; z-index: 1; }
+        #items-layer { position:absolute; inset:0; z-index: 2; pointer-events: none; }
+        #ghost-layer { position:absolute; inset:0; pointer-events:none; z-index: 3; }
+
+        /* ITEMS - REACTIVE LAYOUT STYLES */
+        .item { 
+            position: absolute; 
+            display: flex; flex-direction: column; 
+            transition: transform 0.2s cubic-bezier(0.2, 0, 0.2, 1), width 0.1s, height 0.1s;
+            touch-action: none; pointer-events: auto; 
+            will-change: transform, width, height;
+        }
+        .item.no-transition {
+            transition: none !important;
+        }
+
+        /* DRAGGING STATE */
+        .item.dragging { 
+            /* transition is handled by no-transition class */
+            z-index: 9999 !important; 
+            opacity: 0.95; 
+            filter: drop-shadow(0 15px 30px rgba(0,0,0,0.4));
+            transform: scale(1.02) !important;
+        }
+
+        /* ZONE DROP TARGET */
+        .item.zone { transition: background-color 0.2s, border-color 0.2s, width 0.1s, height 0.1s; }
+        .item.zone.drag-over {
+            box-shadow: 0 0 0 4px var(--accent), 0 0 40px rgba(99,102,241,0.2) !important;
+            background: rgba(99,102,241,0.08) !important;
+            border-color: var(--accent) !important;
+        }
+
+        /* GHOST SLOT & GUIDES */
+        .ghost-slot {
+            position: absolute;
+            border: 2px dashed rgba(99,102,241,0.4);
+            background: rgba(99,102,241,0.1);
+            border-radius: 12px;
+            pointer-events: none;
+            z-index: 3;
+            box-sizing: border-box;
+        }
+        .snap-guide {
+            position: absolute;
+            background: #ef4444;
+            pointer-events: none;
+            z-index: 9998;
+        }
+        .snap-guide.v { width: 1px; }
+        .snap-guide.h { height: 1px; }
+
+        .snap-anim { animation: snapPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        @keyframes snapPop { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+        .jiggle-wrapper { width:100%; height:100%; display:flex; flex-direction:column; background:white; border-radius:16px; box-shadow: var(--shadow); position:relative; overflow:hidden; color: #1e293b; border: 2px solid transparent; transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s; }
+        .item.selected .jiggle-wrapper { box-shadow: 0 0 0 3px var(--accent), 0 20px 25px -5px rgba(0,0,0,0.5) !important; z-index: 50; border-color: var(--accent) !important; }
+        .item.grouped .jiggle-wrapper {
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.7), 0 10px 15px -3px rgba(0,0,0,0.5) !important;
+            border-color: #3b82f6 !important;
+        }
+        .item.grouped.selected .jiggle-wrapper {
+            box-shadow: 0 0 0 3px var(--accent), 0 0 0 6px #3b82f6, 0 20px 25px -5px rgba(0,0,0,0.5) !important;
+        }
+        @keyframes shake { 0% { transform: rotate(0deg); } 25% { transform: rotate(-5deg) scale(1.05); } 75% { transform: rotate(5deg) scale(1.05); } 100% { transform: rotate(0deg); } }
+        .item.jiggling .jiggle-wrapper { animation: shake 0.4s ease-in-out infinite; border-color: #ef4444; z-index: 500; }
+
+        /* SEAMLESS CONSENSUS ITEMS */
+        .item.consensus-child .jiggle-wrapper {
+            background: transparent !important;
+            box-shadow: none !important;
+            border: 2px solid transparent;
+            overflow: visible;
+        }
+        .item.consensus-child.selected .jiggle-wrapper {
+            border: 2px dashed var(--accent) !important;
+        }
+        .item.consensus-child .i-head { display: none !important; }
+        .item.consensus-child textarea { padding: 0; background: transparent; font-weight: bold; text-shadow: 0 1px 2px rgba(255,255,255,0.8); }
+        .item.consensus-child img { background: transparent; }
+
+        /* HEADER ACTIONS */
+        .i-head { height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; font-size: 0.9rem; font-weight: 700; cursor: grab; flex-shrink: 0; z-index: 2; background: rgba(255,255,255,0.5); border-bottom: 1px solid rgba(0,0,0,0.1); user-select: none; -webkit-user-select: none; }
+        .i-head:active { cursor: grabbing; }
+
+        /* COMMENT BADGE */
+        .cmt-badge {
+            position: absolute; top: 6px; right: 40px;
+            background: #ef4444; color: white;
+            width: 20px; height: 20px; border-radius: 50%;
+            font-size: 0.7rem; display: flex; align-items: center;
+            justify-content: center; font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3); z-index: 100;
+            cursor: pointer; pointer-events: auto;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* HEADER BUTTONS */
+        .btn-toggle { cursor: pointer; font-size: 0.75rem; padding: 4px 8px; border-radius: 10px; margin-left: 8px; border: 1px solid #e2e8f0; background: white; transition: 0.2s; }
+        .btn-toggle.active { background: #dcfce7; color: #166534; border-color: #22c55e; }
+        .btn-toggle.results-btn { background: #e0e7ff; color: #4338ca; border-color: #6366f1; display: none; }
+        .btn-toggle.results-btn.active { display: inline-block; animation: popIn 0.3s; }
+
+        /* GLOBAL CONTEXT MENU */
+        #context-menu {
+            position: absolute; display: none; flex-wrap: wrap; 
+            background: #ffffff; border: 1px solid #cbd5e1; border-radius: 16px; 
+            padding: 8px; gap: 6px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3); 
+            z-index: 3000; width: 260px; animation: popIn 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn { from { opacity:0; transform:scale(0.9); } to { opacity:1; transform:scale(1); } }
+
+        @media (max-width: 768px) {
+            #context-menu { 
+                position: fixed !important; bottom: 20px !important; left: 50% !important; top: auto !important; 
+                transform: translateX(-50%) !important; width: 90% !important; max-width: 400px; 
+            }
+        }
+
+        .ctx-row { display: flex; gap: 5px; width: 100%; margin-bottom: 5px; }
+        .ctx-row:last-child { margin-bottom: 0; }
+
+        .ctx-btn { 
+            flex: 1; height: 36px; border: 1px solid #e2e8f0; background: #f8fafc; 
+            border-radius: 8px; cursor: pointer; display: flex; align-items: center; 
+            justify-content: center; font-size: 0.9rem; font-weight: 700; color: #475569; 
+            padding: 0 8px; white-space: nowrap; 
+        }
+        .ctx-btn:hover { background: #e2e8f0; }
+        .ctx-btn.btn-del { color: #ef4444; background: #fef2f2; border-color: #fca5a5; }
+
+        /* MENU BUTTON */
+        .menu-trigger { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; cursor: pointer; font-size: 1.4rem; line-height: 1; color: #4b5563; }
+        .menu-trigger:hover { background: rgba(0,0,0,0.1); }
+
+        /* CONTENT */
+        .item.note textarea { width: 100%; height: 100%; border: none; background: transparent; padding: 16px; font-family: var(--font-hand); font-size: 1.4rem; resize: none; line-height: 1.4; color: #1e293b; }
+        .item.note img { width: 100%; flex: 1; object-fit: contain; background: transparent; pointer-events: none; min-height: 0; display: block; }
+        .caption-in { width: 100%; height: 40px; border: none; border-top: 1px solid rgba(0,0,0,0.1); background: rgba(255,255,255,0.8); padding: 8px; font-family: var(--font-ui); font-size: 0.9rem; resize: none; color: #1e293b; flex-shrink: 0; }
+
+        .i-body { flex: 1; position: relative; min-height: 0; display: flex; flex-direction: column; }
+        .zone-label { position:absolute; top:-25px; left:0; color: var(--accent); font-weight:800; letter-spacing:1px; font-size:0.9rem; white-space:nowrap; text-shadow: 0 2px 4px rgba(0,0,0,0.5); pointer-events: none; }
+        .cer-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; height: 100%; width: 100%; pointer-events: none; }
+        .cer-col { border-right: 2px dashed #cbd5e1; position: relative; display: flex; justify-content: center; padding-top: 10px; font-weight: 800; color: #94a3b8; letter-spacing: 1px; font-size: 0.8rem; }
+        .consensus-bg { background-image: radial-gradient(#bae6fd 1px, transparent 1px); background-size: 20px 20px; background-color: #f0f9ff; }
+        
+        /* ZONE RESULTS WIDGET */
+        .zone-res-box { display: none; background: #f8fafc; border-top: 1px solid #cbd5e1; max-height: 50%; overflow-y: auto; padding: 10px; font-size: 0.9rem; flex-shrink: 0; }
+        .zone-res-box.active { display: block; }
+        .result-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+        .bar-bg { flex: 1; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+        .bar-fill { height: 100%; background: var(--accent); transition: width 0.5s; }
+
+        .disc-item { padding: 8px; border-bottom: 1px solid #e2e8f0; margin-bottom: 8px; background: white; border-radius: 8px; }
+        .disc-tag { font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: 800; margin-right: 6px; }
+        .dt-notice { background:#fef3c7; color:#d97706; }
+        .dt-wonder { background:#bae6fd; color:#0284c7; }
+        .dt-idea { background:#bbf7d0; color:#16a34a; }
+        .dt-feedback { background:#fecaca; color:#dc2626; }
+
+        /* HANDLES */
+        .resize-h { position: absolute; bottom:-15px; right:-15px; width:40px; height:40px; cursor: nwse-resize; opacity: 0; background:transparent; z-index:20; }
+        .item.selected .resize-h { opacity: 1; border: 2px solid var(--accent); border-radius: 50%; background: white; }
+
+        /* --- DESKTOP TOOLBAR (>768px) --- */
+        #desktop-toolbar {
+            position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+            background: #1e293b; padding: 8px 12px; border-radius: 20px;
+            display: none; gap: 8px; z-index: 200; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
+            align-items: center;
+        }
+        .tb-btn { height: 44px; min-width: 44px; padding: 0 16px; border: none; background: rgba(255,255,255,0.1); color: white; border-radius: 12px; font-size: 0.9rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; white-space: nowrap; }
+        .tb-btn:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
+        .tb-btn.active { background: var(--accent); color: white; }
+        .sep { width:1px; height: 24px; background:rgba(255,255,255,0.2); margin:0 4px; flex-shrink: 0; }
+
+        /* --- MOBILE DOCK (<768px) --- */
+        #mobile-dock {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(31, 41, 55, 0.95); backdrop-filter: blur(10px);
+            border: 1px solid #374151; border-radius: 24px;
+            display: flex; align-items: center; padding: 6px; gap: 6px;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
+            z-index: 1000; width: auto; max-width: 95vw;
+        }
+        .dock-btn {
+            width: 36px; height: 36px; border-radius: 16px; border: none;
+            background: transparent; color: #9ca3af; font-size: 1.4rem;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: 0.2s; position: relative; flex-shrink: 0;
+        }
+        .dock-btn.active { background: var(--accent); color: white; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4); transform: translateY(-4px); }
+        .sep-mobile { width:1px; height:24px; background:#4b5563; margin:0 2px; }
+
+        /* --- DRAWERS (Sub-menus) --- */
+        .drawer {
+            position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
+            background: var(--panel); border: 1px solid var(--panel-border);
+            border-radius: 20px; padding: 12px; display: none; flex-wrap: wrap; gap: 8px;
+            width: 320px; justify-content: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            opacity: 0; transition: 0.2s; pointer-events: none; z-index: 999;
+        }
+        .drawer.open { display: flex; opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+
+        .tool-row { display: flex; gap: 8px; width: 100%; justify-content: center; margin-bottom: 8px; }
+        .color-btn { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #374151; cursor: pointer; }
+        .color-btn.active { border-color: white; transform: scale(1.2); }
+        #host-id { user-select: text; }
+        .sub-btn {
+            padding: 10px 16px; background: #374151; color: white; border-radius: 12px;
+            border: 1px solid #4b5563; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+            display: flex; align-items: center; gap: 6px; flex: 1; justify-content: center;
+        }
+        .sub-btn:hover { background: #4b5563; }
+
+        /* SVG ICON BUTTONS */
+        .icon-btn {
+            width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center;
+            background: #374151; border: 1px solid #4b5563; border-radius: 8px; cursor: pointer;
+            color: #e2e8f0; transition: 0.2s;
+        }
+        .icon-btn:hover { background: #4b5563; color: white; }
+        .icon-btn svg { width: 24px; height: 24px; fill: currentColor; }
+
+        /* COMMON UI */
+        #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 4000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+        .toast { background: #1e293b; color: white; padding: 10px 20px; border-radius: 30px; font-weight: 600; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); animation: fadeUp 0.3s ease-out; display:flex; align-items:center; gap:8px; }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+
+        .modal-bg { position: fixed; inset:0; background: rgba(0,0,0,0.6); z-index: 3000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .modal { background: white; padding: 24px; border-radius: 24px; width: 500px; max-width: 90%; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); max-height: 85vh; overflow-y: auto; color: #1f2937; }
+        .btn-p { width: 100%; padding: 14px; background: var(--accent); color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; font-size:1rem; transition:0.2s; min-height: 48px; }
+        .btn-s { width: 100%; padding: 14px; background: #f1f5f9; color: #334155; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; font-size:1rem; margin-top:8px; min-height: 48px; }
+        input.in-txt, select.in-txt { width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1rem; background: #fff; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; font-weight: 700; color: #64748b; margin-bottom: 6px; font-size: 0.9rem; }
+
+        #marquee { position: absolute; border: 1px solid var(--accent); background: rgba(99,102,241,0.1); display: none; pointer-events: none; z-index: 100; }
+
+        .tab-head { display: flex; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; min-height: 50px; border-radius: 12px 12px 0 0; }
+        .tab-btn { flex: 1; padding: 12px; text-align: center; font-weight: 700; font-size: 0.9rem; cursor: pointer; color: #64748b; }
+        .tab-btn.active { background: white; color: var(--accent); border-bottom: 2px solid var(--accent); }
+        .tab-content { display: none; flex: 1; overflow-y: auto; padding: 10px; flex-direction: column; }
+        .tab-content.active { display: flex; }
+
+        #landing { position: fixed; inset:0; background: #f1f5f9; z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #1f2937; }
+        .land-card { background: white; padding: 40px; border-radius: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 500px; max-width: 90%; text-align: center; }
+        .board-row { padding: 16px; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; justify-content: space-between; align-items: center; text-align: left; }
+
+        /* RESPONSIVE SWITCHING */
+        @media (min-width: 769px) {
+            #mobile-dock { display: none !important; }
+            #desktop-toolbar { display: flex !important; }
+        }
+        @media (max-width: 768px) {
+            #desktop-toolbar { display: none !important; }
+            #mobile-dock { display: flex !important; }
+            #sidebar { position: fixed; width: 85%; max-width: 320px; }
+        }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+<div id="toast-container"></div>
+
+<!-- GLOBAL FLOATING CONTEXT MENU -->
+<div id="context-menu"></div>
+
+<!-- JOIN MODAL -->
+<div id="modal-join" class="modal-bg">
+    <div class="modal">
+        <h2 style="margin-top:0; color:var(--accent)">Join as Co-Host</h2>
+        <div id="reader" style="width:100%; min-height:250px; background:#f1f5f9; border-radius:12px; overflow:hidden; display:none; margin-bottom:20px"></div>
+        <button id="btn-scan" class="btn-s" style="background:#e0e7ff; color:#4338ca; display:flex; align-items:center; justify-content:center; gap:8px" onclick="Network.startQRScan()">
+            <svg style="width:20px;height:20px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+            Scan QR Code
+        </button>
+        <div style="margin:20px 0; text-align:center; font-weight:bold; color:#cbd5e1">- OR -</div>
+        <div style="margin-bottom:8px; font-weight:700; color:#64748b">Enter Host ID Manually</div>
+        <input id="join-id-input" class="in-txt" placeholder="e.g. a1b2c3d4e">
+        <button class="btn-p" style="margin-top:20px" onclick="Network.submitJoin()">Join Board</button>
+        <button class="btn-s" style="color:#ef4444; background:#fef2f2" onclick="Network.closeJoinModal()">Cancel</button>
+    </div>
+</div>
+
+<!-- TEMPLATES MODAL -->
+<div id="modal-templates" class="modal-bg">
+    <div class="modal">
+        <h2 style="margin-top:0; color:var(--accent)">Templates</h2>
+        <div id="tpl-list" style="display:flex; flex-direction:column; gap:8px"></div>
+        <button class="btn-s" style="margin-top:20px" onclick="$('modal-templates').style.display='none'">Close</button>
+    </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div id="modal-settings" class="modal-bg">
+    <div class="modal">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h2 style="margin:0; color:var(--accent)">Settings & Sharing</h2>
+            <button class="btn-s" style="width:auto; margin:0; padding:8px 12px; min-height:0" onclick="$('modal-settings').style.display='none'">✕</button>
+        </div>
+        <div class="tab-head" style="margin-bottom:20px; border-radius:12px">
+            <div class="tab-btn active" onclick="UI.settingsTab(0)">Sharing</div>
+            <div class="tab-btn" onclick="UI.settingsTab(1)">Appearance</div>
+        </div>
+        
+        <div id="settings-tab-0" class="tab-content active" style="gap:15px; padding:0">
+             <p style="margin:0 0 10px 0; color:#64748b; text-align:center;">Allow students and co-hosts to join this board using the QR code or ID below.</p>
+             <div id="settings-qr-tgt" style="background:white; padding:10px; border-radius:8px; margin:0 auto 10px auto; display:flex; justify-content:center"></div>
+             <div style="text-align:center; font-size:1.4rem; font-weight:bold; margin-bottom:10px; color:#334155; user-select:text;" id="settings-host-id"></div>
+             <button class="btn-s" style="background:#4338ca; color:#e0e7ff;" onclick="Network.host(null)">Reset Network ID</button>
+        </div>
+
+        <div id="settings-tab-1" class="tab-content" style="gap:15px; padding:0">
+            <div class="input-group">
+                <label for="minimap-pos">Minimap Position</label>
+                <select id="minimap-pos" class="in-txt" onchange="UI.setMinimapPosition(this.value)">
+                    <option value="top-right">Top Right</option>
+                    <option value="top-left">Top Left</option>
+                    <option value="bottom-right">Bottom Right</option>
+                    <option value="bottom-left">Bottom Left</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label for="minimap-size">Minimap Size: <span id="minimap-size-val">200px</span></label>
+                <input type="range" id="minimap-size" min="120" max="300" value="200" style="width:100%" oninput="UI.setMinimapSize(this.value)">
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- LANDING -->
+<div id="landing">
+    <div class="land-card">
+        <h1 style="color:var(--accent); margin:0 0 10px 0; font-size:2.5rem">InquiryDQB</h1>
+        <p style="color:#64748b; margin-bottom:30px">Teacher Console</p>
+        <button class="btn-p" onclick="Board.create()">+ New Board</button>
+        <button class="btn-s" style="background:#e0e7ff; color:#4338ca" onclick="Network.joinAsCoHost()">🤝 Join as Co-Host</button>
+        <div id="saved-list" style="text-align: left; max-height: 300px; overflow-y: auto; margin: 20px 0; border: 1px solid #e2e8f0; border-radius: 12px;"></div>
+        <button class="btn-s" onclick="$('file-up').click()">Import JSON</button>
+        <input type="file" id="file-up" hidden onchange="Board.import(this)">
+    </div>
+</div>
+
+<div id="app">
+    <!-- SIDEBAR -->
+    <div id="sidebar" class="closed">
+        <div style="padding:15px; border-bottom:1px solid #374151; display:flex; justify-content:space-between; align-items:flex-start;">
+            <div style="flex:1">
+                <div style="font-size:0.75rem; color:#9ca3af; font-weight:800; text-transform:uppercase; margin-bottom:6px;">Board Name</div>
+                <input class="in-txt" id="board-name" value="My Board" oninput="State.name=this.value; Board.save(true)">
+            </div>
+            <button class="btn-s" style="width:auto; margin: 24px 0 0 10px; padding:8px 12px; height: 44px; min-height:0;" onclick="window.UI.toggleMenu()">✕</button>
+        </div>
+        <div class="tab-head">
+            <div class="tab-btn active" onclick="Tab(0)">Roster <span id="conn-badge">0</span></div>
+            <div class="tab-btn" onclick="Tab(1)">Activity</div>
+        </div>
+        <div id="tab-roster" class="tab-content active" style="color: #d1d5db;">
+            <div id="roster"><div style="padding:20px; text-align:center">Waiting for connections...</div></div>
+        </div>
+        <div id="tab-activity" class="tab-content" style="color: #d1d5db;">
+            <div id="act-controls" style="display:none; margin-bottom:10px">
+                <div style="padding:10px; background:#374151; border-radius:8px; margin-bottom:10px">
+                    <div style="font-weight:bold; color:#60a5fa;">Active Session</div>
+                    <div id="act-info" style="font-size:0.8rem;"></div>
+                </div>
+                <button class="btn-s" style="background:#7f1d1d; color:#fecaca" onclick="Network.stopActivity()">Stop Activity</button>
+            </div>
+            <div id="act-results"><div style="padding:20px; text-align:center">Select a Zone to see activity or create an Exit Ticket.</div></div>
+        </div>
+        <!-- Sidebar Actions -->
+        <div style="margin-top:auto; padding:15px; border-top:1px solid #374151; display:flex; flex-direction:column; gap:8px;">
+            <button class="sub-btn" onclick="window.UI.toggleA11y()">♿ Accessibility View</button>
+            <button class="sub-btn" style="background:#7f1d1d; color:#fecaca" onclick="Board.exit()">🚪 Exit Board</button>
+        </div>
+    </div>
+
+    <!-- VIEWPORT -->
+    <div id="viewport">
+        <div id="bg-grid"></div>
+        <div id="world">
+            <svg id="ink-layer" style="overflow:visible"></svg>
+            <div id="items-layer"></div>
+            <div id="ghost-layer"></div>
+        </div>
+        <div id="marquee"></div>
+        <div id="minimap-container">
+            <div id="minimap-drag-handle"></div>
+            <div id="minimap-resize-handle"></div>
+            <canvas id="minimap"></canvas>
+        </div>
+    </div>
+
+    <!-- DESKTOP TOOLBAR -->
+    <div id="desktop-toolbar">
+        <button class="tb-btn" onclick="window.UI.toggleMenu()">☰ Menu</button>
+        <div class="sep"></div>
+        <button class="tb-btn active" id="dt-pan" onclick="window.setTool('pan')">✋ Pan</button>
+        <button class="tb-btn" id="dt-select" onclick="window.setTool('select')">⛝ Select</button>
+        <button class="tb-btn" id="dt-draw" onclick="window.UI.toggleDrawer('draw')">✏️ Draw</button>
+        <div class="sep"></div>
+        <button class="tb-btn" onclick="window.UI.toggleDrawer('board')">⚙️ Board</button>
+        <button class="tb-btn" onclick="window.UI.toggleDrawer('add')">➕ Add</button>
+        <button class="tb-btn" id="btn-arrange" style="display:none" onclick="window.UI.toggleDrawer('arrange')">📏 Arrange</button>
+        <div class="sep"></div>
+        <button class="tb-btn" onclick="ActionHistory.undo()">↩️</button>
+        <button class="tb-btn" onclick="ActionHistory.redo()">↪️</button>
+    </div>
+
+    <!-- MOBILE DOCK -->
+    <div id="mobile-dock">
+        <button class="dock-btn" onclick="window.UI.toggleMenu()">☰</button>
+        <div class="sep-mobile"></div>
+        <button class="dock-btn active" id="mt-pan" onclick="window.setTool('pan')">✋</button>
+        <button class="dock-btn" id="mt-select" onclick="window.setTool('select')">⛝</button>
+        <button class="dock-btn" id="mt-draw" onclick="window.UI.toggleDrawer('draw')">✏️</button>
+        <button class="dock-btn" id="mt-add" onclick="window.UI.toggleDrawer('add')">➕</button>
+        <button class="dock-btn" id="mt-arrange" style="display:none" onclick="window.UI.toggleDrawer('arrange')">📏</button>
+        <button class="dock-btn" id="mt-board" onclick="window.UI.toggleDrawer('board')">⚙️</button>
+        <div class="sep-mobile"></div>
+        <button class="dock-btn" onclick="ActionHistory.undo()">↩️</button>
+        <button class="dock-btn" onclick="ActionHistory.redo()">↪️</button>
+    </div>
+
+    <!-- SHARED DRAWERS -->
+    <div id="drawer-draw" class="drawer">
+        <div class="tool-row">
+            <div class="color-btn" style="background:#ef4444" onclick="InkManager.setColor('#ef4444')"></div>
+            <div class="color-btn" style="background:#3b82f6" onclick="InkManager.setColor('#3b82f6')"></div>
+            <div class="color-btn" style="background:#10b981" onclick="InkManager.setColor('#10b981')"></div>
+            <div class="color-btn" style="background:#000000; border-color:#6b7280" onclick="InkManager.setColor('#000000')"></div>
+        </div>
+        <div class="tool-row">
+            <input type="range" min="2" max="10" value="4" onchange="InkManager.setWidth(this.value)" style="flex:1">
+        </div>
+        <div class="tool-row">
+            <button class="sub-btn" onclick="window.setTool('eraser')">🧹 Eraser</button>
+            <button class="sub-btn" onclick="window.setTool('laser')">🔦 Laser</button>
+            <button class="sub-btn" onclick="InkManager.clear()">🗑️ Clear All</button>
+        </div>
+    </div>
+
+    <div id="drawer-add" class="drawer">
+        <div class="tool-row">
+            <button class="sub-btn" style="background:#fef3c7; color:#92400e" onclick="Actions.create('note','notice')">👁️ Notice</button>
+            <button class="sub-btn" style="background:#bae6fd; color:#075985" onclick="Actions.create('note','wonder')">❓ Wonder</button>
+            <button class="sub-btn" style="background:#bbf7d0; color:#166534" onclick="Actions.create('note','idea')">💡 Idea</button>
+        </div>
+        <div class="tool-row">
+            <button class="sub-btn" onclick="Actions.create('zone')">🔳 Zone</button>
+            <button class="sub-btn" onclick="Actions.create('cer')">🏛️ CER</button>
+            <button class="sub-btn" onclick="Actions.create('consensus')">📐 Consensus</button>
+        </div>
+        <div class="tool-row">
+            <button class="sub-btn" onclick="Actions.create('poll')">📊 Poll</button>
+            <button class="sub-btn" onclick="Actions.create('graph')">📈 Graph</button>
+            <button class="sub-btn" onclick="Actions.create('spin')">🎡 Spin</button>
+        </div>
+        <div class="tool-row" style="border-top:1px solid #4b5563; margin-top:5px; padding-top:5px">
+             <button class="sub-btn" onclick="window.UI.showTemplates()">📄 Templates</button>
+             <button class="sub-btn" style="background:#4f46e5; color:white; border-color:#6366f1" onclick="window.UI.toggleDrawer('exit')">🚪 Exit Ticket</button>
+        </div>
+    </div>
+    
+    <!-- NEW BOARD CONTROLS DRAWER -->
+    <div id="drawer-board" class="drawer">
+         <div style="width:100%; text-align:center; color:#9ca3af; font-size:0.8rem; margin-bottom:8px; font-weight:bold">BOARD CONTROLS</div>
+        <div class="tool-row">
+             <button class="sub-btn" id="drawer-open-notes-btn" onclick="UI.toggleOpenNotes()">🔓 Open Board</button>
+             <button class="sub-btn" onclick="UI.showSettingsModal()">📡 Share</button>
+        </div>
+        <div class="tool-row">
+             <button class="sub-btn" onclick="Board.setStartView()">📍 Set Start View</button>
+             <button class="sub-btn" onclick="window.UI.toggleFullScreen()">⛶ Fullscreen</button>
+        </div>
+    </div>
+
+    <!-- NEW EXIT TICKET DRAWER -->
+    <div id="drawer-exit" class="drawer" style="width: 340px;">
+        <div style="width:100%; text-align:center; color:#9ca3af; font-size:0.8rem; margin-bottom:8px; font-weight:bold">ADD EXIT TICKET WIDGET</div>
+        <div class="tool-row">
+            <button class="sub-btn" onclick="Actions.createExit('short')">📝 Short Answer</button>
+            <button class="sub-btn" onclick="Actions.createExit('smiley')">🙂 Rating</button>
+        </div>
+        <div class="tool-row">
+            <button class="sub-btn" onclick="Actions.createExit('mc')">🔘 Multiple Choice</button>
+            <button class="sub-btn" onclick="Actions.createExit('multi')">☑️ Multi-Select</button>
+        </div>
+        <div class="tool-row">
+            <button class="sub-btn" onclick="Actions.createExit('lw')">🧠 Learn / Wonder</button>
+        </div>
+    </div>
+
+    <div id="drawer-arrange" class="drawer" style="width: 340px;">
+        <div class="tool-row">
+            <button class="icon-btn" title="Align Left" onclick="Actions.align('left')"><svg viewBox="0 0 24 24"><path d="M4 22H2V2h2v20zM22 7H6v3h16V7zm-6 7H6v3h10v-3z"/></svg></button>
+            <button class="icon-btn" title="Align Center" onclick="Actions.align('center')"><svg viewBox="0 0 24 24"><path d="M11 2h2v20h-2V2zm-7 5h16v3H4V7zm3 7h10v3H7v-3z"/></svg></button>
+            <button class="icon-btn" title="Align Right" onclick="Actions.align('right')"><svg viewBox="0 0 24 24"><path d="M20 2h2v20h-2V2zM2 7h16v3H2V7zm6 7h10v3H8v-3z"/></svg></button>
+            <button class="icon-btn" title="Align Top" onclick="Actions.align('top')"><svg viewBox="0 0 24 24"><path d="M22 2v2H2V2h20zM7 22V6h3v16H7zm7-6V6h3v10h-3z"/></svg></button>
+            <button class="icon-btn" title="Align Middle" onclick="Actions.align('middle')"><svg viewBox="0 0 24 24"><path d="M22 11v2H2v-2h20zM7 22V4h3v18H7zm7-4V6h3v12h-3z"/></svg></button>
+            <button class="icon-btn" title="Align Bottom" onclick="Actions.align('bottom')"><svg viewBox="0 0 24 24"><path d="M22 22v-2H2v2h20zM7 2V18h3V2H7zm7 6v10h3V8h-3z"/></svg></button>
+        </div>
+        <div class="tool-row">
+            <button class="icon-btn" title="Distribute Horizontal" onclick="Actions.distribute('h')"><svg viewBox="0 0 24 24"><path d="M4 22H2V2h2v20zM22 2h-2v20h2V2zM13.5 7h-3v10h3V7zM9 7H7v10h2V7zm8 0h-2v10h2V7z"/></svg></button>
+            <button class="icon-btn" title="Distribute Vertical" onclick="Actions.distribute('v')"><svg viewBox="0 0 24 24"><path d="M22 4v-2H2v2h20zM2 22h20v-2H2v2zM7 13.5v-3h10v3H7zM7 9v-2h10v2H7zm0 8v-2h10v2H7z"/></svg></button>
+            <button class="icon-btn" title="Grid Arrange" onclick="Actions.arrangeGrid()"><svg viewBox="0 0 24 24"><path d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"/></svg></button>
+            <button class="icon-btn" title="Match Size" onclick="Actions.matchSize()"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 9h-2V7h-2v5H6v2h2v5h2v-5h2v-2z"/></svg></button>
+            <button class="icon-btn" title="Duplicate" onclick="Actions.duplicate()"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button>
+        </div>
+        <div class="tool-row" style="border-top:1px solid #4b5563; padding-top:8px; margin-top:4px">
+             <button class="sub-btn" onclick="Actions.collectByType()" style="font-size:0.8rem">Sort: Type</button>
+             <button class="sub-btn" onclick="Actions.collectByUser()" style="font-size:0.8rem">Sort: User</button>
+        </div>
+        <div class="tool-row">
+            <button class="sub-btn" onclick="Actions.bringFront()">↥ Front</button>
+            <button class="sub-btn" onclick="Actions.sendBack()">↧ Back</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const genId = () => Math.random().toString(36).substr(2, 9);
+
+/* --- CONSTANTS --- */
+window.TYPES = {
+    notice: { col: '#fef3c7', bor: '#d97706', icon: '👁️', lbl: 'Notice' },
+    wonder: { col: '#bae6fd', bor: '#0284c7', icon: '❓', lbl: 'Wonder' },
+    idea:   { col: '#bbf7d0', bor: '#16a34a', icon: '💡', lbl: 'Idea' },
+    test:   { col: '#fecaca', bor: '#dc2626', icon: '🧪', lbl: 'Testable' },
+    meta:   { col: '#f8fafc', bor: '#64748b', icon: '📝', lbl: 'Note' },
+    sketch: { col: '#ffffff', bor: '#64748b', icon: '✏️', lbl: 'Sketch' },
+    claim: { col: '#fffbeb', bor: '#d97706', icon: '🤔', lbl: 'Claim' },
+    evidence: { col: '#f0f9ff', bor: '#0284c7', icon: '📊', lbl: 'Evidence' },
+    reasoning: { col: '#f0fdf4', bor: '#16a34a', icon: '🔗', lbl: 'Reasoning' }
+};
+
+/* --- STATE & HISTORY --- */
+window.State = {
+    id: null, name: 'My Board',
+    items: [], ink: [], selection: [],
+    view: { x: 0, y: 0, z: 1 },
+    tool: 'pan', students: {}, drag: null,
+    
+    // NEW: Centralized Activity State
+    // Types: 'LOCKED' | 'OPEN' | 'ZONE_ACT' | 'WIDGET_ACT' | 'EXIT_TICKET'
+    activity: { type: 'LOCKED', targetId: null, payload: null }, 
+    
+    activeSorts: {}, comments: [],
+    touch: { dist: 0 },
+    draw: { color: '#ef4444', width: 4 },
+    isCoHost: false
+};
+
+window.ActionHistory = {
+    stack: [], index: -1,
+    push: () => {
+        const snapshot = JSON.stringify({ items: State.items, ink: State.ink });
+        if(ActionHistory.index > -1 && ActionHistory.stack[ActionHistory.index] === snapshot) return;
+        ActionHistory.stack = ActionHistory.stack.slice(0, ActionHistory.index + 1);
+        ActionHistory.stack.push(snapshot);
+        if(ActionHistory.stack.length > 20) ActionHistory.stack.shift(); else ActionHistory.index++;
+    },
+    undo: () => {
+        if(ActionHistory.index > 0) {
+            ActionHistory.index--;
+            const s = JSON.parse(ActionHistory.stack[ActionHistory.index]);
+            State.items = s.items; State.ink = s.ink;
+            Render.all(); Board.save(true);
+            UI.toast("Undo");
+            if(State.isCoHost || Network.peer) Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink});
+        }
+    },
+    redo: () => {
+        if (ActionHistory.index < ActionHistory.stack.length - 1) {
+            ActionHistory.index++;
+            const s = JSON.parse(ActionHistory.stack[ActionHistory.index]);
+            State.items = s.items; State.ink = s.ink;
+            Render.all(); Board.save(true);
+            UI.toast("Redo");
+            if (State.isCoHost || Network.peer) Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink});
+        }
+    }
+};
+
+/* --- AUTO SCROLL SYSTEM --- */
+window.AutoScroll = {
+    active: false,
+    vx: 0, vy: 0,
+    margin: 50,
+    // Max pixel shift per frame relative to screen size (not world size)
+    maxSpeed: 15,
+    interval: null,
+    lastEvt: null,
+    
+    start: () => {
+        if(AutoScroll.active) return;
+        AutoScroll.active = true;
+        AutoScroll.loop();
+    },
+    
+    stop: () => {
+        AutoScroll.active = false;
+        AutoScroll.vx = 0; AutoScroll.vy = 0;
+        if(AutoScroll.interval) cancelAnimationFrame(AutoScroll.interval);
+        AutoScroll.interval = null;
+    },
+    
+    check: (e) => {
+        AutoScroll.lastEvt = e;
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const m = AutoScroll.margin;
+        
+        AutoScroll.vx = 0; 
+        AutoScroll.vy = 0;
+
+        // Calculate intensity (0 to 1) based on closeness to edge
+        // Apply maxSpeed and adjust for zoom level so it feels consistent
+        // We clamp the zoom divisor so it doesn't go crazy when zoomed way out
+        const zFactor = Math.max(0.5, State.view.z);
+
+        if (e.clientX < m) {
+            const intensity = (m - e.clientX) / m;
+            AutoScroll.vx = (AutoScroll.maxSpeed * intensity) / zFactor;
+        } else if (e.clientX > w - m) {
+            const intensity = (e.clientX - (w - m)) / m;
+            AutoScroll.vx = -(AutoScroll.maxSpeed * intensity) / zFactor;
+        }
+        
+        if (e.clientY < m) {
+            const intensity = (m - e.clientY) / m;
+            AutoScroll.vy = (AutoScroll.maxSpeed * intensity) / zFactor;
+        } else if (e.clientY > h - m) {
+            const intensity = (e.clientY - (h - m)) / m;
+            AutoScroll.vy = -(AutoScroll.maxSpeed * intensity) / zFactor;
+        }
+    },
+    
+    loop: () => {
+        if (!AutoScroll.active) return;
+        
+        if (AutoScroll.vx !== 0 || AutoScroll.vy !== 0) {
+            State.view.x += AutoScroll.vx;
+            State.view.y += AutoScroll.vy;
+            Render.sync();
+            
+            // Re-trigger move logic to update item position relative to new view
+            if (State.drag && State.drag.mode === 'move' && AutoScroll.lastEvt) {
+                Modes.Move.move(AutoScroll.lastEvt);
+            }
+        }
+        
+        AutoScroll.interval = requestAnimationFrame(AutoScroll.loop);
+    }
+};
+
+/* --- HIERARCHY & DATA MANAGER --- */
+window.HierarchyManager = {
+    link: (childId, zoneId, index = -1) => {
+        const zone = State.items.find(i => i.id === zoneId);
+        const child = State.items.find(i => i.id === childId);
+        if (!zone || !child || zone.type !== 'zone') return;
+
+        if (child.parentZone && child.parentZone !== zoneId) {
+            HierarchyManager.unlink(child.id);
+        }
+
+        if (!zone.children) zone.children = [];
+        
+        const currentIdx = zone.children.indexOf(childId);
+        if (currentIdx > -1) zone.children.splice(currentIdx, 1);
+
+        if (index >= 0 && index <= zone.children.length) {
+            zone.children.splice(index, 0, childId);
+        } else {
+            zone.children.push(childId);
+        }
+        child.parentZone = zoneId;
+    },
+
+    unlink: (childId) => {
+        const child = State.items.find(i => i.id === childId);
+        if (!child || !child.parentZone) return;
+
+        const zone = State.items.find(i => i.id === child.parentZone);
+        if (zone && zone.children) {
+            zone.children = zone.children.filter(id => id !== childId);
+        }
+        delete child.parentZone;
+    },
+
+    getDescendants: (itemId) => {
+        const item = State.items.find(i => i.id === itemId);
+        if (!item || item.type !== 'zone' || !item.children) {
+            return [];
+        }
+        let descendants = [...item.children];
+        item.children.forEach(childId => {
+            descendants.push(...HierarchyManager.getDescendants(childId));
+        });
+        return descendants;
+    },
+
+    delete: (ids) => {
+        if (!Array.isArray(ids)) ids = [ids];
+        const itemsToDelete = new Set(ids);
+        
+        ids.forEach(id => {
+            const item = State.items.find(i => i.id === id);
+            if (item && item.groupId) {
+                State.items.forEach(i => {
+                    if (i.groupId === item.groupId) itemsToDelete.add(i.id);
+                });
+            }
+        });
+
+        const finalIds = Array.from(itemsToDelete);
+        finalIds.forEach(id => {
+            const item = State.items.find(i => i.id === id);
+            if (!item) return;
+            if (item.type === 'zone' && item.children) {
+                [...item.children].forEach(cid => HierarchyManager.unlink(cid));
+            }
+            if (item.parentZone) {
+                HierarchyManager.unlink(id);
+            }
+            Network.broadcast({type:'DELETE_NOTE', id: id});
+        });
+
+        State.items = State.items.filter(i => !finalIds.includes(i.id));
+        State.selection = State.selection.filter(id => !finalIds.includes(id));
+        Render.all();
+        ActionHistory.push();
+        Board.save(true);
+    }
+};
+
+
+/* --- ROBUST LAYOUT ENGINE --- */
+window.LayoutSystem = {
+    padding: 20,
+    gap: 15,
+    headerH: 50,
+    
+    // Main entry point
+    update: (zoneId, ghostItem = null, ghostIndex = -1) => {
+        const zone = State.items.find(i => i.id === zoneId);
+        if(!zone || !zone.children) return;
+
+        // 1. Get real children objects
+        let items = zone.children
+            .map(id => State.items.find(i => i.id === id))
+            .filter(i => i); // Filter out potential nulls
+
+        // 2. Filter out the item currently being dragged (it will be represented by ghostItem)
+        if(ghostItem) {
+            items = items.filter(i => i.id !== ghostItem.id);
+        }
+
+        // 3. Insert Ghost Item for calculation if present
+        if (ghostItem && ghostIndex > -1) {
+            // Clamp index
+            if(ghostIndex > items.length) ghostIndex = items.length;
+            items.splice(ghostIndex, 0, ghostItem);
+        }
+
+        // 4. Delegate to specific layout strategy
+        let contentHeight = 0;
+        if (zone.zoneType === 'cer') {
+            contentHeight = LayoutSystem.layoutColumns(zone, items, 3);
+        } else if (zone.zoneType === 'consensus') {
+            contentHeight = LayoutSystem.layoutConsensus(zone, items);
+        } else {
+            contentHeight = LayoutSystem.layoutFlow(zone, items);
+        }
+
+        // 5. Update Zone Height to fit content (with minimum)
+        const minH = 300; 
+        const newH = Math.max(minH, contentHeight + 40);
+        
+        // Only update DOM/State if height changed significantly to avoid jitter
+        if(Math.abs(zone.h - newH) > 2) {
+            zone.h = newH;
+            const el = document.getElementById(zoneId);
+            if(el) el.style.height = newH + 'px';
+        }
+    },
+
+    // Standard Multi-Row Flow Layout
+    layoutFlow: (zone, items) => {
+        const effectiveW = zone.w - (LayoutSystem.padding * 2);
+        let x = LayoutSystem.padding;
+        let y = LayoutSystem.headerH + (zone.zoneType === 'exit' ? 40 : 0);
+        let currentRowH = 0;
+
+        items.forEach(item => {
+            // Check if wrapping is needed
+            if (x + item.w > effectiveW + LayoutSystem.padding && x > LayoutSystem.padding) {
+                // Wrap to next row
+                x = LayoutSystem.padding;
+                y += currentRowH + LayoutSystem.gap;
+                currentRowH = 0;
+            }
+
+            LayoutSystem.apply(zone, item, x, y);
+
+            // Advance X
+            x += item.w + LayoutSystem.gap;
+            
+            // Track max height of current row
+            if (item.h > currentRowH) currentRowH = item.h;
+        });
+
+        return y + currentRowH + LayoutSystem.padding;
+    },
+
+    // Column Layout (CER)
+    layoutColumns: (zone, items, colCount) => {
+        const colW = (zone.w - (LayoutSystem.padding * 2)) / colCount;
+        const colY = new Array(colCount).fill(LayoutSystem.headerH + 10);
+
+        items.forEach(item => {
+            // Determine column based on Semantic Type
+            let colIdx = 0;
+            if (item.sub === 'claim') colIdx = 0;
+            else if (item.sub === 'evidence') colIdx = 1;
+            else if (item.sub === 'reasoning') colIdx = 2;
+            else {
+                // Fallback: Geometric position
+                if(item._isVirtual) {
+                   const relX = item._dragX - zone.x;
+                   colIdx = Math.floor(relX / colW);
+                } else {
+                   const center = (item.x - zone.x) + (item.w/2);
+                   colIdx = Math.floor(center / colW);
+                }
+            }
+
+            if(colIdx < 0) colIdx = 0;
+            if(colIdx >= colCount) colIdx = colCount - 1;
+
+            // Center item in column
+            const tx = LayoutSystem.padding + (colIdx * colW) + (colW/2 - item.w/2);
+            const ty = colY[colIdx];
+
+            LayoutSystem.apply(zone, item, tx, ty);
+            
+            colY[colIdx] += item.h + LayoutSystem.gap;
+        });
+
+        return Math.max(...colY) + LayoutSystem.padding;
+    },
+
+    // Consensus Layout (Scatter/Random Fill for manual arrangement)
+    layoutConsensus: (zone, items) => {
+        // Consensus layout is a "Free Canvas". 
+        // We do not force positions unless item is new/virtual and needs a default.
+        // We mainly calculate the required height.
+        
+        let maxY = 0;
+
+        items.forEach(item => {
+            // Calculate relative position
+            let relX = item.x - zone.x;
+            let relY = item.y - zone.y;
+
+            // If virtual (dragging), use drag pos
+            if (item._isVirtual) {
+                relX = item._dragX - zone.x;
+                relY = item._dragY - zone.y;
+            }
+
+            // Apply position to DOM/Ghost (ensures visual sync)
+            LayoutSystem.apply(zone, item, relX, relY);
+
+            // Track max height
+            const bottom = relY + item.h;
+            if (bottom > maxY) maxY = bottom;
+        });
+
+        // Return calculated height with padding, but don't shrink below current unless dragged up
+        return Math.max(zone.h, maxY + 50);
+    },
+
+    // Apply calculated position to DOM or Ghost
+    apply: (zone, item, relX, relY) => {
+        const absX = zone.x + relX;
+        const absY = zone.y + relY;
+
+        if(item._isVirtual) {
+            const ghost = document.getElementById('ghost-layer');
+            ghost.innerHTML = `<div class="ghost-slot" style="transform: translate(${absX}px, ${absY}px); width:${item.w}px; height:${item.h}px;"></div>`;
+        } else {
+            item.x = absX;
+            item.y = absY;
+            const el = document.getElementById(item.id);
+            if(el && !el.classList.contains('dragging')) {
+                el.style.transform = `translate(${absX}px, ${absY}px)`;
+            }
+        }
+    },
+
+    getIndex: (zone, x, y, excludeId = null) => {
+        if(!zone.children) return 0;
+        
+        const items = zone.children
+            .filter(id => id !== excludeId)
+            .map(id => State.items.find(i=>i.id===id))
+            .filter(i=>i);
+        
+        if (items.length === 0) return 0;
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const itemCenterY = item.y + item.h / 2;
+            if (y < itemCenterY && x < (item.x + item.w)) {
+                return i;
+            }
+        }
+        return items.length;
+    }
+};
+
+/* --- UI & UTILS --- */
+window.UI = {
+    toast: (msg) => {
+        const t = document.createElement('div'); t.className='toast'; t.innerText=msg;
+        $('toast-container').appendChild(t); setTimeout(() => t.remove(), 3000);
+    },
+    toggleMenu: () => { $('sidebar').classList.toggle('closed'); },
+    toggleDrawer: (id) => {
+        document.querySelectorAll('.drawer').forEach(d => {
+            if(d.id === `drawer-${id}`) d.classList.toggle('open');
+            else d.classList.remove('open');
+        });
+        if(id === 'draw') window.setTool('draw'); 
+    },
+    closeAllMenus: () => {
+        const ctx = $('context-menu');
+        if(ctx) ctx.style.display = 'none';
+        document.querySelectorAll('.item.show-menu').forEach(e => e.classList.remove('show-menu'));
+        document.querySelectorAll('.drawer.open').forEach(d => d.classList.remove('open'));
+        $('sidebar').classList.add('closed');
+    },
+    showTemplates: () => { UI.renderTplList('system'); $('modal-templates').style.display='flex'; UI.toggleDrawer(null); },
+    saveTemplate: async () => {
+        const name = prompt("Template Name:");
+        if(!name) return;
+        const tpl = { id: genId(), name: name, items: JSON.parse(JSON.stringify(State.items)) };
+        await DB.saveTemplate(tpl);
+        UI.toast("Template Saved");
+    },
+    renderTplList: async (type) => {
+        const list = $('tpl-list');
+        if(type === 'system') {
+            const sysTpls = [
+                { name: "See-Think-Wonder", items: [{type:'zone',title:'I See',x:0,y:0,w:300,h:400},{type:'zone',title:'I Think',x:320,y:0,w:300,h:400},{type:'zone',title:'I Wonder',x:640,y:0,w:300,h:400}] },
+                { name: "Frayer Model", items: [{type:'zone',title:'Definition',x:0,y:0,w:300,h:200},{type:'zone',title:'Characteristics',x:320,y:0,w:300,h:200},{type:'zone',title:'Examples',x:0,y:220,w:300,h:200},{type:'zone',title:'Non-Examples',x:320,y:220,w:300,h:200}] },
+                { name: "K-W-L Chart", items: [{type:'zone',title:'What I Know',x:0,y:0,w:300,h:500},{type:'zone',title:'What I Want to Know',x:320,y:0,w:300,h:500},{type:'zone',title:'What I Learned',x:640,y:0,w:300,h:500}] },
+                { name: "Venn Diagram", items: [{type:'zone',title:'Topic A',x:0,y:0,w:300,h:400},{type:'zone',title:'Both',x:320,y:0,w:300,h:400},{type:'zone',title:'Topic B',x:640,y:0,w:300,h:400}] },
+                { name: "Four Corners", items: [{type:'zone',title:'Strongly Agree',x:0,y:0,w:300,h:250},{type:'zone',title:'Agree',x:320,y:0,w:300,h:250},{type:'zone',title:'Disagree',x:0,y:270,w:300,h:250},{type:'zone',title:'Strongly Disagree',x:320,y:270,w:300,h:250}] },
+                { name: "Compass Points", items: [{type:'zone',title:'North (Need to Know)',x:320,y:0,w:300,h:200},{type:'zone',title:'West (Worrisome)',x:0,y:220,w:300,h:200},{type:'zone',title:'East (Excited)',x:640,y:220,w:300,h:200},{type:'zone',title:'South (Stance/Steps)',x:320,y:440,w:300,h:200}] }
+            ];
+            list.innerHTML = sysTpls.map((t,i) => `<button class="btn-s" onclick='UI.loadTemplate(${JSON.stringify(t)})'>${t.name}</button>`).join('');
+        } else {
+            const userTpls = await DB.getAll('templates');
+            list.innerHTML = userTpls.length ? userTpls.map(t => `<button class="btn-s" onclick='UI.loadTemplate(${JSON.stringify(t)})'>${t.name}</button>`).join('') : '<div>No saved templates</div>';
+        }
+    },
+    loadTemplate: (t) => {
+        const groupId = genId(); // Create a new group for this template
+        t.items.forEach(i => {
+            const item = { ...i, id: genId(), groupId: groupId }; // Assign new ID and group ID
+            item.x += -State.view.x + 100; item.y += -State.view.y + 100;
+            State.items.push(item);
+        });
+        Render.all(); ActionHistory.push(); Board.save(true); $('modal-templates').style.display='none';
+        if(State.isCoHost || Network.peer) Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink});
+    },
+    toggleA11y: () => {
+        const v = $('a11y-view');
+        if(v.style.display==='block') { v.style.display='none'; return; }
+        v.style.display='block';
+        const content = State.items.map(i => {
+            let txt = i.text || i.title || i.q || "Item";
+            return `<div style="border-bottom:1px solid #eee; padding:10px"><strong>${i.type.toUpperCase()}</strong>: ${txt}</div>`;
+        }).join('');
+        $('a11y-content').innerHTML = content || "Board is empty.";
+    },
+    toggleZoneResults: (id) => {
+        const el = document.getElementById(`zr-${id}`);
+        if(el) {
+            el.classList.toggle('active');
+            if(el.classList.contains('active') && State.activity && State.activity.targetId === id) {
+                if(State.activity.type === 'ZONE_ACT' && State.activity.payload.subType === 'ACT_DISCUSS') Network.updateDiscussion();
+                else Network.updateResults(id);
+            }
+        }
+    },
+    toggleFullScreen: () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+        } else {
+            if (document.exitFullscreen) document.exitFullscreen();
+        }
+    },
+    showSettingsModal: () => {
+        $('modal-settings').style.display = 'flex';
+        UI.settingsTab(0);
+        // Ensure QR code and host ID are populated
+        const hostId = localStorage.getItem('dqb_host_id');
+        if (hostId) {
+            $('settings-host-id').innerText = hostId;
+            const qrTgt = $('settings-qr-tgt');
+            qrTgt.innerHTML = '';
+            new QRCode(qrTgt, { text: hostId, width: 180, height: 180 });
+        }
+    },
+    settingsTab: (n) => {
+        const modal = $('modal-settings');
+        modal.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===n));
+        modal.querySelectorAll('.tab-content').forEach((c,i) => c.classList.toggle('active', i===n));
+    },
+    toggleOpenNotes: () => {
+        const isOpen = State.activity.type === 'OPEN';
+        Network.toggleOpenMode(!isOpen);
+    },
+    updateOpenNotesButton: (isOpen) => {
+        const drawerBtn = $('drawer-open-notes-btn');
+        if (drawerBtn) {
+            drawerBtn.innerHTML = isOpen ? '🔒 Lock Board' : '🔓 Open Board';
+            if (isOpen) {
+                drawerBtn.style.background = '#c2410c';
+                drawerBtn.style.color = '#fef2f2';
+            } else {
+                drawerBtn.style.background = ''; // Revert to default .sub-btn style
+                drawerBtn.style.color = '';
+            }
+        }
+    },
+    setMinimapPosition: (val) => {
+        const cont = $('minimap-container');
+        cont.style.top = (val.includes('top')) ? '20px' : 'auto';
+        cont.style.bottom = (val.includes('bottom')) ? '100px' : 'auto';
+        cont.style.left = (val.includes('left')) ? '20px' : 'auto';
+        cont.style.right = (val.includes('right')) ? '20px' : 'auto';
+        localStorage.setItem('dqb_minimap_pos', val);
+    },
+    setMinimapSize: (val) => {
+        const cont = $('minimap-container');
+        const aspect = 4/3;
+        cont.style.width = val + 'px';
+        cont.style.height = (val / aspect) + 'px';
+        $('minimap-size-val').innerText = `${val}px`;
+        Render.minimap();
+        localStorage.setItem('dqb_minimap_size', val);
+    },
+    loadMinimapSettings: () => {
+        const pos = localStorage.getItem('dqb_minimap_pos') || 'top-right';
+        const size = localStorage.getItem('dqb_minimap_size') || '200';
+        $('minimap-pos').value = pos;
+        $('minimap-size').value = size;
+        UI.setMinimapPosition(pos);
+        UI.setMinimapSize(size);
+    }
+};
+
+/* --- PERSISTENCE --- */
+window.DB = {
+    db: null,
+    init: () => new Promise(resolve => {
+        const req = indexedDB.open('DQB_Ultimate', 2);
+        req.onupgradeneeded = e => { 
+            const db = e.target.result; 
+            if(!db.objectStoreNames.contains('boards')) db.createObjectStore('boards', { keyPath: 'id' });
+            if(!db.objectStoreNames.contains('templates')) db.createObjectStore('templates', { keyPath: 'id' });
+        };
+        req.onsuccess = e => { DB.db = e.target.result; resolve(); Board.list(); };
+    }),
+    save: (board) => { 
+        if(State.isCoHost) return; // Co-hosts don't save to local DB
+        const tx = DB.db.transaction('boards', 'readwrite'); tx.objectStore('boards').put(board); return new Promise(r => tx.oncomplete = r); 
+    },
+    saveTemplate: (tpl) => { const tx = DB.db.transaction('templates', 'readwrite'); tx.objectStore('templates').put(tpl); return new Promise(r => tx.oncomplete = r); },
+    getAll: (store) => new Promise(resolve => { const req = DB.db.transaction(store, 'readonly').objectStore(store).getAll(); req.onsuccess = () => resolve(req.result); })
+};
+
+window.Board = {
+    list: async () => {
+        const boards = await DB.getAll('boards');
+        const c = $('saved-list');
+        if(boards.length === 0) { c.innerHTML = '<div style="padding:10px; color:#94a3b8">No saved boards</div>'; return; }
+        c.innerHTML = boards.map(b => `<div class="board-row" onclick="Board.load('${b.id}')"><div><b>${b.name}</b><br><span style="font-size:0.8rem; color:#64748b">${new Date(b.ts).toLocaleString()}</span></div><div>➡️</div></div>`).join('');
+    },
+    create: () => { 
+        State.id = genId(); State.items=[]; State.ink=[]; State.name="My Board"; 
+        State.view = { x: 0, y: 0, z: 1 };
+        localStorage.setItem('lastBoard', State.id);
+        ActionHistory.stack=[]; ActionHistory.index=-1; ActionHistory.push();
+        Board.start(); 
+    },
+    load: async (id) => { 
+        const b = (await DB.getAll('boards')).find(x => x.id === id); 
+        if(b) { 
+            State.id=b.id; State.items=b.items; State.ink=b.ink||[]; State.name=b.name; 
+            State.view = b.view || { x: 0, y: 0, z: 1 };
+            localStorage.setItem('lastBoard', State.id);
+            ActionHistory.stack=[]; ActionHistory.index=-1; ActionHistory.push();
+            Board.start(); 
+        } 
+    },
+    start: () => { 
+        $('landing').style.display='none'; $('app').style.display='block'; $('board-name').value=State.name; 
+        Render.loop(); Render.all();
+        setTool(State.tool);
+        UI.loadMinimapSettings();
+        UI.updateOpenNotesButton(State.activity.type === 'OPEN');
+        if(!State.isCoHost) {
+            const lastPeer = localStorage.getItem('dqb_host_id');
+            Network.host(lastPeer);
+        }
+    },
+    setStartView: () => {
+        Board.save(true);
+        UI.toast("✅ Start view set and saved!");
+    },
+    save: async (silent) => { 
+        await DB.save({ id: State.id, name: State.name, items: State.items, ink: State.ink, view: State.view, ts: Date.now() }); 
+        if(!silent) UI.toast("💾 Board Saved"); 
+    },
+    exit: () => { localStorage.removeItem('lastBoard'); location.reload(); },
+    import: (input) => {
+        const f = input.files[0]; if(!f) return;
+        const r = new FileReader();
+        r.onload = e => { const d = JSON.parse(e.target.result); State.id=genId(); State.items=d.items||[]; State.ink=d.ink||[]; State.name=d.name||"Imported"; Board.start(); };
+        r.readAsText(f);
+    },
+    // Collision-Aware Placement Algorithm
+    getFreeSpace: (x, y, w, h) => {
+        let attempts = 0;
+        let nx = x, ny = y;
+        
+        // Define padding for overlap check
+        const pad = 10; 
+        
+        // Helper to check if rect (nx, ny, w, h) collides with any item in State.items
+        const checkCollision = (cx, cy) => {
+            return State.items.some(i => 
+                cx < i.x + i.w + pad && cx + w + pad > i.x &&
+                cy < i.y + i.h + pad && cy + h + pad > i.y
+            );
+        };
+
+        // Spiral search
+        let angle = 0;
+        let radius = 0;
+        const step = 20;
+
+        while(checkCollision(nx, ny) && attempts < 150) {
+            attempts++;
+            if(attempts === 1) { radius = 50; }
+            else {
+                angle += 0.5;
+                radius = 30 + (angle * 10);
+            }
+            nx = x + Math.cos(angle) * radius;
+            ny = y + Math.sin(angle) * radius;
+        }
+        
+        // If still colliding after 150 tries, just offset slightly from original
+        if (attempts >= 150) {
+            nx = x + (Math.random() * 40 - 20);
+            ny = y + (Math.random() * 40 - 20);
+        }
+
+        return { x: nx, y: ny };
+    }
+};
+
+/* --- INK & DRAWING --- */
+window.InkManager = {
+    currentPath: [],
+    setColor: (c) => { State.draw.color = c; window.setTool('draw'); UI.toast("Color Changed"); },
+    setWidth: (w) => { State.draw.width = w; window.setTool('draw'); },
+    start: (x, y) => { InkManager.currentPath = [{x,y}]; },
+    move: (x, y) => { InkManager.currentPath.push({x,y}); InkManager.renderTemp(); },
+    end: () => {
+        if(InkManager.currentPath.length > 1) {
+            State.ink.push({ id: genId(), points: [...InkManager.currentPath], color: State.draw.color, width: State.draw.width });
+            Render.ink(); ActionHistory.push(); Board.save(true);
+            if(State.isCoHost || Network.peer) Network.broadcast({type:'INK_ADD', ink:State.ink[State.ink.length-1]});
+        }
+        InkManager.currentPath = []; InkManager.renderTemp();
+    },
+    renderTemp: () => {
+        const svg = $('ink-layer'); const temp = document.getElementById('temp-ink'); if(temp) temp.remove();
+        if(InkManager.currentPath.length < 2) return;
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", InkManager.pointsToPath(InkManager.currentPath));
+        path.setAttribute("stroke", State.draw.color);
+        path.setAttribute("stroke-width", State.draw.width);
+        path.setAttribute("fill", "none"); path.setAttribute("stroke-linecap", "round");
+        path.id = "temp-ink"; svg.appendChild(path);
+    },
+    pointsToPath: (pts) => { if(pts.length===0) return ""; let d=`M ${pts[0].x} ${pts[0].y}`; for(let i=1;i<pts.length;i++) d+=` L ${pts[i].x} ${pts[i].y}`; return d; },
+    clear: () => { if(confirm("Clear all drawings?")) { State.ink = []; Render.ink(); ActionHistory.push(); Board.save(true); Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink}); } },
+    eraseAt: (x, y) => {
+        const thresh = 20 / State.view.z;
+        const initLen = State.ink.length;
+        State.ink = State.ink.filter(s => { return !s.points.some(p => Math.hypot(p.x - x, p.y - y) < thresh); });
+        if(State.ink.length !== initLen) { Render.ink(); ActionHistory.push(); Board.save(true); Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink}); }
+    }
+};
+
+/* --- RENDER --- */
+window.Render = {
+    loop: () => { Render.sync(); requestAnimationFrame(Render.loop); },
+    sync: () => {
+        const t = `scale(${State.view.z}) translate(${State.view.x}px, ${State.view.y}px)`;
+        $('world').style.transform = t;
+        $('bg-grid').style.backgroundPosition = `${State.view.x*State.view.z}px ${State.view.y*State.view.z}px`;
+
+        const isDragging = State.drag && State.drag.mode === 'move';
+        
+        State.items.forEach(i => {
+            const el = document.getElementById(i.id);
+            if(el) {
+                // Dragging is handled by direct transform in Modes.Move.move for performance
+                if (!isDragging || !State.drag.moveTargets.find(t => t.id === i.id)) {
+                     el.style.transform = `translate(${i.x}px, ${i.y}px)`;
+                }
+                
+                el.style.width = i.w + 'px'; if(i.h) el.style.height = i.h + 'px';
+                el.classList.toggle('selected', State.selection.includes(i.id));
+                el.classList.toggle('grouped', !!i.groupId);
+
+                if(i.type==='zone') { const lbl = el.querySelector('.zone-label'); if(lbl && lbl.innerText !== i.title) lbl.innerText = i.title; }
+
+                const cmts = State.comments.filter(c => c.targetId === i.id);
+                const badge = el.querySelector('.cmt-badge');
+                if(cmts.length > 0) {
+                    if(!badge) {
+                        const b = document.createElement('div'); b.className='cmt-badge'; b.innerText=cmts.length;
+                        b.title = "View Comments";
+                        b.onpointerdown = (e) => { e.stopPropagation(); Actions.showComments(i.id); };
+                        el.appendChild(b);
+                    } else { badge.innerText = cmts.length; }
+                } else if (badge) {
+                    badge.remove();
+                }
+            }
+        });
+        
+        Render.minimap();
+    },
+    all: () => {
+        const layer = $('items-layer');
+        State.items.sort((a,b) => (a.type==='zone' ? -1 : 1));
+
+        State.items.forEach(i => {
+            let el = document.getElementById(i.id);
+            if(!el) { el = Render.createItem(i); layer.appendChild(el); }
+            
+            if(!el.style.transform) el.style.transform = `translate(${i.x}px, ${i.y}px)`;
+            
+            const baseZ = i.type === 'zone' ? 1 : (i.z || 10);
+            el.style.zIndex = baseZ;
+            
+            if(i.type==='poll') Render.updatePoll(el, i);
+            if(i.type==='spin') Render.updateSpin(el, i);
+            if(i.type==='graph') Render.updateGraph(el, i);
+
+            if(i.type === 'note' && !i.src) {
+                 const txt = el.querySelector('textarea');
+                 if (txt && txt.value !== i.text) txt.value = i.text;
+            }
+        });
+        Array.from(layer.children).forEach(c => { if(!State.items.find(i=>i.id===c.id)) c.remove(); });
+        Render.ink();
+
+        const arrBtn = $('btn-arrange');
+        if(arrBtn) arrBtn.style.display = State.selection.length > 1 ? 'flex' : 'none';
+        const mobArr = $('mt-arrange');
+        if(mobArr) mobArr.style.display = State.selection.length > 1 ? 'flex' : 'none';
+    },
+    ink: () => {
+        $('ink-layer').innerHTML = State.ink.map(s => `<path d="${InkManager.pointsToPath(s.points)}" stroke="${s.color}" stroke-width="${s.width}" fill="none" stroke-linecap="round"/>`).join('');
+    },
+    minimap: () => {
+        const canvas = $('minimap');
+        const cont = $('minimap-container');
+        canvas.width = cont.offsetWidth;
+        canvas.height = cont.offsetHeight;
+
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Calculate World Bounds
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        
+        // Include items
+        if (State.items.length > 0) {
+            State.items.forEach(i => {
+                minX = Math.min(minX, i.x);
+                minY = Math.min(minY, i.y);
+                maxX = Math.max(maxX, i.x + i.w);
+                maxY = Math.max(maxY, i.y + i.h);
+            });
+        } else {
+            minX = 0; minY = 0; maxX = window.innerWidth; maxY = window.innerHeight;
+        }
+
+
+        // Include Viewport
+        const vw = window.innerWidth / State.view.z;
+        const vh = window.innerHeight / State.view.z;
+        const vx = -State.view.x;
+        const vy = -State.view.y;
+
+        minX = Math.min(minX, vx);
+        minY = Math.min(minY, vy);
+        maxX = Math.max(maxX, vx + vw);
+        maxY = Math.max(maxY, vy + vh);
+
+        // Add padding
+        const padding = 100;
+        minX -= padding; minY -= padding; maxX += padding; maxY += padding;
+
+        const worldW = maxX - minX;
+        const worldH = maxY - minY;
+        if (worldW <= 0 || worldH <= 0) return;
+        
+        const scale = Math.min(canvas.width / worldW, canvas.height / worldH);
+
+        const mapX = (val) => (val - minX) * scale;
+        const mapY = (val) => (val - minY) * scale;
+
+        // Draw Items
+        State.items.forEach(i => {
+            ctx.fillStyle = i.type === 'zone' ? 'rgba(255, 255, 255, 0.2)' : (TYPES[i.sub] ? TYPES[i.sub].bor : '#94a3b8');
+            if (i.type === 'zone') {
+                ctx.strokeStyle = '#cbd5e1';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(mapX(i.x), mapY(i.y), i.w * scale, i.h * scale);
+            } else {
+                ctx.fillRect(mapX(i.x), mapY(i.y), i.w * scale, i.h * scale);
+            }
+        });
+
+        // Draw Viewport
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(mapX(vx), mapY(vy), vw * scale, vh * scale);
+
+        // Save transforms for interaction
+        canvas.worldInfo = { minX, minY, scale };
+    },
+    createItem: (d) => {
+        const el = document.createElement('div'); el.id=d.id; el.className=`item ${d.type}`;
+        
+        // --- CONSENSUS LOGIC ---
+        // Check if this item belongs to a Consensus Zone
+        const parent = d.parentZone ? State.items.find(x => x.id === d.parentZone) : null;
+        const isConsensusChild = parent && parent.zoneType === 'consensus';
+        if (isConsensusChild) {
+            el.classList.add('consensus-child');
+        }
+        // -----------------------
+
+        let inner = '';
+        
+        let isActive = d.isOpen;
+        let btnText = isActive ? "🟢 Open" : "📡 Open";
+        let btnClass = isActive ? "btn-toggle active" : "btn-toggle";
+        let btnAction = `Network.toggleZone('${d.id}')`;
+        
+        if (d.type === 'poll' || d.type === 'graph' || (d.zoneType === 'exit')) {
+             btnText = isActive ? "🔴 Stop" : "📡 Broadcast";
+             if(d.zoneType === 'exit') btnAction = `Network.toggleZone('${d.id}')`;
+             else if(d.type === 'poll') btnAction = `Network.broadcastPoll('${d.id}')`; 
+             else if(d.type === 'graph') btnAction = `Network.broadcastGraph('${d.id}')`;
+        }
+
+        let btnHtml = `<span id="zbtn-${d.id}" class="${btnClass}" onpointerdown="event.stopPropagation()" onclick="${btnAction}">${btnText}</span>`;
+        let resBtn = `<span id="btn-res-${d.id}" class="btn-toggle results-btn" onpointerdown="event.stopPropagation()" onclick="UI.toggleZoneResults('${d.id}')">💬 Results</span>`;
+
+        if(d.type === 'note') {
+            if(d.sub === 'sketch' || d.src) {
+                // Sketch or Image Note
+                inner = `<div style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
+                    <img src="${d.src}" draggable="false" style="flex:1;width:100%;object-fit:contain;background:${isConsensusChild ? 'transparent' : '#f8fafc'}">
+                    ${!isConsensusChild ? `<textarea class="caption-in" placeholder="Caption...">${d.text||''}</textarea>` : ''}
+                </div>`;
+            } else {
+                // Text Note
+                inner = `<textarea class="note-in" placeholder="Empty note..." ${isConsensusChild ? 'style="border:none;background:transparent;resize:none;font-weight:bold"' : ''}>${d.text||''}</textarea>`;
+            }
+        } else if (d.type === 'zone') {
+            if(d.zoneType === 'cer') inner = `<div class="cer-grid"><div class="cer-col">CLAIM</div><div class="cer-col">EVIDENCE</div><div class="cer-col">REASONING</div></div>`;
+            else if(d.zoneType === 'consensus') inner = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#cbd5e1;font-weight:bold;font-size:1.5rem;opacity:0.5;pointer-events:none">CONSENSUS AREA</div>`;
+            else if(d.zoneType === 'exit') {
+                inner = `<div style="padding:15px; text-align:center; color:#1e293b; font-weight:bold; border-bottom:1px solid #e2e8f0; background:#f8fafc">
+                    ${d.prompt}
+                </div><div style="flex:1; position:relative"></div>`;
+            }
+            else inner = `<div style="padding:20px;text-align:center;color:#94a3b8;pointer-events:none;display:flex;align-items:center;justify-content:center;height:100%"></div>`;
+
+            inner += `<div id="zr-${d.id}" class="zone-res-box"></div>`;
+            el.innerHTML = `<div class="zone-label">${d.title}</div>` + el.innerHTML;
+        } else {
+             if(d.type === 'poll') { inner = `<div class="poll-q" style="padding:8px;font-weight:bold">${d.q}</div><div class="poll-opts"></div>`; }
+             else if(d.type === 'graph') { inner = `<div class="graph-bars" style="display:flex;align-items:flex-end;height:100%;padding:10px;gap:5px"></div>`; }
+             else if(d.type === 'spin') inner = `<div style="padding:10px; display:flex; flex-direction:column; align-items:center"><svg class="spin-svg" viewBox="0 0 100 100" width="120" height="120"></svg><button class="btn-s" style="margin-top:8px; padding:4px 8px; font-size:0.8rem" onpointerdown="event.stopPropagation()" onclick="Actions.spin('${d.id}')">SPIN</button></div>`;
+        }
+
+        const head = TYPES[d.sub] || TYPES.meta;
+        const title = d.type==='zone' ? (d.zoneType==='cer'?'CER Builder':(d.zoneType==='consensus'?'Consensus Model':(d.zoneType==='exit'?'Exit Ticket':'Zone'))) : (d.type==='poll'?'Poll':(d.type==='spin'?'Spinner':(d.type==='graph'?'Live Graph':(d.author || head.lbl))));
+        
+        if(d.type === 'note' || d.type === 'spin') { btnHtml = ''; resBtn = ''; }
+
+        el.innerHTML += `
+            <div class="jiggle-wrapper">
+                <div class="i-head">
+                    <div style="display:flex;gap:5px;align-items:center">
+                        <span class="icon-span">${d.type==='note'?head.icon:(d.type==='poll'?'📊':(d.type==='spin'?'🎡':(d.type==='graph'?'📈':'')))}</span>
+                        <span class="auth-span">${title}</span>
+                        ${btnHtml}
+                        ${resBtn}
+                    </div>
+                    <div class="menu-trigger" onpointerdown="event.stopPropagation()" onclick="Actions.showContextMenu(event, '${d.id}')">⋮</div>
+                </div>
+                <div class="i-body">${inner}</div>
+                <div class="resize-h"></div>
+            </div>`;
+
+        const w = el.querySelector('.jiggle-wrapper');
+        if(d.type==='note') {
+            if (!isConsensusChild) {
+                w.style.background = head.col;
+                w.style.borderColor = head.bor;
+                const h = el.querySelector('.i-head');
+                h.style.background = head.bor + '33'; 
+                h.style.color = head.bor;
+            }
+        }
+        else if(d.type==='zone') { 
+            w.style.border = '2px dashed #cbd5e1';
+            if(d.zoneType === 'consensus') { w.classList.add('consensus-bg'); w.style.border = '2px solid #0ea5e9'; } 
+            else if(d.zoneType === 'exit') { w.style.border = '2px solid #6366f1'; w.style.background = '#fefeff'; }
+            else { w.style.background = 'rgba(255,255,255,0.5)'; }
+        }
+
+        const ta = el.querySelector('textarea');
+        if(ta) ta.oninput = e => { 
+            d.text = e.target.value; 
+            if(d._timeout) clearTimeout(d._timeout);
+            d._timeout = setTimeout(() => { Network.broadcast({type:'NOTE_UPDATE', note:d}); }, 500);
+        };
+
+        return el;
+    },
+    updatePoll: (el, d) => {
+        const tot = d.opts.reduce((a,b)=>a+b.v, 0);
+        el.querySelector('.poll-opts').innerHTML = d.opts.map(o => `<div style="margin:5px;background:#f1f5f9;border-radius:4px;position:relative;height:24px"><div style="position:absolute;height:100%;background:#93c5fd;border-radius:4px;width:${tot?(o.v/tot)*100:0}%"></div><div style="position:absolute;inset:0;display:flex;justify-content:space-between;padding:0 8px;align-items:center;font-size:0.8rem;font-weight:700"><span>${o.lbl}</span><span>${o.v}</span></div></div>`).join('');
+    },
+    updateGraph: (el, d) => {
+        const max = Math.max(...d.data, 10);
+        el.querySelector('.graph-bars').innerHTML = d.data.map(v => `<div style="flex:1;background:#6366f1;border-radius:4px 4px 0 0;transition:height 0.5s;height:${(v/max)*100}%;position:relative;min-height:1px"><div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:0.7rem;font-weight:bold">${v}</div></div>`).join('');
+    },
+    updateSpin: (el, d) => {
+        const svg = el.querySelector('.spin-svg');
+        const colors = ['#fecaca','#fed7aa','#fde68a','#bbf7d0','#bae6fd','#c7d2fe'];
+        const slice = 360/d.opts.length;
+        svg.innerHTML = d.opts.map((o,i) => {
+            const a1 = (i*slice)*Math.PI/180, a2 = ((i+1)*slice)*Math.PI/180;
+            const x1=50+50*Math.cos(a1), y1=50+50*Math.sin(a1), x2=50+50*Math.cos(a2), y2=50+50*Math.sin(a2);
+            return `<path d="M50,50 L${x1},${y1} A50,50 0 0,1 ${x2},${y2} Z" fill="${colors[i%6]}" stroke="white" stroke-width="1"/>`;
+        }).join('') + `<polygon points="50,10 45,-5 55,-5" fill="#333"/>`;
+        svg.style.transform = `rotate(${d.ang}deg)`;
+        svg.style.transition = "transform 3s cubic-bezier(0.2,0.8,0.2,1)";
+    }
+};
+
+/* --- ACTIONS --- */
+window.Actions = {
+    create: (type, sub) => {
+        let cx = -State.view.x + window.innerWidth/2/State.view.z - 100;
+        let cy = -State.view.y + window.innerHeight/2/State.view.z - 75;
+        const id = genId();
+        let it = { id, type, w:200, h:150, groupId: null };
+        if(type==='note') { it.sub=sub; it.text=''; }
+        if(type==='zone') { 
+            const name = prompt("Name your new zone:", "New Zone");
+            if(!name) return;
+            it.title=name; it.w=300; it.h=300; it.children=[];
+        }
+        if(type==='cer') { it.type='zone'; it.zoneType='cer'; it.title="Argument Builder (CER)"; it.w=600; it.h=400; it.children=[]; }
+        if(type==='consensus') { it.type='zone'; it.zoneType='consensus'; it.title="Consensus Model"; it.w=600; it.h=600; it.children=[]; }
+        if(type==='poll') { it.q="Question?"; it.opts=[{lbl:'Yes',v:0},{lbl:'No',v:0}]; }
+        if(type==='spin') { it.ang=0; it.opts=['A','B','C','D']; it.w=200; it.h=220; }
+        if(type==='graph') { it.title="Class Data"; it.data=[]; it.w=300; it.h=200; }
+
+        const pos = Board.getFreeSpace(cx, cy, it.w, it.h);
+        it.x = pos.x; it.y = pos.y;
+
+        State.items.push(it); Render.all(); ActionHistory.push(); Board.save(true);
+        UI.toggleDrawer(null);
+        if(State.isCoHost || Network.peer) Network.broadcast({type:'ADD_ITEM', item:it});
+    },
+    createExit: (mode) => {
+        let cx = -State.view.x + window.innerWidth/2/State.view.z - 200;
+        let cy = -State.view.y + window.innerHeight/2/State.view.z - 150;
+        const id = genId();
+
+        let promptTxt = "Exit Ticket";
+        let opts = null;
+
+        if(mode === 'short') promptTxt = prompt("Short Answer Question:", "What was the most important thing you learned?");
+        else if(mode === 'smiley') promptTxt = prompt("Statement to rate:", "I feel confident about today's lesson.");
+        else if(mode === 'mc') {
+            promptTxt = prompt("Multiple Choice Question:", "Which is correct?");
+            const o = prompt("Options (comma separated):", "Option A, Option B, Option C");
+            if(o) opts = o.split(',');
+        }
+        else if(mode === 'multi') {
+            promptTxt = prompt("Select all that apply:", "Which topics did we cover?");
+            const o = prompt("Options (comma separated):", "Topic A, Topic B, Topic C");
+            if(o) opts = o.split(',');
+        }
+        else if(mode === 'lw') promptTxt = "List one thing you Learned and one thing you Wonder.";
+
+        if(!promptTxt && mode !== 'lw') return;
+
+        let it = { 
+            id, type: 'zone', zoneType: 'exit', exitMode: mode, 
+            title: 'Exit Ticket', prompt: promptTxt, opts: opts,
+            w: 400, h: 300, children: [],
+            x: cx, y: cy // Will be overridden by free space
+        };
+
+        const pos = Board.getFreeSpace(cx, cy, it.w, it.h);
+        it.x = pos.x; it.y = pos.y;
+
+        State.items.push(it); Render.all(); ActionHistory.push(); Board.save(true);
+        UI.toggleDrawer(null);
+        if(State.isCoHost || Network.peer) Network.broadcast({type:'ADD_ITEM', item:it});
+    },
+    showContextMenu: (e, id) => {
+        const menu = $('context-menu');
+        const item = State.items.find(x => x.id === id);
+        if(!item) return;
+
+        if (!State.selection.includes(id)) {
+            Actions.sel(id);
+        }
+        
+        const selection = State.items.filter(i => State.selection.includes(i.id));
+        const isGroupSelected = selection.length > 1;
+        const firstSelectedItem = selection[0] || item;
+        const isInGroup = !!firstSelectedItem.groupId;
+
+        let html = '';
+        if (isGroupSelected) {
+            if (isInGroup) {
+                html += `<div class="ctx-row"><button class="ctx-btn" onclick="Actions.ungroupSelection()">Ungroup</button></div>`;
+            } else {
+                html += `<div class="ctx-row"><button class="ctx-btn" onclick="Actions.groupSelection()">Group Items</button></div>`;
+            }
+            
+            // ADDED: Check if notes are in the selection and add the "Move to Zone" button
+            const hasNotesInSelection = selection.some(i => i.type === 'note');
+            if (hasNotesInSelection) {
+                html += `<div class="ctx-row"><button class="ctx-btn" onclick="Actions.showZoneList(event)">Move to Zone ➡</button></div>`;
+            }
+
+            // ADDED: Save as Template for selection
+            html += `<div class="ctx-row"><button class="ctx-btn" onclick="Actions.saveSelectionAsTemplate()">💾 Save Template</button></div>`;
+
+            html += `<div class="ctx-row"><button class="ctx-btn btn-del" onclick="Actions.delete()">Delete All</button></div>`;
+
+        } else { // Single item selection logic remains the same
+             if(item.type === 'note') {
+                html += `<div class="ctx-row">
+                    <button class="ctx-btn" style="background:#fef3c7" onclick="Actions.setType('${id}','notice')">👁️</button>
+                    <button class="ctx-btn" style="background:#bae6fd" onclick="Actions.setType('${id}','wonder')">❓</button>
+                    <button class="ctx-btn" style="background:#bbf7d0" onclick="Actions.setType('${id}','idea')">💡</button>
+                    <button class="ctx-btn" style="background:#fecaca" onclick="Actions.setType('${id}','test')">🧪</button>
+                </div>
+                <div class="ctx-row">
+                    <button class="ctx-btn" onclick="Actions.toggleLock('${id}')">${item.locked?'Unlock 🔓':'Lock 🔒'}</button>
+                    <button class="ctx-btn btn-del" onclick="Actions.delete('${id}')">Delete</button>
+                </div>
+                <div class="ctx-row"><button class="ctx-btn" onclick="Actions.showZoneList(event)">Move to Zone ➡</button></div>`;
+                 if (isInGroup) {
+                    html += `<div class="ctx-row"><button class="ctx-btn" onclick="Actions.ungroupSelection()">Ungroup</button></div>`;
+                }
+            } else if(item.type === 'zone') {
+                html += `<div class="ctx-row">
+                    <button class="ctx-btn" onclick="Network.startActivity('vote')">🗳️ Vote</button>
+                    <button class="ctx-btn" onclick="Network.startActivity('sort')">🔢 Rank</button>
+                    <button class="ctx-btn" onclick="Network.startActivity('discuss')">💬 Discuss</button>
+                </div>
+                <div class="ctx-row"><button class="ctx-btn" onclick="Actions.rename('${id}')">Rename</button></div>
+                <div class="ctx-row">
+                    <button class="ctx-btn btn-del" onclick="Actions.delete('${id}')">Delete</button>
+                </div>`;
+            } else if(item.type === 'poll') {
+                html += `<div class="ctx-row"><button class="ctx-btn" onclick="Actions.editPoll('${id}')">✏️ Edit</button><button class="ctx-btn btn-del" onclick="Actions.delete('${id}')">Delete</button></div>`;
+            } else {
+                html += `<div class="ctx-row"><button class="ctx-btn btn-del" onclick="Actions.delete('${id}')">Delete</button></div>`;
+            }
+        }
+        
+        menu.innerHTML = html; menu.style.display = 'block'; Actions.posMenu(menu, e);
+    },
+    saveSelectionAsTemplate: async () => {
+        if(State.selection.length === 0) return;
+        const name = prompt("Template Name:");
+        if(!name) return;
+
+        // Get items
+        const selectedItems = State.selection.map(id => State.items.find(i => i.id === id)).filter(Boolean);
+
+        // Calculate bounding box to normalize positions
+        const minX = Math.min(...selectedItems.map(i => i.x));
+        const minY = Math.min(...selectedItems.map(i => i.y));
+
+        // Clone and offset
+        const tplItems = selectedItems.map(i => {
+            const clone = JSON.parse(JSON.stringify(i));
+            clone.x -= minX;
+            clone.y -= minY;
+            return clone;
+        });
+
+        const tpl = { id: genId(), name: name, items: tplItems };
+        await DB.saveTemplate(tpl);
+        UI.toast("Template Saved");
+        UI.closeAllMenus();
+    },
+    showZoneList: (e) => {
+        e.stopPropagation();
+        const menu = $('context-menu');
+        const zones = State.items.filter(i => i.type === 'zone');
+        let html = `<div style="max-height:200px;overflow-y:auto">`;
+        if(zones.length > 0) {
+            html += zones.map(z => `<div class="ctx-row"><button class="ctx-btn" onclick="Actions.moveToZone('${z.id}')">${z.title}</button></div>`).join('');
+        }
+        html += `<div class="ctx-row" style="border-top:1px solid #e2e8f0; margin-top:5px; padding-top:5px"><button class="ctx-btn" onclick="Actions.groupToZone()">+ New Zone</button></div>`;
+        html += `</div>`;
+        menu.innerHTML = html;
+    },
+    moveToZone: (zoneId) => {
+        const items = State.selection.map(id => State.items.find(i => i.id === id)).filter(i => i && i.type === 'note');
+        if(items.length === 0) return;
+        items.forEach(i => HierarchyManager.link(i.id, zoneId));
+        LayoutSystem.update(zoneId);
+        Render.all(); UI.closeAllMenus(); ActionHistory.push(); Board.save(true);
+        if(State.isCoHost || Network.peer) {
+            const zone = State.items.find(z => z.id === zoneId);
+            if(zone) Network.broadcast({type:'ZONE_REORDER', zoneId:zoneId, children:zone.children});
+        }
+    },
+    posMenu: (menu, e) => {
+        const rect = e.target.getBoundingClientRect();
+        let left = rect.left; let top = rect.bottom + 10;
+        if(left + 240 > window.innerWidth) left = window.innerWidth - 250;
+        if(top + 150 > window.innerHeight) top = rect.top - 150;
+        menu.style.left = left + 'px'; menu.style.top = top + 'px';
+    },
+    groupToZone: () => {
+        const sel = State.selection.map(id => State.items.find(i => i.id === id)).filter(i => i && i.type === 'note');
+        if(sel.length === 0) return;
+        
+        const name = prompt("Name your new zone:", "Group");
+        if(!name) return;
+
+        let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+        sel.forEach(i => { minX = Math.min(minX, i.x); minY = Math.min(minY, i.y); maxX = Math.max(maxX, i.x+i.w); maxY = Math.max(maxY, i.y+i.h); });
+        
+        const z = { 
+            id: genId(), type: 'zone', title: name, 
+            x: minX - 20, y: minY - 50, 
+            w: (maxX - minX) + 40, h: (maxY - minY) + 70, 
+            children: sel.map(i => i.id)
+        };
+        
+        sel.forEach(i => i.parentZone = z.id);
+        State.items.push(z);
+        
+        sel.forEach(i => HierarchyManager.link(i.id, z.id));
+        LayoutSystem.update(z.id);
+        
+        Actions.sel(z.id); UI.closeAllMenus(); Render.all(); ActionHistory.push(); Board.save(true);
+        if(State.isCoHost || Network.peer) {
+            Network.broadcast({type:'ADD_ITEM', item:z});
+            Network.broadcast({type:'ZONE_REORDER', zoneId:z.id, children:z.children});
+        }
+        setTimeout(() => { sel.forEach(i => { const el = $(i.id); if(el) el.classList.add('snap-anim'); }); }, 50);
+    },
+    groupSelection: () => {
+        if (State.selection.length < 2) return;
+        const groupId = genId();
+        State.selection.forEach(id => {
+            const item = State.items.find(i => i.id === id);
+            if (item) item.groupId = groupId;
+        });
+        UI.closeAllMenus();
+        UI.toast("Items Grouped");
+        Board.save(true);
+        Render.all();
+        Network.broadcast({type:'GROUP_ITEMS', ids: State.selection, groupId: groupId});
+    },
+    ungroupSelection: () => {
+        const item = State.items.find(i => State.selection.includes(i.id));
+        if (!item || !item.groupId) return;
+        const groupId = item.groupId;
+        State.items.forEach(i => {
+            if (i.groupId === groupId) {
+                i.groupId = null;
+            }
+        });
+        UI.closeAllMenus();
+        UI.toast("Items Ungrouped");
+        Board.save(true);
+        Render.all();
+        Network.broadcast({type:'UNGROUP_ITEMS', groupId: groupId});
+    },
+    setType: (id, sub) => { const i = State.items.find(x=>x.id===id); if(i && i.type==='note') { i.sub = sub; const oldEl = document.getElementById(id); if(oldEl) oldEl.remove(); Render.all(); UI.closeAllMenus(); Board.save(true); Network.broadcast({type:'NOTE_UPDATE', note:i}); } },
+    delete: (id) => {
+        const targets = id ? [id] : State.selection;
+        if (targets.length === 0) return;
+        HierarchyManager.delete(targets);
+        UI.closeAllMenus();
+    },
+    sel: (id) => { 
+        State.selection=[id]; 
+        const i = State.items.find(x=>x.id===id);
+        if(i && i.type==='zone') {
+            if(State.activeSorts[i.id] || State.activity && State.activity.targetId === i.id) {
+                 Tab(1);
+                 $('act-results').innerHTML = `<div style="padding:10px;font-weight:bold;color:#6366f1">Zone: ${i.title}</div><div id="zone-res-${i.id}">Loading results...</div>`;
+                 Network.updateResults(i.id);
+            }
+        }
+        Render.all(); 
+    },
+    spin: (id) => { const i = State.items.find(x=>x.id===id); i.ang += 720 + Math.random()*360; Render.all(); },
+    rename: (id) => { const i = State.items.find(x=>x.id===id); const n = prompt("Rename Zone:", i.title); if(n) { i.title=n; Render.sync(); Board.save(true); if(State.isCoHost || Network.peer) Network.broadcast({type:'NOTE_UPDATE', note:i}); } },
+    editPoll: (id) => {
+        const p = State.items.find(x=>x.id===id); if(!p) return;
+        const q = prompt("Poll Question:", p.q);
+        if(q) { p.q = q; const opts = prompt("Options (comma separated):", p.opts.map(o=>o.lbl).join(',')); if(opts) { p.opts = opts.split(',').map(s => ({lbl:s.trim(), v:0})); Render.all(); Board.save(true); } }
+        UI.closeAllMenus();
+    },
+    showComments: (id) => {
+        State.activeCommentId = id; 
+        const cmts = State.comments.filter(c => c.targetId === id);
+        $('cmt-list').innerHTML = cmts.map(c => `<div class="disc-item"><div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#94a3b8;margin-bottom:4px"><span>${c.author}</span></div><span class="disc-tag dt-${c.tag}">${c.tag.toUpperCase()}</span><div style="color:#334155">${c.text}</div></div>`).join('');
+        $('modal-comments').style.display='flex';
+        $('cmt-input').value = ''; 
+    },
+    postComment: () => {
+        const id = State.activeCommentId;
+        const txt = $('cmt-input').value;
+        if(!id || !txt) return;
+        const cmt = { type:'COMMENT', targetId:id, text:txt, author:'Teacher', tag:'feedback' };
+        State.comments.push(cmt);
+        Network.broadcast(cmt); 
+        $('cmt-input').value = '';
+        Actions.showComments(id); 
+        Render.all(); 
+    },
+    toggleLock: (id) => { const i = State.items.find(x=>x.id===id); if(i) { i.locked = !i.locked; Render.all(); UI.closeAllMenus(); Board.save(true); } },
+    layoutZone: (zoneId) => { LayoutSystem.update(zoneId); },
+    addToZone: (zoneId, noteId) => {
+        HierarchyManager.link(noteId, zoneId);
+        LayoutSystem.update(zoneId); 
+        Render.all();
+    },
+    align: (mode) => {
+        // 1. Filter targets: Only items whose parent is NOT also selected
+        const allSelected = State.selection.map(id => State.items.find(i => i.id === id)).filter(x=>x);
+        if(allSelected.length < 2) return;
+        
+        const items = allSelected.filter(item => {
+            // If item has a parent zone, and that parent zone is also in the selection, exclude this item (it moves with parent)
+            if (item.parentZone && State.selection.includes(item.parentZone)) return false;
+            return true;
+        });
+        
+        if(items.length < 2) return; // Need at least 2 top-level items to align
+
+        if(mode === 'left') { const min = Math.min(...items.map(i=>i.x)); items.forEach(i=>i.x=min); }
+        if(mode === 'center') { const avg = items.reduce((a,b)=>a+(b.x+b.w/2),0)/items.length; items.forEach(i=>i.x=avg-i.w/2); }
+        if(mode === 'right') { const max = Math.max(...items.map(i=>i.x+i.w)); items.forEach(i=>i.x=max-i.w); }
+        if(mode === 'top') { const min = Math.min(...items.map(i=>i.y)); items.forEach(i=>i.y=min); }
+        if(mode === 'middle') { const avg = items.reduce((a,b)=>a+(b.y+b.h/2),0)/items.length; items.forEach(i=>i.y=avg-i.h/2); }
+        if(mode === 'bottom') { const max = Math.max(...items.map(i=>i.y+i.h)); items.forEach(i=>i.y=max-i.h); }
+        
+        // Update children of any moved zones
+        items.forEach(t => {
+            if(t.type === 'zone') LayoutSystem.update(t.id);
+        });
+
+        Render.sync(); ActionHistory.push(); Board.save(true);
+        if(State.isCoHost || Network.peer) Network.broadcast({type:'BATCH_UPDATE', items:items});
+    },
+    distribute: (axis) => {
+        const allSelected = State.selection.map(id => State.items.find(i => i.id === id)).filter(x=>x);
+        if(allSelected.length < 3) return;
+
+        const items = allSelected.filter(item => {
+            if (item.parentZone && State.selection.includes(item.parentZone)) return false;
+            return true;
+        });
+
+        if(items.length < 3) return;
+
+        if(axis === 'h') {
+            items.sort((a,b) => a.x - b.x); const min = items[0].x; const max = items[items.length-1].x; const span = max - min; const step = span / (items.length - 1);
+            items.forEach((item, i) => { item.x = min + (step * i); });
+        } else {
+            items.sort((a,b) => a.y - b.y); const min = items[0].y; const max = items[items.length-1].y; const span = max - min; const step = span / (items.length - 1);
+            items.forEach((item, i) => { item.y = min + (step * i); });
+        }
+
+        items.forEach(t => {
+            if(t.type === 'zone') LayoutSystem.update(t.id);
+        });
+
+        Render.sync(); ActionHistory.push(); Board.save(true);
+        if(State.isCoHost || Network.peer) Network.broadcast({type:'BATCH_UPDATE', items:items});
+    },
+    matchSize: () => {
+        const allSelected = State.selection.map(id => State.items.find(i => i.id === id)).filter(x=>x);
+        if(allSelected.length < 2) return;
+
+        const items = allSelected.filter(item => {
+            if (item.parentZone && State.selection.includes(item.parentZone)) return false;
+            return true;
+        });
+
+        const maxW = Math.max(...items.map(i=>i.w)); const maxH = Math.max(...items.map(i=>i.h));
+        items.forEach(i => { i.w = maxW; i.h = maxH; });
+        
+        items.forEach(t => {
+            if(t.type === 'zone') LayoutSystem.update(t.id);
+        });
+
+        Render.sync(); ActionHistory.push(); Board.save(true);
+        if(State.isCoHost || Network.peer) Network.broadcast({type:'BATCH_UPDATE', items:items});
+    },
+    arrangeGrid: () => {
+        let items = State.selection.length > 0 
+            ? State.selection.map(id => State.items.find(i => i.id === id)).filter(x=>x) 
+            : State.items.filter(i => i.type === 'note');
+        
+        if(items.length === 0) return;
+
+        // Filter out children if parent is also selected
+        items = items.filter(item => !item.parentZone || !State.selection.includes(item.parentZone));
+
+        const cols = Math.ceil(Math.sqrt(items.length)); const startX = Math.min(...items.map(i=>i.x)); const startY = Math.min(...items.map(i=>i.y)); const pad = 20;
+        items.sort((a,b) => (a.y - b.y) || (a.x - b.x));
+        let cx = startX, cy = startY; let rowH = 0;
+        items.forEach((item, i) => {
+            if(i > 0 && i % cols === 0) { cx = startX; cy += rowH + pad; rowH = 0; }
+            item.x = cx; item.y = cy; cx += item.w + pad; if(item.h > rowH) rowH = item.h;
+        });
+
+        items.forEach(t => {
+            if(t.type === 'zone') LayoutSystem.update(t.id);
+        });
+
+        Render.sync(); ActionHistory.push(); Board.save(true);
+        if(State.isCoHost || Network.peer) Network.broadcast({type:'BATCH_UPDATE', items:items});
+    },
+    collectByType: () => {
+        const types = ['notice', 'wonder', 'idea', 'test', 'meta', 'sketch'];
+        let startX = -State.view.x + 100; let startY = -State.view.y + 100;
+        types.forEach(t => {
+            const items = State.items.filter(i => i.type === 'note' && (i.sub || 'meta') === t);
+            if(items.length === 0) return;
+            const cols = Math.ceil(Math.sqrt(items.length)); let cx = startX, cy = startY; let rowH = 0, maxGroupW = 0;
+            items.forEach((item, i) => {
+                if(i > 0 && i % cols === 0) { cx = startX; cy += rowH + 20; rowH = 0; }
+                item.x = cx; item.y = cy; cx += item.w + 20; if(item.h > rowH) rowH = item.h; if(cx - startX > maxGroupW) maxGroupW = cx - startX;
+            });
+            startX += maxGroupW + 100;
+        });
+        Render.sync(); ActionHistory.push(); Board.save(true);
+        if(State.isCoHost || Network.peer) Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink});
+    },
+    collectByUser: () => {
+        const users = [...new Set(State.items.filter(i=>i.author).map(i=>i.author))];
+        let startX = -State.view.x + 100; let startY = -State.view.y + 100;
+        users.forEach(u => {
+            const items = State.items.filter(i => i.author === u);
+            if(items.length === 0) return;
+            const cols = Math.ceil(Math.sqrt(items.length)); let cx = startX, cy = startY; let rowH = 0, maxGroupW = 0;
+            items.forEach((item, i) => {
+                if(i > 0 && i % cols === 0) { cx = startX; cy += rowH + 20; rowH = 0; }
+                item.x = cx; item.y = cy; cx += item.w + 20; if(item.h > rowH) rowH = item.h; if(cx - startX > maxGroupW) maxGroupW = cx - startX;
+            });
+            startX += maxGroupW + 100;
+        });
+        Render.sync(); ActionHistory.push(); Board.save(true);
+        if(State.isCoHost || Network.peer) Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink});
+    },
+    bringFront: () => { State.selection.forEach(id => { const i = State.items.find(x=>x.id===id); if(i) i.z = (i.z || 10) + 1; }); Render.all(); Board.save(true); },
+    sendBack: () => { State.selection.forEach(id => { const i = State.items.find(x=>x.id===id); if(i) i.z = Math.max(1, (i.z || 10) - 1); }); Render.all(); Board.save(true); },
+    duplicate: () => {
+        const newIds = [];
+        const newItems = [];
+        State.selection.forEach(id => {
+            const original = State.items.find(x=>x.id===id);
+            if(original) {
+                const copy = JSON.parse(JSON.stringify(original)); copy.id = genId();
+                const pos = Board.getFreeSpace(copy.x + 20, copy.y + 20, copy.w, copy.h);
+                copy.x = pos.x; copy.y = pos.y; State.items.push(copy); newIds.push(copy.id); newItems.push(copy);
+            }
+        });
+        State.selection = newIds; Render.all(); ActionHistory.push(); Board.save(true);
+        if(State.isCoHost || Network.peer) newItems.forEach(i => Network.broadcast({type:'ADD_ITEM', item:i}));
+    }
+};
+
+/* --- MODES DEFINITIONS --- */
+window.Modes = {
+    Pan: {
+        down: (e) => { State.drag = { mode:'pan', sx:e.clientX, sy:e.clientY, vx:State.view.x, vy:State.view.y }; $('viewport').classList.add('panning'); UI.closeAllMenus(); },
+        move: (e) => { State.view.x = State.drag.vx + (e.clientX - State.drag.sx)/State.view.z; State.view.y = State.drag.vy + (e.clientY - State.drag.sy)/State.view.z; },
+        up: () => { $('viewport').classList.remove('panning'); }
+    },
+    Move: {
+        down: (e, id) => {
+            const item = State.items.find(i => i.id === id);
+            if (!item || item.locked) return;
+
+            // Start AutoScroll
+            AutoScroll.start();
+
+            const r = $('viewport').getBoundingClientRect();
+            const wx = (e.clientX - r.left) / State.view.z - State.view.x;
+            const wy = (e.clientY - r.top) / State.view.z - State.view.y;
+
+            const moveTargetIds = new Set();
+            if (item.groupId) {
+                State.items.forEach(i => { if (i.groupId === item.groupId) moveTargetIds.add(i.id); });
+            } else if (State.selection.includes(id) && State.selection.length > 1) {
+                State.selection.forEach(selId => moveTargetIds.add(selId));
+            } else {
+                moveTargetIds.add(id);
+            }
+
+            const finalTargetIds = new Set(moveTargetIds);
+            moveTargetIds.forEach(targetId => {
+                HierarchyManager.getDescendants(targetId).forEach(descId => finalTargetIds.add(descId));
+            });
+
+            const moveTargets = Array.from(finalTargetIds)
+                .map(iId => State.items.find(i => i.id === iId)).filter(Boolean);
+
+            State.drag = {
+                mode: 'move', primaryId: id,
+                moveTargets: moveTargets.map(i => ({ id: i.id, startX: i.x, startY: i.y })),
+                mouseStartX: wx, mouseStartY: wy,
+                hoverZoneId: null, targetIndex: -1
+            };
+
+            moveTargets.forEach(i => {
+                const el = document.getElementById(i.id);
+                if (el) {
+                    el.classList.add('no-transition');
+                    el.style.zIndex = (parseInt(el.style.zIndex) || 10) + 10000;
+                }
+            });
+        },
+        move: (e) => {
+            const d = State.drag;
+            if (!d) return;
+            
+            // Update AutoScroll check
+            AutoScroll.check(e);
+
+            const primaryItem = State.items.find(i => i.id === d.primaryId);
+            if (!primaryItem) return;
+
+            const r = $('viewport').getBoundingClientRect();
+            const wx = (e.clientX - r.left) / State.view.z - State.view.x;
+            const wy = (e.clientY - r.top) / State.view.z - State.view.y;
+            let dx = wx - d.mouseStartX;
+            let dy = wy - d.mouseStartY;
+
+            const primaryTarget = d.moveTargets.find(t => t.id === d.primaryId);
+            
+            const potentialX = primaryTarget.startX + dx;
+            const potentialY = primaryTarget.startY + dy;
+
+            // Check for zone hover first to decide whether to snap
+            const cx = potentialX + primaryItem.w / 2;
+            const cy = potentialY + primaryItem.h / 2;
+            const hitZone = (primaryItem.type !== 'zone') && State.items.find(z => z.type === 'zone' && z.id !== primaryItem.id && cx > z.x && cx < z.x + z.w && cy > z.y && cy < z.y + z.h);
+
+            if (hitZone) {
+                // If over a zone, disable snapping and clear guides
+                SnapSystem.clearGuides();
+            } else {
+                // Not over a zone, so apply snapping
+                const snapResult = SnapSystem.getSnap(primaryItem, potentialX, potentialY);
+                dx = snapResult.x - primaryTarget.startX;
+                dy = snapResult.y - primaryTarget.startY;
+                SnapSystem.drawGuides();
+            }
+
+            d.moveTargets.forEach(target => {
+                const item = State.items.find(i => i.id === target.id);
+                if (item) {
+                    item.x = target.startX + dx;
+                    item.y = target.startY + dy;
+                    const el = document.getElementById(item.id);
+                    if (el) el.style.transform = `translate(${item.x}px, ${item.y}px)`;
+                }
+            });
+
+            if (primaryItem.type !== 'zone') {
+                const currentCx = primaryItem.x + primaryItem.w / 2;
+                const currentCy = primaryItem.y + primaryItem.h / 2;
+                const currentHitZone = State.items.find(z => z.type === 'zone' && z.id !== primaryItem.id && currentCx > z.x && currentCx < z.x + z.w && currentCy > z.y && currentCy < z.y + z.h);
+
+                if (d.hoverZoneId && (!currentHitZone || currentHitZone.id !== d.hoverZoneId)) {
+                    document.getElementById(d.hoverZoneId)?.classList.remove('drag-over');
+                    LayoutSystem.update(d.hoverZoneId);
+                    d.hoverZoneId = null; d.targetIndex = -1;
+                    $('ghost-layer').innerHTML = '';
+                }
+                if (currentHitZone) {
+                    d.hoverZoneId = currentHitZone.id;
+                    document.getElementById(currentHitZone.id).classList.add('drag-over');
+                    
+                    // Special Handling for Consensus Zones: No ghost slot logic, just free movement
+                    if (currentHitZone.zoneType === 'consensus') {
+                         d.targetIndex = -1; // No specific index
+                         // We still call update to potentially resize zone if we drag near bottom
+                         // but we pass isVirtual to show it inside
+                         const virt = { ...primaryItem, _isVirtual: true, _dragX: primaryItem.x, _dragY: primaryItem.y };
+                         LayoutSystem.update(currentHitZone.id, virt);
+                    } else {
+                        // Standard Flow Layout Logic
+                        const newIndex = LayoutSystem.getIndex(currentHitZone, currentCx, currentCy, primaryItem.id);
+                        if (d.targetIndex !== newIndex) {
+                            d.targetIndex = newIndex;
+                            const virt = { ...primaryItem, _isVirtual: true, _dragX: primaryItem.x, _dragY: primaryItem.y };
+                            LayoutSystem.update(currentHitZone.id, virt, newIndex);
+                        }
+                    }
+                }
+            }
+        },
+        up: (e) => {
+            const d = State.drag;
+            if(!d) return;
+
+            // Stop AutoScroll
+            AutoScroll.stop();
+
+            SnapSystem.clearGuides();
+            $('ghost-layer').innerHTML = '';
+            document.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+
+            d.moveTargets.forEach(target => {
+                const el = document.getElementById(target.id);
+                if (el) {
+                    el.classList.remove('no-transition');
+                    el.style.zIndex = (parseInt(el.style.zIndex) || 10010) - 10000;
+                }
+            });
+
+            const updatedItems = d.moveTargets.map(t => State.items.find(i => i.id === t.id)).filter(Boolean);
+
+            if (d.hoverZoneId) {
+                const zone = State.items.find(i => i.id === d.hoverZoneId);
+                if (zone) {
+                    const itemsToLink = updatedItems.filter(i => i && i.type !== 'zone');
+                    const primaryItem = itemsToLink.find(i => i.id === d.primaryId);
+                    
+                    // Link items to zone
+                    if (primaryItem) {
+                        HierarchyManager.link(primaryItem.id, d.hoverZoneId, d.targetIndex);
+                        itemsToLink.forEach(item => {
+                            if (item.id !== d.primaryId) HierarchyManager.link(item.id, d.hoverZoneId);
+                        });
+                    } else {
+                        itemsToLink.forEach(item => HierarchyManager.link(item.id, d.hoverZoneId));
+                    }
+                    LayoutSystem.update(d.hoverZoneId);
+                }
+            } else {
+                d.moveTargets.forEach(target => {
+                    const item = State.items.find(i => i.id === target.id);
+                    if (item && item.parentZone) {
+                        const oldZone = State.items.find(z => z.id === item.parentZone);
+                        if (oldZone && !d.moveTargets.find(t => t.id === oldZone.id)) {
+                            const oldParentId = item.parentZone;
+                            HierarchyManager.unlink(item.id);
+                            LayoutSystem.update(oldParentId);
+                        }
+                    }
+                });
+            }
+
+            State.drag = null;
+            ActionHistory.push();
+            Board.save(true);
+            
+            Network.broadcast({type:'BATCH_UPDATE', items: updatedItems});
+            if (d.hoverZoneId) {
+                const z = State.items.find(x => x.id === d.hoverZoneId);
+                if (z) Network.broadcast({type:'ZONE_REORDER', zoneId: z.id, children: z.children});
+            }
+        }
+    },
+    Resize: {
+        down: (e, id) => {
+            const r = $('viewport').getBoundingClientRect();
+            const x = (e.clientX - r.left)/State.view.z - State.view.x;
+            const y = (e.clientY - r.top)/State.view.z - State.view.y;
+            const item = State.items.find(i=>i.id===id);
+            State.drag = { mode:'resize', id:id, sx:x, sy:y, ow:item.w, oh:item.h };
+        },
+        move: (e) => {
+            const r = $('viewport').getBoundingClientRect();
+            const x = (e.clientX - r.left)/State.view.z - State.view.x;
+            const y = (e.clientY - r.top)/State.view.z - State.view.y;
+            const d = State.drag;
+            const i = State.items.find(x=>x.id===d.id);
+            
+            i.w = Math.max(150, d.ow + (x - d.sx)); 
+            i.h = Math.max(150, d.oh + (y - d.sy));
+            
+            if(i.type === 'zone') {
+                LayoutSystem.update(i.id);
+            } else if (i.parentZone) {
+                LayoutSystem.update(i.parentZone);
+            }
+            
+            const el = document.getElementById(i.id);
+            if(el) { el.style.width = i.w + 'px'; el.style.height = i.h + 'px'; }
+        },
+        up: (e) => { 
+            const i = State.items.find(x=>x.id===State.drag.id);
+            if(i && i.parentZone) {
+                LayoutSystem.update(i.parentZone);
+            }
+            
+            if(State.isCoHost || Network.peer) {
+                Network.broadcast({type:'UPDATE_POS', id:i.id, x:i.x, y:i.y, w:i.w, h:i.h});
+            }
+            State.drag = null; ActionHistory.push(); Board.save(true); 
+        }
+    },
+    Marquee: {
+        down: (e) => {
+            const r = $('viewport').getBoundingClientRect();
+            State.drag = { mode:'box', sx: e.clientX - r.left, sy: e.clientY - r.top };
+            if(!e.shiftKey) { State.selection=[]; UI.closeAllMenus(); Render.all(); }
+        },
+        move: (e) => {
+            const r = $('viewport').getBoundingClientRect();
+            const relX = e.clientX - r.left; const relY = e.clientY - r.top;
+            const d = State.drag;
+            const l = Math.min(relX, d.sx), t = Math.min(relY, d.sy), w = Math.abs(relX - d.sx), h = Math.abs(relY - d.sy);
+            const m = $('marquee');
+            m.style.left = l + 'px'; m.style.top = t + 'px'; m.style.width = w + 'px'; m.style.height = h + 'px'; m.style.display='block';
+            const globalL = l + r.left, globalT = t + r.top, globalR = globalL + w, globalB = globalT + h;
+            
+            const newlySelected = [];
+            State.items.forEach(i => {
+                const el = document.getElementById(i.id); if(!el) return;
+                const rect = el.getBoundingClientRect();
+                if (globalL < rect.right && globalR > rect.left && globalT < rect.bottom && globalB > rect.top) {
+                    newlySelected.push(i.id);
+                }
+            });
+            State.selection = [...new Set([...(e.shiftKey ? State.selection : []), ...newlySelected])];
+            Render.all(); 
+        },
+        up: (e) => { $('marquee').style.display='none'; State.drag = null; }
+    },
+    Draw: {
+        down: (e) => {
+            const r = $('viewport').getBoundingClientRect();
+            const x = (e.clientX - r.left)/State.view.z - State.view.x;
+            const y = (e.clientY - r.top)/State.view.z - State.view.y;
+            State.drag = { mode:'draw' }; InkManager.start(x, y);
+        },
+        move: (e) => {
+            const r = $('viewport').getBoundingClientRect();
+            const x = (e.clientX - r.left)/State.view.z - State.view.x;
+            const y = (e.clientY - r.top)/State.view.z - State.view.y;
+            InkManager.move(x, y);
+        },
+        up: () => { InkManager.end(); State.drag = null; }
+    },
+    Eraser: {
+        down: (e) => { State.drag = { mode:'eraser' }; },
+        move: (e) => {
+            const r = $('viewport').getBoundingClientRect();
+            const x = (e.clientX - r.left)/State.view.z - State.view.x;
+            const y = (e.clientY - r.top)/State.view.z - State.view.y;
+            InkManager.eraseAt(x, y);
+        },
+        up: () => { State.drag = null; }
+    },
+    Laser: {
+        down: (e) => { State.drag = { mode:'laser' }; },
+        move: (e) => {
+            const r = $('viewport').getBoundingClientRect();
+            const x = e.clientX - r.left; const y = e.clientY - r.top;
+            const dot = document.createElement('div');
+            dot.style.cssText = `position:absolute;left:${x}px;top:${y}px;width:10px;height:10px;background:red;border-radius:50%;pointer-events:none;z-index:9999;opacity:0.8;box-shadow:0 0 5px red`;
+            $('viewport').appendChild(dot);
+            setTimeout(() => dot.remove(), 500);
+            if(State.isCoHost || Network.peer) Network.broadcast({type:'LASER', x:x, y:y});
+        },
+        up: () => { State.drag = null; }
+    }
+};
+
+/* --- INPUT CONTROLLER --- */
+window.InputController = {
+    start: (e) => {
+        if(e.target.closest('.drawer') || e.target.closest('.modal') || e.target.closest('.dock-btn') || e.target.closest('.tb-btn') || e.target.closest('input') || e.target.closest('textarea') || e.target.closest('select')) return;
+        if(e.target.closest('.menu-trigger') || e.target.closest('[onclick]') || e.target.closest('.cmt-badge')) return;
+        
+        if (e.target.id === 'minimap-drag-handle') {
+            const cont = $('minimap-container');
+            State.drag = { mode: 'minimap-drag', el: cont, sx: e.clientX, sy: e.clientY, ex: cont.offsetLeft, ey: cont.offsetTop };
+            return;
+        }
+        if (e.target.id === 'minimap-resize-handle') {
+            const cont = $('minimap-container');
+            State.drag = { mode: 'minimap-resize', el: cont, sx: e.clientX, sy: e.clientY, ew: cont.offsetWidth, eh: cont.offsetHeight };
+            return;
+        }
+        if(e.target.closest('#minimap')) {
+            const rect = $('minimap').getBoundingClientRect();
+            const mx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+            const my = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+            const info = $('minimap').worldInfo;
+            if(info && info.scale > 0) {
+                const wx = (mx / info.scale) + info.minX;
+                const wy = (my / info.scale) + info.minY;
+                State.view.x = -wx + (window.innerWidth/State.view.z)/2;
+                State.view.y = -wy + (window.innerHeight/State.view.z)/2;
+                Render.sync();
+            }
+            return;
+        }
+
+        const evt = e.touches ? e.touches[0] : e;
+        if(e.touches && e.touches.length > 1) { State.touch.dist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); return; }
+
+        const itemEl = e.target.closest('.item');
+        const handle = e.target.closest('.resize-h');
+
+        if(e.button === 1) { Modes.Pan.down(evt); return; }
+
+        if(State.tool === 'pan' || State.tool === 'select') {
+            if(handle) { Modes.Resize.down(evt, itemEl.id); return; }
+            if(itemEl) {
+                 if(!e.shiftKey) { if(!State.selection.includes(itemEl.id)) { State.selection = [itemEl.id]; Render.all(); } } 
+                 else { if(!State.selection.includes(itemEl.id)) State.selection.push(itemEl.id); else State.selection = State.selection.filter(id => id !== itemEl.id); Render.all(); }
+                 if(e.target.closest('.i-body') && itemEl.classList.contains('note')) return;
+                 Modes.Move.down(evt, itemEl.id); return;
+            }
+            if(State.tool === 'pan') Modes.Pan.down(evt); else Modes.Marquee.down(evt);
+            return;
+        }
+        else if(State.tool === 'draw') { Modes.Draw.down(evt); return; }
+        else if(State.tool === 'eraser') { Modes.Eraser.down(evt); return; }
+        else if(State.tool === 'laser') { Modes.Laser.down(evt); return; }
+    },
+    move: (e) => {
+        if(e.touches && e.touches.length === 2) {
+            const dist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+            const delta = dist - State.touch.dist;
+            if(Math.abs(delta) > 5) { const s = delta > 0 ? 1.02 : 0.98; InputController.zoom(s, (e.touches[0].clientX+e.touches[1].clientX)/2, (e.touches[0].clientY+e.touches[1].clientY)/2); State.touch.dist = dist; }
+            return;
+        }
+        if(!State.drag) return;
+        e.preventDefault();
+        const evt = e.touches ? e.touches[0] : e;
+        const m = State.drag.mode;
+        if (m === 'minimap-drag' || m === 'minimap-resize') {
+            return;
+        }
+        if(m === 'pan') Modes.Pan.move(evt);
+        else if(m === 'move') Modes.Move.move(evt);
+        else if(m === 'resize') Modes.Resize.move(evt);
+        else if(m === 'box') Modes.Marquee.move(evt);
+        else if(m === 'draw') Modes.Draw.move(evt);
+        else if(m === 'eraser') Modes.Eraser.move(evt);
+        else if(m === 'laser') Modes.Laser.move(evt);
+    },
+    end: (e) => {
+        if(!State.drag) return;
+        const m = State.drag.mode;
+        if(m === 'pan') {
+            const dist = Math.hypot(e.clientX - State.drag.sx, e.clientY - State.drag.sy);
+            if(dist < 5) { State.selection = []; UI.closeAllMenus(); Render.all(); }
+            Modes.Pan.up();
+        }
+        else if(m === 'move') Modes.Move.up(e);
+        else if(m === 'resize') Modes.Resize.up();
+        else if(m === 'box') Modes.Marquee.up();
+        else if(m === 'draw') Modes.Draw.up();
+        else if(m === 'eraser') Modes.Eraser.up();
+        else if(m === 'laser') Modes.Laser.up();
+        if(State.drag) State.drag = null;
+    },
+    wheel: (e) => { e.preventDefault(); const s = Math.exp(-e.deltaY * 0.001); InputController.zoom(s, e.clientX, e.clientY); },
+    zoom: (factor, cx, cy) => {
+        const oz = State.view.z; let nz = oz * factor; nz = Math.max(0.1, Math.min(nz, 5));
+        const wx = (cx / oz) - State.view.x; const wy = (cy / oz) - State.view.y;
+        State.view.x = (cx / nz) - wx; State.view.y = (cy / nz) - wy; State.view.z = nz; Render.sync();
+    },
+    keydown: (e) => {
+        if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        if(e.key === 'Backspace' || e.key === 'Delete') Actions.delete();
+        if((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); ActionHistory.undo(); }
+        if((e.metaKey || e.ctrlKey) && e.key === 'y') { e.preventDefault(); ActionHistory.redo(); }
+        if(e.code === 'Space') { e.preventDefault(); window.setTool('pan'); }
+    },
+    keyup: (e) => { if(e.code === 'Space') { window.setTool('select'); } }
+};
+window.addEventListener('keyup', InputController.keyup);
+
+/* --- MAGNETIC SNAP SYSTEM --- */
+window.SnapSystem = {
+    threshold: 10,
+    activeGuides: [],
+
+    getSnap: (item, newX, newY) => {
+        const threshold = SnapSystem.threshold / State.view.z;
+        let finalX = newX, finalY = newY;
+        SnapSystem.activeGuides = [];
+
+        const itemBounds = {
+            left: newX, right: newX + item.w, top: newY, bottom: newY + item.h,
+            cx: newX + item.w / 2, cy: newY + item.h / 2
+        };
+
+        const otherItems = State.items.filter(i => i.id !== item.id && !State.drag.moveTargets.find(t => t.id === i.id) && !i.parentZone);
+
+        let bestSnapX = { dist: Infinity }, bestSnapY = { dist: Infinity };
+
+        otherItems.forEach(other => {
+            const otherBounds = {
+                left: other.x, right: other.x + other.w, top: other.y, bottom: other.y + other.h,
+                cx: other.x + other.w / 2, cy: other.y + other.h / 2
+            };
+
+            // STRICT EDGE-TO-EDGE AND MIDDLE-TO-MIDDLE LOGIC
+            
+            // X-Axis Edges (Left/Right to Left/Right)
+            ['left', 'right'].forEach(p1 => {
+                ['left', 'right'].forEach(p2 => {
+                    const dist = Math.abs(itemBounds[p1] - otherBounds[p2]);
+                    if (dist < threshold && dist < bestSnapX.dist) {
+                        bestSnapX = { dist, val: otherBounds[p2] - (itemBounds[p1] - newX), guide: otherBounds[p2] };
+                    }
+                });
+            });
+
+            // X-Axis Centers (CX to CX)
+            const distCx = Math.abs(itemBounds.cx - otherBounds.cx);
+            if (distCx < threshold && distCx < bestSnapX.dist) {
+                bestSnapX = { dist: distCx, val: otherBounds.cx - (itemBounds.cx - newX), guide: otherBounds.cx };
+            }
+
+            // Y-Axis Edges (Top/Bottom to Top/Bottom)
+            ['top', 'bottom'].forEach(p1 => {
+                ['top', 'bottom'].forEach(p2 => {
+                    const dist = Math.abs(itemBounds[p1] - otherBounds[p2]);
+                    if (dist < threshold && dist < bestSnapY.dist) {
+                        bestSnapY = { dist, val: otherBounds[p2] - (itemBounds[p1] - newY), guide: otherBounds[p2] };
+                    }
+                });
+            });
+
+            // Y-Axis Centers (CY to CY)
+            const distCy = Math.abs(itemBounds.cy - otherBounds.cy);
+            if (distCy < threshold && distCy < bestSnapY.dist) {
+                bestSnapY = { dist: distCy, val: otherBounds.cy - (itemBounds.cy - newY), guide: otherBounds.cy };
+            }
+        });
+
+        if (bestSnapX.dist < Infinity) {
+            finalX = bestSnapX.val;
+            SnapSystem.activeGuides.push({ type: 'v', pos: bestSnapX.guide });
+        }
+        if (bestSnapY.dist < Infinity) {
+            finalY = bestSnapY.val;
+            SnapSystem.activeGuides.push({ type: 'h', pos: bestSnapY.guide });
+        }
+
+        return { x: finalX, y: finalY };
+    },
+
+    drawGuides: () => {
+        const layer = $('ghost-layer');
+        SnapSystem.clearGuides(true);
+        SnapSystem.activeGuides.forEach(g => {
+            const el = document.createElement('div');
+            el.className = `snap-guide ${g.type}`;
+            if (g.type === 'v') {
+                el.style.left = `${g.pos}px`;
+                el.style.top = '0';
+                el.style.height = '10000px'; // A large number
+                el.style.transform = 'translateY(-5000px)';
+            } else {
+                el.style.top = `${g.pos}px`;
+                el.style.left = '0';
+                el.style.width = '10000px';
+                el.style.transform = 'translateX(-5000px)';
+            }
+            layer.appendChild(el);
+        });
+    },
+
+    clearGuides: (instant = false) => {
+        const layer = $('ghost-layer');
+        Array.from(layer.querySelectorAll('.snap-guide')).forEach(g => g.remove());
+    }
+};
+
+
+/* --- NETWORK & ACTIVITY MANAGER --- */
+window.Network = {
+    peer: null,
+    qrScanner: null,
+    
+    host: (existingId) => {
+        if (Network.peer && !Network.peer.destroyed && existingId === undefined) {
+            UI.showSettingsModal();
+            return;
+        }
+        if(Network.peer) { Network.peer.destroy(); Network.peer = null; }
+        const idToUse = existingId === null ? undefined : existingId;
+
+        Network.peer = new Peer(idToUse);
+        Network.peer.on('open', id => {
+            localStorage.setItem('dqb_host_id', id);
+            UI.toast(State.isCoHost ? "Connected as Co-Host" : "📡 Network Ready"); 
+            setInterval(() => Network.broadcast({type:'HEARTBEAT'}), 3000);
+            if(State.isCoHost) Network.requestSync();
+        });
+
+        Network.peer.on('connection', c => {
+            c.on('open', () => { 
+                const syncNotes = State.items.filter(i => i.type === 'note').map(i => ({id:i.id, text:i.text, sub:i.sub, src:i.src}));
+                
+                let welcomeMode = 'LOCKED'; 
+                let actPayload = null;
+
+                switch(State.activity.type) {
+                    case 'OPEN': welcomeMode = 'OPEN'; break;
+                    case 'ZONE_ACT': welcomeMode = State.activity.payload.subType; actPayload = State.activity.payload; break;
+                    case 'WIDGET_ACT': welcomeMode = State.activity.payload.subType; actPayload = State.activity.payload; break;
+                    case 'EXIT_TICKET': welcomeMode = 'EXIT_TICKET'; actPayload = State.activity.payload; break;
+                }
+
+                SafeSend(c, { type: 'WELCOME', boardId: State.id, mode: welcomeMode, payload: actPayload, sync: syncNotes });
+                UI.toast(`Student Joined`); 
+            });
+            c.on('data', d => { try { Network.handle(c.peer, JSON.parse(d), c); } catch(e) { console.error(e); } });
+            c.on('close', () => { delete State.students[c.peer]; Roster(); });
+            c.on('error', (e) => console.error("Connection Error", e));
+        });
+        Network.peer.on('error', (err) => {
+            if(err.type === 'unavailable-id') { Network.host(null); } else { console.error(err); }
+        });
+    },
+
+    joinAsCoHost: () => {
+        $('modal-join').style.display = 'flex';
+        $('join-id-input').focus();
+    },
+
+    startQRScan: () => {
+        $('reader').style.display = 'block';
+        $('btn-scan').style.display = 'none';
+        
+        if (!Network.qrScanner) {
+            Network.qrScanner = new Html5Qrcode("reader");
+        }
+        
+        Network.qrScanner.start(
+            { facingMode: "environment" }, 
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            (decodedText, decodedResult) => {
+                $('join-id-input').value = decodedText;
+                Network.qrScanner.stop().then(() => {
+                    $('reader').style.display = 'none';
+                    $('btn-scan').style.display = 'flex';
+                    Network.submitJoin();
+                });
+            },
+            (errorMessage) => {
+                // Ignore parse errors, scanning is continuous
+            }
+        ).catch(err => {
+            console.error(err);
+            UI.toast("Camera access failed");
+            $('reader').style.display = 'none';
+            $('btn-scan').style.display = 'flex';
+        });
+    },
+
+    submitJoin: () => {
+        const id = $('join-id-input').value.trim();
+        if(!id) return alert("Please enter a Host ID");
+        
+        Network.closeJoinModal();
+        State.isCoHost = true;
+        $('landing').style.display='none'; $('app').style.display='block';
+        
+        Network.peer = new Peer();
+        Network.peer.on('open', myId => {
+            const conn = Network.peer.connect(id);
+            conn.on('open', () => {
+                UI.toast("Connected to Host");
+                State.students['HOST'] = { name: "HOST", conn: conn };
+                conn.send(JSON.stringify({type: 'AUTH_COHOST'}));
+            });
+            conn.on('data', d => Network.handle('HOST', JSON.parse(d), conn));
+            conn.on('error', e => { alert("Connection Failed"); location.reload(); });
+        });
+        Render.loop();
+    },
+
+    closeJoinModal: () => {
+        $('modal-join').style.display='none';
+        if(Network.qrScanner && Network.qrScanner.isScanning) {
+            Network.qrScanner.stop().then(() => {
+                 $('reader').style.display = 'none';
+                 $('btn-scan').style.display = 'flex';
+            });
+        }
+    },
+
+    requestSync: () => {
+        if(State.students['HOST']) SafeSend(State.students['HOST'].conn, {type:'SYNC_REQ'});
+    },
+
+    transitionTo: (type, targetId = null, payload = null) => {
+        State.items.forEach(i => {
+            i.isOpen = false;
+            const btn = document.getElementById(`zbtn-${i.id}`);
+            if(btn) {
+                btn.classList.remove('active');
+                if(i.type === 'zone' && i.zoneType !== 'exit') btn.innerText = "📡 Open";
+                else if(i.type === 'poll' || i.type === 'graph' || i.zoneType === 'exit') btn.innerText = "📡 Broadcast";
+            }
+        });
+
+        $('act-controls').style.display = 'none';
+        UI.updateOpenNotesButton(type === 'OPEN');
+
+        Network.broadcast({ type: 'STOP_ACT' });
+        if (type !== 'OPEN') Network.broadcast({ type: 'MODE', val: 'LOCKED' });
+
+        State.activity = { type, targetId, payload };
+        Board.save(true); // Save activity state change
+
+        if (type === 'OPEN') {
+            Network.broadcast({ type: 'MODE', val: 'OPEN' });
+        }
+        else if (targetId) {
+            const item = State.items.find(i => i.id === targetId);
+            if(item) {
+                item.isOpen = true;
+                const btn = document.getElementById(`zbtn-${item.id}`);
+                
+                if (type === 'ZONE_ACT') {
+                    if(btn) { btn.innerText = "🟢 Open"; btn.classList.add('active'); }
+                    // CRITICAL FIX: Send 'type' as the specific activity subtype so student client recognizes it immediately
+                    const finalPayload = { ...payload, type: payload.subType };
+                    Network.broadcast(finalPayload); 
+                    
+                    Tab(1); 
+                    $('act-controls').style.display='block'; 
+                    $('act-info').innerText = `Mode: ${payload.subType.replace('ACT_','')} | Items: ${payload.items.length}`;
+                    
+                    const modeLabel = payload.subType === 'ACT_DISCUSS' ? 'Discussion' : 'Results';
+                    const html = `<div style="padding:10px;color:#64748b">Waiting for ${modeLabel}...</div>`;
+                    const zContainer = $(`zr-${targetId}`); 
+                    if(zContainer) { 
+                        zContainer.innerHTML = `<h4 style="margin:0 0 10px 0; color:#475569">${modeLabel}</h4>` + html; 
+                        zContainer.classList.add('active'); 
+                    }
+                    $('act-results').innerHTML = html;
+                } 
+                else if (type === 'WIDGET_ACT' || type === 'EXIT_TICKET') {
+                    if(btn) { btn.innerText = "🔴 Stop"; btn.classList.add('active'); }
+                    Network.broadcast(payload); 
+                }
+            }
+        }
+        Render.all(); 
+        UI.toast(`Activity: ${type}`);
+    },
+
+    toggleOpenMode: (isOn) => { 
+        if(isOn) Network.transitionTo('OPEN');
+        else Network.transitionTo('LOCKED');
+    },
+
+    startActivity: (mode) => {
+        let targets = []; let zoneId = null;
+        State.selection.forEach(id => { 
+            const i = State.items.find(x=>x.id===id); 
+            if(i.type === 'note') targets.push(i); 
+            else if(i.type === 'zone') { 
+                zoneId = i.id; 
+                if(i.children) i.children.forEach(cid => { const n = State.items.find(x=>x.id===cid); if(n) targets.push(n); }); 
+            } 
+        });
+        targets = [...new Set(targets)];
+
+        if(targets.length < 1 && mode==='discuss') return alert("Select notes to discuss.");
+        if(targets.length < 2 && mode!=='discuss') return alert("Select at least 2 notes.");
+
+        if(!zoneId) {
+            let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+            targets.forEach(t => { minX = Math.min(minX, t.x); minY = Math.min(minY, t.y); maxX = Math.max(maxX, t.x+t.w); maxY = Math.max(maxY, t.y+t.h); });
+            zoneId = genId(); const pad = 40;
+            const newZone = { id: zoneId, type: 'zone', title: 'Activity Zone', x: minX - pad, y: minY - pad - 40, w: (maxX - minX) + pad*2, h: (maxY - minY) + pad*2 + 40, children: targets.map(t => t.id) };
+            State.items.push(newZone); Actions.sel(zoneId);
+        } else { Actions.sel(zoneId); }
+
+        State.activeSorts[zoneId] = [];
+        const subType = mode==='vote'?'ACT_VOTE':(mode==='sort'?'ACT_SORT':'ACT_DISCUSS');
+        const itemsList = targets.map(n => ({ id:n.id, text:n.text, sub:n.sub }));
+        
+        Network.transitionTo('ZONE_ACT', zoneId, { 
+            type: subType, 
+            subType: subType, 
+            actId: zoneId, 
+            items: itemsList 
+        });
+    },
+
+    stopActivity: () => { 
+        Network.transitionTo('LOCKED');
+    },
+
+    toggleZone: (id) => {
+        if (State.activity.targetId === id && State.activity.type !== 'LOCKED') {
+            Network.transitionTo('LOCKED');
+            return;
+        }
+        const item = State.items.find(x => x.id === id);
+        if(!item) return;
+
+        if (item.zoneType === 'exit') {
+            Network.broadcastExit(id);
+        } else if (item.type === 'poll') {
+            Network.broadcastPoll(id);
+        } else if (item.type === 'graph') {
+            Network.broadcastGraph(id);
+        } else if (item.type === 'zone') {
+            Network.openZone(id);
+        }
+    },
+
+    openZone: (id) => {
+        const z = State.items.find(x=>x.id===id);
+        Network.transitionTo('ZONE_ACT', id, { 
+            type: 'OPEN_ZONE', 
+            subType: 'OPEN_ZONE',
+            actId: id, 
+            title: z.title, 
+            zoneType: z.zoneType,
+            items: [] 
+        });
+    },
+
+    broadcastPoll: (id) => {
+        const p = State.items.find(x=>x.id===id);
+        Network.transitionTo('WIDGET_ACT', id, {
+            type: 'ACT_POLL',
+            subType: 'ACT_POLL',
+            actId: id,
+            q: p.q,
+            opts: p.opts
+        });
+    },
+
+    broadcastGraph: (id) => {
+        const g = State.items.find(x=>x.id===id);
+        Network.transitionTo('WIDGET_ACT', id, {
+            type: 'ACT_GRAPH',
+            subType: 'ACT_GRAPH',
+            actId: id,
+            title: g.title
+        });
+    },
+
+    broadcastExit: (id) => {
+        const item = State.items.find(x=>x.id===id);
+        Network.transitionTo('EXIT_TICKET', id, {
+            type: 'EXIT_TICKET',
+            subType: 'EXIT_TICKET',
+            actId: id,
+            mode: item.exitMode,
+            prompt: item.prompt,
+            opts: item.opts,
+            single: true
+        });
+    },
+
+    handle: (pid, d, conn) => {
+        if(d.type === 'JOIN') { State.students[pid] = { name:d.name, avatar:d.avatar, conn:conn }; Roster(); } 
+        else if(d.type === 'AUTH_COHOST') { 
+            State.students[pid] = { name: "Co-Host", avatar: "👑", conn: conn }; 
+            Roster(); 
+            SafeSend(conn, {type:'FULL_SYNC', items:State.items, ink:State.ink, activity: State.activity});
+        }
+        else if(d.type === 'SYNC_REQ') { SafeSend(conn, {type:'FULL_SYNC', items:State.items, ink:State.ink, activity: State.activity}); }
+        else if(d.type === 'FULL_SYNC') { 
+            State.items = d.items; State.ink = d.ink; if (d.activity) State.activity = d.activity; 
+            Render.all(); 
+            UI.updateOpenNotesButton(State.activity.type === 'OPEN');
+        }
+        else if(d.type === 'UPDATE_POS') { 
+            const i = State.items.find(x=>x.id===d.id); 
+            if(i) { i.x=d.x; i.y=d.y; if(d.w) i.w=d.w; if(d.h) i.h=d.h; Render.sync(); } 
+        }
+        else if(d.type === 'BATCH_UPDATE') {
+             d.items.forEach(u => {
+                 const i = State.items.find(x=>x.id===u.id);
+                 if(i) { Object.assign(i, u); }
+             });
+             Render.all();
+        }
+        else if(d.type === 'GROUP_ITEMS') { d.ids.forEach(id => { const i = State.items.find(x=>x.id===id); if(i) i.groupId = d.groupId; }); Render.all(); }
+        else if(d.type === 'UNGROUP_ITEMS') { State.items.forEach(i => { if(i.groupId === d.groupId) i.groupId = null; }); Render.all(); }
+        else if(d.type === 'ADD_ITEM') { State.items.push(d.item); Render.all(); }
+        else if(d.type === 'LINK_ITEMS') { d.ids.forEach(id => HierarchyManager.link(id, d.zoneId)); LayoutSystem.update(d.zoneId); Render.all(); }
+        else if(d.type === 'ZONE_REORDER') {
+            const z = State.items.find(i => i.id === d.zoneId);
+            if(z) {
+                z.children = d.children;
+                // Ensure all children point to this parent
+                z.children.forEach(cid => {
+                    const c = State.items.find(x => x.id === cid);
+                    if(c) c.parentZone = z.id;
+                });
+                LayoutSystem.update(z.id);
+                Render.all();
+            }
+        }
+        else if(d.type === 'INK_ADD') { State.ink.push(d.ink); Render.ink(); }
+        else if(d.type === 'LASER') { 
+            const dot = document.createElement('div');
+            dot.style.cssText = `position:absolute;left:${d.x}px;top:${d.y}px;width:10px;height:10px;background:red;border-radius:50%;pointer-events:none;z-index:9999;opacity:0.8;box-shadow:0 0 5px red`;
+            $('viewport').appendChild(dot);
+            setTimeout(() => dot.remove(), 500);
+        }
+        else if(d.type === 'NOTE') {
+            // Auto-Target Active Zone
+            if (!d.zoneId && (State.activity.type === 'ZONE_ACT' || State.activity.type === 'OPEN_ZONE')) {
+                d.zoneId = State.activity.targetId;
+            }
+
+            let i = State.items.find(x => x.id === d.id);
+            if(!i) {
+                i = { id:d.id, type:'note', sub:d.sub, text:d.text, author:State.students[pid]?.name, w:200, h:150, votes:0, groupId: null };
+                
+                // Initialize default placement first
+                const pos = Board.getFreeSpace(-State.view.x+100, -State.view.y+100, 200, 150);
+                i.x = pos.x; i.y = pos.y;
+                State.items.push(i);
+
+                if(d.zoneId) {
+                    const zone = State.items.find(z => z.id === d.zoneId);
+                    if(zone) {
+                        i.x = zone.x + zone.w/2 - i.w/2;
+                        i.y = zone.y + zone.h/2 - i.h/2;
+                    }
+                    Actions.addToZone(d.zoneId, i.id); 
+                }
+            } else { i.text = d.text; i.sub = d.sub; }
+            
+            if(d.zoneId) LayoutSystem.update(d.zoneId);
+            Render.all(); Board.save(true);
+            Network.broadcast(d); // Rebroadcast to other co-hosts
+        }
+        else if(d.type === 'IMG_NOTE') {
+             if (!d.src) return;
+             
+             // Auto-Target Active Zone
+             if (!d.zoneId && (State.activity.type === 'ZONE_ACT' || State.activity.type === 'OPEN_ZONE')) {
+                 d.zoneId = State.activity.targetId;
+             }
+
+             let i = { id:d.id, type:'note', sub:'sketch', src:d.src, text:d.text, author:State.students[pid]?.name, w:200, h:200, votes:0, groupId: null };
+             
+             const pos = Board.getFreeSpace(-State.view.x+100, -State.view.y+100, 200, 200);
+             i.x = pos.x; i.y = pos.y;
+             State.items.push(i);
+
+             if(d.zoneId) {
+                const zone = State.items.find(z => z.id === d.zoneId);
+                if(zone) {
+                    i.x = zone.x + zone.w/2 - i.w/2;
+                    i.y = zone.y + zone.h/2 - i.h/2;
+                }
+                Actions.addToZone(d.zoneId, i.id); 
+             }
+             
+             if(d.zoneId) LayoutSystem.update(d.zoneId);
+             Render.all(); Board.save(true);
+             Network.broadcast(d);
+        }
+        else if(d.type === 'DELETE_NOTE') { HierarchyManager.delete(d.id); }
+        else if(d.type === 'POLL_VOTE') { 
+            const p = State.items.find(x => x.id === d.actId); 
+            if(p && p.opts[d.idx]) { p.opts[d.idx].v++; Render.all(); confetti({particleCount: 50, spread: 60, origin: { y: 0.8 }}); } 
+        }
+        else if(d.type === 'DATA_SUBMIT') { const g = State.items.find(x => x.id === d.actId); if(g) { g.data.push(d.val); Render.all(); } }
+        else if(d.type === 'SUBMIT_VOTE' || d.type === 'SUBMIT_SORT') {
+            if(!State.activeSorts[d.actId]) State.activeSorts[d.actId] = [];
+            State.activeSorts[d.actId].push(d.type==='SUBMIT_SORT' ? d.order : d.choiceId);
+            Network.updateResults(d.actId);
+        }
+        else if(d.type === 'COMMENT') { State.comments.push(d); Network.updateDiscussion(); Render.all(); }
+        else if(d.type === 'JIGGLE_NOTE') {
+            const el = document.getElementById(d.id); if(el) { el.classList.add('jiggling'); setTimeout(() => el.classList.remove('jiggling'), 2000); } }
+
+        else if(d.type === 'EXIT_SUBMIT') {
+            const zone = State.items.find(x => x.id === d.actId && x.zoneType === 'exit');
+            if(zone) {
+                let txt = d.val;
+                if(Array.isArray(d.val)) txt = d.val.join(', ');
+                if(typeof d.val === 'object' && d.val.l) txt = `L: ${d.val.l}\nW: ${d.val.w}`;
+
+                const noteId = genId();
+                const newNote = {
+                    id: noteId, type: 'note', sub: 'notice', text: txt,
+                    author: State.students[pid]?.name || 'Student',
+                    w: 200, h: 150, votes: 0,
+                    parentZone: zone.id
+                };
+                State.items.push(newNote);
+                if(!zone.children) zone.children = [];
+                zone.children.push(noteId);
+                LayoutSystem.update(zone.id);
+                Render.all(); Board.save(true);
+                Network.broadcast(d);
+            }
+        }
+    },
+    
+    updateResults: (actId) => {
+        const btn = $(`btn-res-${actId}`);
+        if(btn) { btn.style.display = 'inline-block'; }
+
+        const submissions = State.activeSorts[actId] || [];
+        const scores = {};
+        submissions.forEach(sub => { if(Array.isArray(sub)) sub.forEach((itemId, idx) => { scores[itemId] = (scores[itemId] || 0) + (sub.length - idx); }); else scores[sub] = (scores[sub] || 0) + 1; });
+        const results = Object.keys(scores).map(id => { const item = State.items.find(x=>x.id===id); return { text: item ? item.text.substring(0,30) : "Unknown", score: scores[id] }; }).sort((a,b) => b.score - a.score);
+        const max = results.length ? results[0].score : 1;
+        const html = `<div style="margin-bottom:10px;font-weight:bold;color:#64748b">${submissions.length} Responses</div>${results.map((r, i) => `<div class="result-row"><div style="width:20px;font-weight:bold;color:#64748b">#${i+1}</div><div style="flex:2; font-weight:600; color:#334155">${r.text}</div><div class="bar-bg"><div class="bar-fill" style="width:${(r.score/max)*100}%"></div></div><div style="font-size:0.8rem;font-weight:bold;color:#6366f1">${r.score}</div></div>`).join('')}`;
+        const zContainer = $(`zr-${actId}`); if(zContainer) zContainer.innerHTML = `<h4 style="margin:0 0 10px 0; color:#475569">Activity Results</h4>` + html;
+        if($('act-results')) $('act-results').innerHTML = html;
+    },
+    
+    updateDiscussion: () => {
+        if(!State.activity || State.activity.type !== 'ZONE_ACT') return;
+        const actId = State.activity.targetId;
+        const btn = $(`btn-res-${actId}`);
+        if(btn) { btn.style.display = 'inline-block'; }
+
+        const relevant = State.comments.filter(c => {
+             if (c.targetId === actId) return true;
+             if (State.activity.payload.items && State.activity.payload.items.find(i=>i.id===c.targetId)) return true;
+             return false;
+        });
+
+        const html = relevant.map(c => { const item = State.items.find(x=>x.id===c.targetId); const txt = item ? item.text.substring(0,20)+'...' : 'Unknown'; return `<div class="disc-item"><div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#94a3b8;margin-bottom:4px"><span>${c.author}</span><span>Ref: ${txt}</span></div><span class="disc-tag dt-${c.tag}">${c.tag.toUpperCase()}</span><div style="color:#334155">${c.text}</div></div>`; }).reverse().join('');
+        const zContainer = $(`zr-${actId}`); if(zContainer) zContainer.innerHTML = `<h4 style="margin:0 0 10px 0; color:#475569">Discussion</h4>` + html;
+        if($('act-results')) $('act-results').innerHTML = html;
+    },
+    
+    broadcast: (msg) => {
+        if(State.students['HOST']) SafeSend(State.students['HOST'].conn, msg); // Send to Host
+        Object.values(State.students).forEach(s => { SafeSend(s.conn, msg); }); // Send to Clients
+    }
+};
+
+window.setTool = function(t) { 
+    State.tool=t; 
+    document.querySelectorAll('.dock-btn, .tb-btn').forEach(b=>b.classList.remove('active')); 
+    if(t==='pan') { if($('dt-pan')) $('dt-pan').classList.add('active'); if($('mt-pan')) $('mt-pan').classList.add('active'); }
+    else if(t==='select') { if($('dt-select')) $('dt-select').classList.add('active'); if($('mt-select')) $('mt-select').classList.add('active'); }
+    else if(t==='draw'||t==='eraser'||t==='laser') { if($('dt-draw')) $('dt-draw').classList.add('active'); if($('mt-draw')) $('mt-draw').classList.add('active'); }
+    $('viewport').className = t==='pan' ? 'panning' : (t==='draw'||t==='eraser'||t==='laser' ? 'drawing' : '');
+    if(t==='pan' || t==='select') document.querySelectorAll('.drawer').forEach(d=>d.classList.remove('open'));
+};
+
+window.SafeSend = function(conn, data) { if(conn && conn.open) conn.send(JSON.stringify(data)); };
+window.Roster = function() { const s = Object.values(State.students); $('conn-badge').innerText = s.length; if(s.length===0) $('roster').innerHTML = '<div style="padding:20px; text-align:center">Waiting for connections...</div>'; else $('roster').innerHTML = s.map(x => `<div style="display:flex; gap:10px; padding:8px 16px; border-bottom:1px solid #374151; align-items:center"><span style="font-size:1.2rem">${x.avatar}</span><b>${x.name}</b></div>`).join(''); };
+window.Tab = function(n) { document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===n)); document.querySelectorAll('.tab-content').forEach((c,i) => c.classList.toggle('active', i===n)); };
+
+window.onload = () => {
+    DB.init();
+    const v = $('viewport');
+    v.addEventListener('mousedown', InputController.start);
+    v.addEventListener('wheel', InputController.wheel, {passive:false});
+    window.addEventListener('mousemove', InputController.move);
+    window.addEventListener('mouseup', InputController.end);
+    v.addEventListener('touchstart', InputController.start, {passive: false});
+    v.addEventListener('touchmove', InputController.move, {passive: false});
+    v.addEventListener('touchend', InputController.end);
+    window.addEventListener('keydown', InputController.keydown);
+    
+    // Global listeners for minimap dragging/resizing
+    window.addEventListener('mousemove', e => {
+        if (!State.drag) return;
+        if (State.drag.mode === 'minimap-drag') {
+            const dx = e.clientX - State.drag.sx;
+            const dy = e.clientY - State.drag.sy;
+            State.drag.el.style.left = `${State.drag.ex + dx}px`;
+            State.drag.el.style.top = `${State.drag.ey + dy}px`;
+        } else if (State.drag.mode === 'minimap-resize') {
+            const dx = e.clientX - State.drag.sx;
+            const newWidth = Math.max(120, State.drag.ew + dx);
+            UI.setMinimapSize(newWidth);
+            $('minimap-size').value = newWidth;
+        }
+    });
+    window.addEventListener('mouseup', e => {
+        if (State.drag && (State.drag.mode === 'minimap-drag' || State.drag.mode === 'minimap-resize')) {
+             if (State.drag.mode === 'minimap-drag') {
+                const cont = State.drag.el;
+                const rect = cont.getBoundingClientRect();
+                const midX = rect.left + rect.width / 2;
+                const midY = rect.top + rect.height / 2;
+                const pos = (midY < window.innerHeight / 2 ? 'top' : 'bottom') + '-' + (midX < window.innerWidth / 2 ? 'left' : 'right');
+                $('minimap-pos').value = pos;
+                UI.setMinimapPosition(pos);
+            }
+            State.drag = null;
+        }
+    });
+
+    setInterval(() => Board.save(true), 30000);
+};
+</script>
+</body>
+</html>

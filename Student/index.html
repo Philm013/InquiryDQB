@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Student Remote</title>
+    <!-- PeerJS -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <!-- QR Scanner -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --accent: #6366f1; --accent-dark: #4f46e5;
+            --bg: #f8fafc; --card-bg: #ffffff;
+            --text: #1e293b; --text-light: #64748b;
+            --font-ui: 'Nunito', sans-serif;
+            --font-hand: 'Patrick Hand', cursive;
+            --shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body { 
+            margin: 0; font-family: var(--font-ui); background: var(--bg); color: var(--text);
+            height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        /* --- SCREEN MANAGEMENT --- */
+        .screen { 
+            flex: 1; display: none; flex-direction: column; 
+            width: 100%; max-width: 600px; margin: 0 auto;
+            position: relative; overflow-y: auto; overflow-x: hidden;
+        }
+        .screen.active { display: flex; animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- COMMON UI ELEMENTS --- */
+        .card { 
+            background: var(--card-bg); border-radius: 20px; padding: 24px; 
+            box-shadow: var(--shadow); margin: 16px; 
+            display: flex; flex-direction: column; align-items: center; text-align: center;
+        }
+        
+        .btn { 
+            width: 100%; padding: 16px; border-radius: 14px; border: none; 
+            background: var(--accent); color: white; font-weight: 800; font-size: 1.1rem; 
+            cursor: pointer; transition: transform 0.1s, background 0.2s; 
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+            margin-bottom: 12px;
+        }
+        .btn:active { transform: scale(0.97); }
+        .btn-s { background: #e2e8f0; color: #475569; box-shadow: none; }
+        .btn-icon { background: transparent; color: var(--text-light); box-shadow: none; padding: 8px; font-size: 1.5rem; width: auto; }
+
+        input, textarea { 
+            width: 100%; padding: 14px; border: 2px solid #e2e8f0; border-radius: 12px; 
+            font-size: 1.1rem; font-family: inherit; margin-bottom: 16px; 
+            transition: 0.2s; background: #fff;
+        }
+        input:focus, textarea:focus { border-color: var(--accent); }
+
+        /* --- SETUP SCREEN --- */
+        #scr-setup { justify-content: center; background: linear-gradient(135deg, #e0e7ff 0%, #f8fafc 100%); }
+        .hero-title { font-size: 2rem; color: var(--accent); margin-bottom: 8px; font-weight: 900; }
+        .hero-sub { color: var(--text-light); margin-bottom: 24px; }
+        
+        .av-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 20px; width: 100%; }
+        .av-item { 
+            font-size: 1.6rem; padding: 10px; background: white; border-radius: 12px; 
+            cursor: pointer; border: 2px solid transparent; transition: 0.2s;
+        }
+        .av-item.sel { border-color: var(--accent); background: #e0e7ff; transform: scale(1.1); }
+
+        /* --- LOBBY HEADER --- */
+        .lobby-header {
+            padding: 16px 20px; background: white; border-bottom: 1px solid #e2e8f0;
+            display: flex; justify-content: space-between; align-items: center;
+            position: sticky; top: 0; z-index: 10;
+        }
+        .user-badge { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.1rem; }
+        .status-pill {
+            font-size: 0.75rem; padding: 4px 10px; border-radius: 20px; 
+            background: #cbd5e1; color: #475569; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.5px; transition: 0.3s;
+        }
+        .status-pill.online { background: #dcfce7; color: #166534; }
+        .status-pill.error { background: #fee2e2; color: #991b1b; }
+
+        /* --- ACTION ZONE (Dynamic) --- */
+        #action-container { padding: 16px; flex-shrink: 0; }
+        
+        /* State: Locked */
+        .locked-state { text-align: center; color: var(--text-light); padding: 40px 20px; }
+        .locked-icon { font-size: 4rem; margin-bottom: 16px; opacity: 0.5; animation: float 3s ease-in-out infinite; }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+        /* State: Active Zone */
+        .active-zone-card { 
+            background: #e0e7ff; border: 2px dashed var(--accent); border-radius: 16px; 
+            padding: 20px; text-align: center; margin-bottom: 10px;
+        }
+        .zone-badge { 
+            background: var(--accent); color: white; padding: 4px 12px; border-radius: 8px; 
+            font-size: 0.8rem; font-weight: 800; text-transform: uppercase; display: inline-block; margin-bottom: 8px;
+        }
+
+        /* --- SPECIAL ACTIVITIES (Vote, Sort, Discuss) --- */
+        .act-container { display: none; width: 100%; }
+        .act-container.active { display: block; }
+        
+        /* Vote Items */
+        .vote-item {
+            background: white; padding: 16px; border-radius: 12px; border: 2px solid #e2e8f0;
+            margin-bottom: 10px; cursor: pointer; text-align: left; transition: 0.2s;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .vote-item:hover { border-color: var(--accent); }
+        .vote-item.selected { background: #e0e7ff; border-color: var(--accent); color: var(--accent-dark); font-weight: bold; }
+
+        /* Sort Items */
+        .sort-list { display: flex; flex-direction: column; gap: 8px; }
+        .sort-item {
+            background: white; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .sort-controls { display: flex; flex-direction: column; gap: 2px; }
+        .sort-btn { width: 30px; height: 30px; padding: 0; display: flex; align-items: center; justify-content: center; background: #f1f5f9; border: none; border-radius: 4px; cursor: pointer; }
+        
+        /* Discuss Cards */
+        .discuss-card {
+            background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+            padding: 16px; margin-bottom: 12px; text-align: left;
+            cursor: pointer; transition: 0.2s;
+            border-left: 4px solid var(--accent);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .discuss-card:active { transform: scale(0.98); background: #f8fafc; }
+        .d-meta { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; color: #64748b; font-weight: 700; text-transform: uppercase; }
+        
+        /* Discuss Modal */
+        #modal-discuss {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000;
+            display: none; align-items: flex-end; justify-content: center;
+            backdrop-filter: blur(2px);
+        }
+        #modal-discuss.active { display: flex; animation: slideUp 0.2s ease-out; }
+        .modal-sheet {
+            background: white; width: 100%; max-width: 600px;
+            border-radius: 20px 20px 0 0; padding: 24px;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+            display: flex; flex-direction: column;
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        .tag-row { display: flex; gap: 8px; margin-bottom: 16px; justify-content: center; }
+        .tag-btn { padding: 8px 16px; border-radius: 20px; border: 1px solid #cbd5e1; background: white; font-size: 0.9rem; cursor: pointer; font-weight: 600; }
+        .tag-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+        /* --- NOTE TYPES GRID --- */
+        .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+        .type-btn { 
+            padding: 16px; border-radius: 12px; font-weight: 700; cursor: pointer; 
+            display: flex; flex-direction: column; align-items: center; gap: 5px;
+            border: 2px solid transparent; transition: 0.2s; background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .type-btn:active { transform: scale(0.95); }
+        /* Colors */
+        .t-notice { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
+        .t-wonder { background: #f0f9ff; border-color: #7dd3fc; color: #075985; }
+        .t-idea { background: #f0fdf4; border-color: #86efac; color: #166534; }
+        .t-test { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
+        .t-sketch { background: #f8fafc; border-color: #cbd5e1; color: #475569; grid-column: span 2; }
+
+        /* --- HISTORY LIST --- */
+        .hist-container { 
+            flex: 1; background: #f1f5f9; border-radius: 20px 20px 0 0; 
+            padding: 20px; overflow-y: auto; 
+        }
+        .hist-header { display: flex; justify-content: space-between; margin-bottom: 12px; color: var(--text-light); font-size: 0.9rem; font-weight: 700; }
+        .note-card { 
+            background: white; padding: 16px; border-radius: 12px; margin-bottom: 12px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); border-left: 5px solid #cbd5e1;
+            font-family: var(--font-hand); font-size: 1.2rem; line-height: 1.4;
+            position: relative; text-align: left;
+        }
+        .n-notice { border-color: #d97706; background: #fffbeb; }
+        .n-wonder { border-color: #0284c7; background: #f0f9ff; }
+        .n-idea { border-color: #16a34a; background: #f0fdf4; }
+        .n-sketch { border-color: #64748b; background: white; }
+        
+        .note-controls { 
+            margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(0,0,0,0.05); 
+            display: flex; justify-content: flex-end; gap: 8px; 
+        }
+        .mini-btn { font-family: var(--font-ui); font-size: 0.8rem; padding: 4px 10px; border-radius: 6px; border: 1px solid #e2e8f0; background: white; cursor: pointer; }
+
+        /* --- WRITE SCREEN --- */
+        #scr-write .card { height: 100%; justify-content: flex-start; }
+        .cat-selector { display: flex; gap: 8px; overflow-x: auto; width: 100%; padding-bottom: 10px; margin-bottom: 10px; }
+        .cat-chip { 
+            padding: 8px 16px; border-radius: 20px; background: #f1f5f9; color: #64748b; 
+            font-weight: 700; font-size: 0.9rem; white-space: nowrap; cursor: pointer; border: 2px solid transparent;
+        }
+        .cat-chip.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+        /* --- SKETCH SCREEN --- */
+        #sketch-canvas { border: 2px dashed #cbd5e1; border-radius: 12px; background: transparent; touch-action: none; cursor: crosshair; width: 100%; height: 300px; }
+        .tool-bar { display: flex; gap: 12px; margin-bottom: 12px; justify-content: center; }
+        .tool-btn { 
+            width: 44px; height: 44px; border-radius: 50%; border: 2px solid #e2e8f0; 
+            display: flex; align-items: center; justify-content: center; font-size: 1.2rem; cursor: pointer; background: white;
+        }
+        .tool-btn.active { border-color: var(--accent); background: #e0e7ff; color: var(--accent); }
+
+        /* --- EXIT TICKET --- */
+        .emoji-row { display: flex; justify-content: space-between; width: 100%; margin: 20px 0; }
+        .emoji-opt { font-size: 2.5rem; opacity: 0.5; transition: 0.2s; cursor: pointer; transform: scale(1); }
+        .emoji-opt.selected { opacity: 1; transform: scale(1.3); }
+        .mc-opt { width: 100%; padding: 16px; margin-bottom: 8px; border: 2px solid #e2e8f0; border-radius: 12px; font-weight: bold; text-align: left; background: white; transition: 0.2s; }
+        .mc-opt.selected { border-color: var(--accent); background: #e0e7ff; color: var(--accent-dark); }
+
+    </style>
+</head>
+<body>
+
+<!-- SETUP SCREEN -->
+<div id="scr-setup" class="screen active">
+    <div class="card" style="max-width: 400px; width: 90%;">
+        <div class="hero-title">InquiryDQB</div>
+        <div class="hero-sub">Student Companion</div>
+        
+        <div style="text-align:left; width:100%; margin-bottom:8px; font-weight:700; color:#64748b; font-size:0.9rem">CHOOSE AVATAR</div>
+        <div class="av-grid" id="av-grid"></div>
+        
+        <div style="text-align:left; width:100%; margin-bottom:8px; font-weight:700; color:#64748b; font-size:0.9rem">YOUR NAME</div>
+        <input id="inp-name" placeholder="Enter your name" style="text-align:center; font-weight:bold">
+        
+        <button class="btn" onclick="Setup()">Next ➔</button>
+    </div>
+</div>
+
+<!-- JOIN SCREEN -->
+<div id="scr-join" class="screen">
+    <div class="card">
+        <h2>Join Class</h2>
+        <div id="reader" style="border-radius:12px; overflow:hidden; margin-bottom:16px; width:100%"></div>
+        <button class="btn" id="btn-scan" onclick="StartScan()">📸 Scan QR Code</button>
+        <div style="margin: 10px 0; color: #94a3b8">- OR -</div>
+        <input id="inp-id" placeholder="Enter Session ID" style="text-align:center; text-transform:uppercase; letter-spacing: 2px;">
+        <button class="btn btn-s" onclick="Connect($('inp-id').value)">Connect Manually</button>
+    </div>
+</div>
+
+<!-- LOBBY SCREEN -->
+<div id="scr-lobby" class="screen">
+    <div class="lobby-header">
+        <div class="user-badge">
+            <span id="my-av"></span>
+            <span id="my-name"></span>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center">
+            <div id="status-badge" class="status-pill">Connecting...</div>
+            <button class="btn-icon" onclick="ManualDisconnect()">✕</button>
+        </div>
+    </div>
+
+    <!-- Dynamic Action Container -->
+    <div id="action-container">
+        
+        <!-- 1. LOCKED STATE -->
+        <div id="state-locked" class="locked-state">
+            <div class="locked-icon">👀</div>
+            <h3>Eyes on the Board</h3>
+            <p>Wait for the teacher to open an activity.</p>
+        </div>
+
+        <!-- 2. ACTIVE ZONE STATE (GENERIC / CER / CONSENSUS) -->
+        <div id="state-zone" style="display:none">
+            <div class="active-zone-card">
+                <div class="zone-badge" id="zone-type-badge">ACTIVITY</div>
+                <h3 id="zone-title" style="margin:0 0 10px 0; color:var(--accent-dark)">Target Zone</h3>
+                <p style="margin:0 0 16px 0; color:#64748b; font-size:0.9rem" id="zone-desc">Contribute to this activity.</p>
+                
+                <div id="zone-buttons-default">
+                    <button class="btn" onclick="Draft('idea')">💡 Add Note</button>
+                    <button class="btn" style="background:white; color:var(--text); border:2px solid #e2e8f0" onclick="DraftSketch()">✏️ Add Sketch</button>
+                </div>
+                
+                <!-- CER Buttons -->
+                <div id="zone-buttons-cer" style="display:none; grid-template-columns:1fr 1fr 1fr; gap:8px">
+                    <button class="btn" style="background:#d97706; padding:10px; font-size:0.9rem" onclick="Draft('claim')">Claim</button>
+                    <button class="btn" style="background:#0284c7; padding:10px; font-size:0.9rem" onclick="Draft('evidence')">Evidence</button>
+                    <button class="btn" style="background:#16a34a; padding:10px; font-size:0.9rem" onclick="Draft('reasoning')">Reasoning</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. OPEN BOARD STATE -->
+        <div id="state-open" style="display:none">
+            <h3 style="margin:0 0 16px 0; text-align:center">Add to Board</h3>
+            <div class="type-grid">
+                <div class="type-btn t-notice" onclick="Draft('notice')"><span>👁️</span>Notice</div>
+                <div class="type-btn t-wonder" onclick="Draft('wonder')"><span>❓</span>Wonder</div>
+                <div class="type-btn t-idea" onclick="Draft('idea')"><span>💡</span>Idea</div>
+                <div class="type-btn t-test" onclick="Draft('test')"><span>🧪</span>Test</div>
+                <div class="type-btn t-sketch" onclick="DraftSketch()"><span>✏️</span>Sketch</div>
+            </div>
+        </div>
+
+        <!-- 4. VOTE ACTIVITY -->
+        <div id="act-vote" class="act-container">
+            <div class="active-zone-card">
+                <div class="zone-badge">VOTE</div>
+                <h3>Cast Your Vote</h3>
+                <p>Select the best option below.</p>
+                <div id="vote-list"></div>
+                <button class="btn" id="btn-submit-vote" style="margin-top:10px" disabled>Submit Vote</button>
+            </div>
+        </div>
+
+        <!-- 5. SORT ACTIVITY -->
+        <div id="act-sort" class="act-container">
+            <div class="active-zone-card">
+                <div class="zone-badge">RANK</div>
+                <h3>Rank Items</h3>
+                <p>Order from top (1st) to bottom.</p>
+                <div id="sort-list" class="sort-list"></div>
+                <button class="btn" onclick="SubmitSort()" style="margin-top:15px">Submit Order</button>
+            </div>
+        </div>
+
+        <!-- 6. DISCUSS ACTIVITY -->
+        <div id="act-discuss" class="act-container">
+            <div class="active-zone-card">
+                <div class="zone-badge">DISCUSS</div>
+                <h3>Discussion</h3>
+                <p style="color:#64748b; font-size:0.9rem; margin-bottom:16px">Select an item to comment.</p>
+                <div id="discuss-items" style="max-height:300px; overflow-y:auto; margin-bottom:10px"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- History -->
+    <div class="hist-container">
+        <div class="hist-header">
+            <span>YOUR CONTRIBUTIONS</span>
+            <span onclick="location.reload()">↻ Refresh</span>
+        </div>
+        <div id="hist-list"></div>
+    </div>
+</div>
+
+<!-- WRITE SCREEN -->
+<div id="scr-write" class="screen">
+    <div class="card">
+        <h2 id="w-head" style="margin-top:0">New Note</h2>
+        
+        <div class="cat-selector" id="cat-scroll">
+            <div class="cat-chip" id="c-notice" onclick="SetDraftType('notice')">👁️ Notice</div>
+            <div class="cat-chip" id="c-wonder" onclick="SetDraftType('wonder')">❓ Wonder</div>
+            <div class="cat-chip" id="c-idea" onclick="SetDraftType('idea')">💡 Idea</div>
+            <div class="cat-chip" id="c-test" onclick="SetDraftType('test')">🧪 Test</div>
+            <div class="cat-chip" id="c-claim" onclick="SetDraftType('claim')">Claim</div>
+            <div class="cat-chip" id="c-evidence" onclick="SetDraftType('evidence')">Evidence</div>
+            <div class="cat-chip" id="c-reasoning" onclick="SetDraftType('reasoning')">Reasoning</div>
+        </div>
+
+        <textarea id="w-txt" rows="6" placeholder="Type your thoughts here..."></textarea>
+        
+        <div style="display:flex; gap:10px; width:100%">
+            <button class="btn btn-s" onclick="Show('scr-lobby')">Cancel</button>
+            <button class="btn" onclick="SendNote()">Send</button>
+        </div>
+    </div>
+</div>
+
+<!-- SKETCH SCREEN -->
+<div id="scr-sketch" class="screen">
+    <div class="card">
+        <h2 style="margin-top:0">Draw</h2>
+        <div class="tool-bar">
+            <div class="tool-btn active" id="tb-pen" onclick="SetTool('pen')">✏️</div>
+            <div class="tool-btn" id="tb-era" onclick="SetTool('eraser')">🧼</div>
+            <div class="tool-btn" style="color:#ef4444" onclick="ClearSketch()">🗑️</div>
+        </div>
+        <canvas id="sketch-canvas" width="300" height="300"></canvas>
+        <input id="sketch-caption" placeholder="Optional caption..." style="margin-top:16px">
+        
+        <div style="display:flex; gap:10px; width:100%; margin-top:16px">
+            <button class="btn btn-s" onclick="Show('scr-lobby')">Cancel</button>
+            <button class="btn" onclick="SendSketch()">Send</button>
+        </div>
+    </div>
+</div>
+
+<!-- WIDGET SCREEN -->
+<div id="scr-widget" class="screen">
+    <div class="card">
+        <h2 id="wid-title">Activity</h2>
+        <div id="wid-content" style="width:100%; padding:10px 0"></div>
+        <div id="wid-input-area" style="display:none; width:100%">
+            <input type="number" id="graph-val" placeholder="0.0" style="font-size:2rem; text-align:center">
+        </div>
+        <button class="btn" id="wid-submit">Submit</button>
+    </div>
+</div>
+
+<!-- EXIT TICKET SCREEN -->
+<div id="scr-exit" class="screen">
+    <div class="card">
+        <h2 style="color:var(--accent)">Exit Ticket</h2>
+        <p id="exit-prompt" style="font-size:1.2rem; font-weight:bold; margin-bottom:20px">...</p>
+        <div id="exit-area" style="width:100%"></div>
+        <button class="btn" id="exit-submit" style="margin-top:20px">Submit Response</button>
+    </div>
+</div>
+
+<!-- DISCUSSION MODAL -->
+<div id="modal-discuss">
+    <div class="modal-sheet">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px">
+            <h3 style="margin:0">Add Comment</h3>
+            <button class="btn-icon" onclick="CloseDiscussModal()">✕</button>
+        </div>
+        <div id="md-text" style="background:#f1f5f9; padding:12px; border-radius:8px; margin-bottom:16px; font-style:italic; color:#475569"></div>
+        
+        <div class="tag-row">
+            <div class="tag-btn active" onclick="SetDiscussTag(this, 'feedback')">Feedback</div>
+            <div class="tag-btn" onclick="SetDiscussTag(this, 'question')">Question</div>
+            <div class="tag-btn" onclick="SetDiscussTag(this, 'connection')">Connection</div>
+        </div>
+        
+        <textarea id="md-input" rows="3" placeholder="Type your comment..."></textarea>
+        <button class="btn" onclick="SubmitDiscussComment()">Post Comment</button>
+    </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const genId = () => Math.random().toString(36).substr(2, 9);
+
+/* --- GLOBAL STATE --- */
+const State = {
+    me: { name: '', av: '😀' },
+    notes: [],
+    // Active Activity State
+    activity: { 
+        type: 'LOCKED', // LOCKED, OPEN, ZONE, WIDGET, EXIT
+        id: null,       // zoneId or actId
+        title: null,
+        subType: null,   // For CER, Consensus, etc.
+        items: []       // For Vote/Sort/Discuss
+    },
+    draft: { id: null, sub: 'notice', text: '' },
+    hostId: null,
+    boardId: null,
+    lastHeartbeat: 0,
+    
+    // Temp state for specific activities
+    selectedVote: null,
+    sortOrder: [],
+    discussTag: 'feedback'
+};
+
+/* --- DATABASE (IndexedDB) --- */
+const DB = {
+    db: null,
+    init: () => new Promise(res => {
+        const r = indexedDB.open('DQB_Student', 2);
+        r.onupgradeneeded = e => {
+            const db = e.target.result;
+            if(!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', {keyPath:'id'});
+            if(!db.objectStoreNames.contains('profile')) db.createObjectStore('profile', {keyPath:'key'});
+        };
+        r.onsuccess = e => {
+            DB.db = e.target.result;
+            const tx = DB.db.transaction(['profile','notes'], 'readonly');
+            tx.objectStore('profile').get('me').onsuccess = ev => { if(ev.target.result) State.me = ev.target.result.val; };
+            tx.objectStore('notes').getAll().onsuccess = ev => { State.notes = ev.target.result || []; };
+            res();
+        };
+    }),
+    saveNote: (n) => {
+        n.boardId = State.boardId;
+        const tx = DB.db.transaction('notes', 'readwrite');
+        tx.objectStore('notes').put(n);
+        const idx = State.notes.findIndex(x=>x.id===n.id);
+        if(idx >= 0) State.notes[idx] = n; else State.notes.push(n);
+        RenderHist();
+    },
+    delNote: (id) => {
+        const tx = DB.db.transaction('notes', 'readwrite');
+        tx.objectStore('notes').delete(id);
+        State.notes = State.notes.filter(x=>x.id!==id);
+        RenderHist();
+    },
+    saveProfile: () => DB.db.transaction('profile', 'readwrite').objectStore('profile').put({key:'me', val:State.me})
+};
+
+/* --- SETUP & NAVIGATION --- */
+const EMOJIS = ['😀','😎','🦊','🐱','🚀','🎨','⚽','🦄','🍔','🧩'];
+const g = $('av-grid');
+EMOJIS.forEach(e => {
+    let d = document.createElement('div'); d.className='av-item'; d.innerText=e;
+    d.onclick = () => { document.querySelectorAll('.av-item').forEach(x=>x.classList.remove('sel')); d.classList.add('sel'); State.me.av=e; };
+    g.appendChild(d);
+});
+// Select first by default
+setTimeout(() => { if(g.children[0]) g.children[0].click(); }, 100);
+
+function Setup() {
+    State.me.name = $('inp-name').value.trim() || "Student";
+    $('my-name').innerText = State.me.name; $('my-av').innerText = State.me.av;
+    DB.saveProfile();
+    
+    const lastHost = localStorage.getItem('dqb_host_id');
+    if(lastHost) Connect(lastHost); else Show('scr-join');
+}
+
+function Show(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    $(id).classList.add('active');
+    // Mobile scroll fix
+    window.scrollTo(0,0);
+}
+
+/* --- NETWORK --- */
+let peer, conn, hbInt;
+
+function StartScan() {
+    const s = new Html5Qrcode("reader");
+    s.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, t => { s.stop(); Connect(t); });
+    $('btn-scan').style.display = 'none';
+}
+
+function Connect(id) {
+    if(!id) return;
+    id = id.trim();
+    State.hostId = id;
+    localStorage.setItem('dqb_host_id', id);
+    
+    UpdateStatus("Connecting...", "warn");
+    
+    if(peer) peer.destroy();
+    peer = new Peer();
+    
+    peer.on('open', () => {
+        conn = peer.connect(id);
+        SetupConn(conn);
+    });
+    
+    peer.on('error', err => {
+        console.error(err);
+        UpdateStatus("Error", "error");
+        if(err.type === 'peer-unavailable') {
+            localStorage.removeItem('dqb_host_id');
+            setTimeout(() => Show('scr-join'), 2000);
+        } else {
+            setTimeout(() => Connect(State.hostId), 3000); // Retry
+        }
+    });
+
+    // Heartbeat / Reconnect Watchdog
+    State.lastHeartbeat = Date.now();
+    if(hbInt) clearInterval(hbInt);
+    hbInt = setInterval(() => {
+        if(Date.now() - State.lastHeartbeat > 8000) {
+            UpdateStatus("Reconnecting...", "warn");
+            Connect(State.hostId);
+        }
+    }, 2000);
+}
+
+function SetupConn(c) {
+    c.on('open', () => {
+        SafeSend({ type:'JOIN', name:State.me.name, avatar:State.me.av });
+        State.lastHeartbeat = Date.now();
+        UpdateStatus("Online", "online");
+        Show('scr-lobby');
+    });
+    c.on('data', d => Handle(JSON.parse(d)));
+    c.on('close', () => UpdateStatus("Offline", "error"));
+}
+
+function SafeSend(data) { if(conn && conn.open) conn.send(JSON.stringify(data)); }
+
+function UpdateStatus(msg, type) {
+    const b = $('status-badge');
+    b.innerText = msg;
+    b.className = `status-pill ${type}`;
+}
+
+function ManualDisconnect() {
+    if(confirm("Leave session?")) {
+        if(conn) conn.close();
+        localStorage.removeItem('dqb_host_id');
+        location.reload();
+    }
+}
+
+/* --- LOGIC HANDLER --- */
+function Handle(d) {
+    State.lastHeartbeat = Date.now();
+    if(d.type === 'HEARTBEAT') return;
+
+    if(d.type === 'WELCOME') {
+        State.boardId = d.boardId;
+        SyncNotes(d.sync);
+        RenderHist();
+        // Restore state if teacher is already in an activity
+        if(d.payload) {
+            // Ensure payload has the correct structure for SetActivityState
+            Handle(d.payload);
+        }
+        else if(d.mode) Handle({ type: 'MODE', val: d.mode });
+    }
+    
+    // --- MODE SWITCHING ---
+    else if(d.type === 'MODE') {
+        SetActivityState(d.val === 'OPEN' ? 'OPEN' : 'LOCKED');
+    }
+    
+    // --- ZONE ACTIVITY (GENERIC OR SPECIFIC) ---
+    else if(d.type === 'ZONE_ACT' || d.type === 'OPEN_ZONE' || d.type === 'ACT_VOTE' || d.type === 'ACT_SORT' || d.type === 'ACT_DISCUSS') {
+        // Normalize the call
+        SetActivityState('ZONE_ACT', d.actId, d.title, d.subType, d.items);
+    }
+    
+    else if(d.type === 'CLOSE_ZONE') {
+        SetActivityState('LOCKED');
+    }
+    
+    // --- WIDGETS ---
+    else if(d.type === 'ACT_POLL') {
+        SetActivityState('WIDGET', d.actId, d.q);
+        RenderPoll(d);
+    }
+    else if(d.type === 'ACT_GRAPH') {
+        SetActivityState('WIDGET', d.actId, d.title);
+        RenderGraphInput(d);
+    }
+    
+    // --- EXIT TICKET ---
+    else if(d.type === 'EXIT_TICKET') {
+        SetActivityState('EXIT', d.actId, "Exit Ticket");
+        RenderExit(d);
+    }
+    else if(d.type === 'STOP_ACT' || d.type === 'STOP_EXIT') {
+        SetActivityState('LOCKED');
+        Show('scr-lobby');
+    }
+    
+    // --- NOTE SYNC & UPDATES ---
+    else if(d.type === 'NOTE_UPDATE') {
+        const noteToUpdate = State.notes.find(n => n.id === d.note.id);
+        if (noteToUpdate) {
+            noteToUpdate.text = d.note.text;
+            noteToUpdate.sub = d.note.sub;
+            DB.saveNote(noteToUpdate);
+        }
+    }
+    else if(d.type === 'DELETE_NOTE') {
+        const noteExists = State.notes.some(n => n.id === d.id);
+        if (noteExists) {
+            DB.delNote(d.id);
+        }
+    }
+    else if(d.type === 'COMMENT') {
+        // Future: Could display comment alerts, but for now student client doesn't need to do anything.
+    }
+}
+
+function SetActivityState(type, id=null, title=null, subType=null, items=[]) {
+    State.activity = { type, id, title, subType, items };
+    
+    // Hide All Containers
+    $('state-locked').style.display = 'none';
+    $('state-open').style.display = 'none';
+    $('state-zone').style.display = 'none';
+    $('act-vote').style.display = 'none';
+    $('act-sort').style.display = 'none';
+    $('act-discuss').style.display = 'none';
+    
+    // Route to correct UI
+    if(type === 'LOCKED') {
+        $('state-locked').style.display = 'block';
+    } 
+    else if (type === 'OPEN') {
+        $('state-open').style.display = 'block';
+    }
+    else if (type === 'ZONE_ACT') {
+        // Branch based on subType
+        if (subType === 'ACT_VOTE') {
+            $('act-vote').style.display = 'block';
+            RenderVoteUI(items);
+        }
+        else if (subType === 'ACT_SORT') {
+            $('act-sort').style.display = 'block';
+            RenderSortUI(items);
+        }
+        else if (subType === 'ACT_DISCUSS') {
+            $('act-discuss').style.display = 'block';
+            RenderDiscussUI(items);
+        }
+        else {
+            // Default Zone (Add Notes / CER / Consensus)
+            $('state-zone').style.display = 'block';
+            $('zone-title').innerText = title || 'Activity';
+            $('zone-type-badge').innerText = subType === 'consensus' ? 'Consensus Model' : (subType === 'cer' ? 'CER Builder' : 'Zone Activity');
+            
+            if(subType === 'consensus') $('zone-desc').innerText = "Contribute your pieces to the class model.";
+            else if(subType === 'cer') $('zone-desc').innerText = "Build the argument: Claim, Evidence, Reasoning.";
+            else $('zone-desc').innerText = "Contribute notes or sketches to this zone.";
+
+            // Toggle Button Sets
+            if(subType === 'cer') {
+                $('zone-buttons-default').style.display = 'none';
+                $('zone-buttons-cer').style.display = 'grid';
+            } else {
+                $('zone-buttons-default').style.display = 'block';
+                $('zone-buttons-cer').style.display = 'none';
+            }
+        }
+    }
+    else if (type === 'WIDGET') {
+        Show('scr-widget');
+    }
+    else if (type === 'EXIT') {
+        Show('scr-exit');
+    }
+}
+
+/* --- SPECIAL ACTIVITY RENDERERS --- */
+
+function RenderVoteUI(items) {
+    const list = $('vote-list');
+    list.innerHTML = items.map(i => `
+        <div class="vote-item" onclick="SelectVote('${i.id}', this)">
+            <div style="font-size:1.2rem; margin-right:8px">${i.sub ? (i.sub==='idea'?'💡':(i.sub==='wonder'?'❓':'👁️')) : '📝'}</div>
+            <div style="font-weight:600; font-size:0.95rem">${i.text.substring(0,60)}...</div>
+        </div>
+    `).join('');
+    State.selectedVote = null;
+    $('btn-submit-vote').disabled = true;
+    $('btn-submit-vote').onclick = () => {
+        if(State.selectedVote) {
+            SafeSend({ type: 'SUBMIT_VOTE', actId: State.activity.id, choiceId: State.selectedVote });
+            alert("Vote Submitted!");
+            $('btn-submit-vote').disabled = true;
+            $('btn-submit-vote').innerText = "Submitted";
+        }
+    };
+}
+
+function SelectVote(id, el) {
+    document.querySelectorAll('.vote-item').forEach(e => e.classList.remove('selected'));
+    el.classList.add('selected');
+    State.selectedVote = id;
+    $('btn-submit-vote').disabled = false;
+}
+
+function RenderSortUI(items) {
+    State.sortOrder = [...items]; // Clone
+    const list = $('sort-list');
+    
+    const render = () => {
+        list.innerHTML = State.sortOrder.map((i, idx) => `
+            <div class="sort-item">
+                <div style="font-weight:bold; color:#94a3b8">#${idx+1}</div>
+                <div style="flex:1; font-size:0.9rem">${i.text.substring(0,50)}</div>
+                <div class="sort-controls">
+                    <button class="sort-btn" onclick="MoveItem(${idx}, -1)">▲</button>
+                    <button class="sort-btn" onclick="MoveItem(${idx}, 1)">▼</button>
+                </div>
+            </div>
+        `).join('');
+    };
+    render();
+    
+    window.MoveItem = (idx, dir) => {
+        if(idx+dir < 0 || idx+dir >= State.sortOrder.length) return;
+        const temp = State.sortOrder[idx];
+        State.sortOrder[idx] = State.sortOrder[idx+dir];
+        State.sortOrder[idx+dir] = temp;
+        render();
+    };
+}
+
+function SubmitSort() {
+    const order = State.sortOrder.map(i => i.id);
+    SafeSend({ type: 'SUBMIT_SORT', actId: State.activity.id, order: order });
+    alert("Ranking Submitted!");
+}
+
+function RenderDiscussUI(items) {
+    const list = $('discuss-items');
+    list.innerHTML = items.map(i => `
+        <div class="discuss-card" onclick="OpenDiscussModal('${i.id}', '${i.text.replace(/'/g, "\\'")}', '${i.sub}')">
+            <div class="d-meta">
+                <span>${i.sub ? (i.sub==='idea'?'💡 IDEA':(i.sub==='wonder'?'❓ WONDER':'👁️ NOTICE')) : '📝 NOTE'}</span>
+                <span>Tap to comment</span>
+            </div>
+            <div style="font-weight:600; color:#334155">${i.text.substring(0, 100)}${i.text.length>100?'...':''}</div>
+        </div>
+    `).join('');
+}
+
+let currentDiscussTarget = null;
+
+function OpenDiscussModal(id, text, sub) {
+    currentDiscussTarget = id;
+    $('md-text').innerText = text.substring(0, 60) + "...";
+    $('md-input').value = '';
+    $('modal-discuss').classList.add('active');
+    $('md-input').focus();
+}
+
+function CloseDiscussModal() {
+    $('modal-discuss').classList.remove('active');
+    currentDiscussTarget = null;
+}
+
+function SetDiscussTag(el, tag) {
+    document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    State.discussTag = tag;
+}
+
+function SubmitDiscussComment() {
+    const txt = $('md-input').value.trim();
+    if(!txt || !currentDiscussTarget) return;
+    
+    SafeSend({
+        type: 'COMMENT',
+        targetId: currentDiscussTarget, // Specific Note ID
+        text: txt,
+        author: State.me.name,
+        tag: State.discussTag
+    });
+    
+    CloseDiscussModal();
+    alert("Comment Posted!");
+}
+
+
+/* --- NOTES SYNC --- */
+function SyncNotes(serverNotes) {
+    if(!serverNotes) return;
+    serverNotes.forEach(sn => {
+        const local = State.notes.find(n => n.id === sn.id);
+        if(local) {
+            local.text = sn.text;
+            local.sub = sn.sub;
+            DB.saveNote(local);
+        }
+    });
+}
+
+
+/* --- DRAFTING & SENDING --- */
+function Draft(sub) {
+    State.draft = { id: genId(), sub: sub, text: '' };
+    $('w-head').innerText = sub === 'notice' ? 'I Notice...' : (sub==='wonder'?'I Wonder...':'New Note');
+    $('w-txt').value = '';
+    
+    // Update Category Chips
+    document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
+    const chip = $(`c-${sub}`);
+    if(chip) { 
+        chip.classList.add('active'); 
+        chip.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+    
+    Show('scr-write');
+    setTimeout(() => $('w-txt').focus(), 300);
+}
+
+function SetDraftType(sub) {
+    State.draft.sub = sub;
+    $('w-head').innerText = sub.toUpperCase();
+    document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
+    $(`c-${sub}`).classList.add('active');
+}
+
+function SendNote() {
+    const txt = $('w-txt').value.trim();
+    if(!txt) return;
+    
+    const n = {
+        id: State.draft.id,
+        sub: State.draft.sub,
+        text: txt,
+        ts: Date.now(),
+        boardId: State.boardId
+    };
+    
+    DB.saveNote(n);
+    
+    // CRITICAL: Attach Zone ID if active
+    const zoneId = (State.activity.type === 'ZONE_ACT') ? State.activity.id : null;
+    
+    SafeSend({ type:'NOTE', id:n.id, sub:n.sub, text:n.text, zoneId: zoneId });
+    Show('scr-lobby');
+}
+
+/* --- SKETCHING --- */
+let ctx, isDrawing=false;
+
+function DraftSketch() {
+    State.draft = { id: genId(), sub: 'sketch' };
+    $('sketch-caption').value = '';
+    Show('scr-sketch');
+    InitCanvas();
+}
+
+function InitCanvas() {
+    const c = $('sketch-canvas');
+    const p = c.parentElement;
+    c.width = p.clientWidth - 40; // padding
+    c.height = 300;
+    
+    ctx = c.getContext('2d');
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // REMOVED: No white background fill for transparency
+    
+    SetTool('pen');
+    
+    // Events
+    const start = (e) => { isDrawing=true; Draw(e); };
+    const move = (e) => { if(isDrawing) Draw(e); };
+    const end = () => isDrawing=false;
+    
+    c.onmousedown = start; c.onmousemove = move; c.onmouseup = end;
+    c.ontouchstart = (e) => { e.preventDefault(); start(e.touches[0]); };
+    c.ontouchmove = (e) => { e.preventDefault(); move(e.touches[0]); };
+    c.ontouchend = end;
+}
+
+function Draw(e) {
+    const r = $('sketch-canvas').getBoundingClientRect();
+    const x = e.clientX - r.left; const y = e.clientY - r.top;
+    
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+}
+
+function SetTool(t) {
+    ctx.beginPath();
+    if(t==='pen') { ctx.globalCompositeOperation='source-over'; ctx.lineWidth=3; ctx.strokeStyle='#000'; }
+    else { ctx.globalCompositeOperation='destination-out'; ctx.lineWidth=20; }
+    
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    if(t==='pen') $('tb-pen').classList.add('active'); else $('tb-era').classList.add('active');
+}
+
+function ClearSketch() {
+    ctx.clearRect(0,0,1000,1000);
+    // REMOVED: No white background fill
+    ctx.beginPath();
+}
+
+function SendSketch() {
+    const c = $('sketch-canvas');
+    // Send as transparent PNG
+    const data = c.toDataURL('image/png');
+    const cap = $('sketch-caption').value.trim() || 'Sketch';
+    
+    const n = {
+        id: State.draft.id,
+        sub: 'sketch',
+        text: cap,
+        src: data,
+        ts: Date.now(),
+        boardId: State.boardId
+    };
+    
+    DB.saveNote(n);
+    
+    const zoneId = (State.activity.type === 'ZONE_ACT') ? State.activity.id : null;
+    
+    SafeSend({ type:'IMG_NOTE', id:n.id, src:data, text:cap, zoneId: zoneId });
+    Show('scr-lobby');
+}
+
+/* --- WIDGETS --- */
+function RenderPoll(d) {
+    $('wid-title').innerText = d.q;
+    const c = $('wid-content');
+    c.innerHTML = d.opts.map((o,i) => `<button class="btn btn-s mc-opt" onclick="SubmitPoll(${i}, this)">${o.lbl}</button>`).join('');
+    $('wid-input-area').style.display = 'none';
+    $('wid-submit').style.display = 'none'; // Auto submit on click
+}
+
+function SubmitPoll(idx, btn) {
+    document.querySelectorAll('.mc-opt').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    SafeSend({ type:'POLL_VOTE', actId: State.activity.id, idx: idx });
+    Show('scr-lobby');
+}
+
+function RenderGraphInput(d) {
+    $('wid-title').innerText = d.title;
+    $('wid-content').innerHTML = '';
+    $('wid-input-area').style.display = 'block';
+    $('wid-submit').style.display = 'block';
+    $('graph-val').value = '';
+    $('wid-submit').onclick = () => {
+        const v = parseFloat($('graph-val').value);
+        if(isNaN(v)) return alert("Enter a number");
+        SafeSend({ type:'DATA_SUBMIT', actId: State.activity.id, val: v });
+        Show('scr-lobby');
+    };
+}
+
+/* --- EXIT TICKET --- */
+function RenderExit(d) {
+    $('exit-prompt').innerText = d.prompt;
+    const area = $('exit-area');
+    area.innerHTML = '';
+    
+    let val = null;
+    let multi = [];
+    
+    if(d.mode === 'short') {
+        area.innerHTML = `<textarea id="exit-txt" rows="5" placeholder="Answer here..."></textarea>`;
+        $('exit-submit').onclick = () => SubmitExit($('exit-txt').value);
+    }
+    else if(d.mode === 'smiley') {
+        const row = document.createElement('div'); row.className='emoji-row';
+        ['😡','🙁','😐','🙂','😀'].forEach(e => {
+            const b = document.createElement('div'); b.className='emoji-opt'; b.innerText=e;
+            b.onclick = () => { 
+                document.querySelectorAll('.emoji-opt').forEach(x=>x.classList.remove('selected'));
+                b.classList.add('selected'); val=e; 
+            };
+            row.appendChild(b);
+        });
+        area.appendChild(row);
+        $('exit-submit').onclick = () => SubmitExit(val);
+    }
+    else if(d.mode === 'mc' || d.mode === 'multi') {
+        d.opts.forEach(o => {
+            const b = document.createElement('div'); b.className='mc-opt'; b.innerText=o;
+            b.onclick = () => {
+                if(d.mode === 'mc') {
+                    document.querySelectorAll('.mc-opt').forEach(x=>x.classList.remove('selected'));
+                    b.classList.add('selected'); val=o;
+                } else {
+                    b.classList.toggle('selected');
+                    if(b.classList.contains('selected')) multi.push(o); else multi = multi.filter(x=>x!==o);
+                }
+            };
+            area.appendChild(b);
+        });
+        $('exit-submit').onclick = () => SubmitExit(d.mode==='mc'?val:multi);
+    }
+    else if(d.mode === 'lw') {
+        area.innerHTML = `
+            <label style="font-weight:bold; color:#166534">I Learned:</label>
+            <input id="exit-l" placeholder="...">
+            <label style="font-weight:bold; color:#0369a1">I Wonder:</label>
+            <input id="exit-w" placeholder="...">
+        `;
+        $('exit-submit').onclick = () => {
+            const l = $('exit-l').value; const w = $('exit-w').value;
+            if(l && w) SubmitExit({l, w}); else alert("Fill both");
+        };
+    }
+}
+
+function SubmitExit(val) {
+    if(!val || (Array.isArray(val) && val.length===0)) return alert("Please answer.");
+    SafeSend({ type:'EXIT_SUBMIT', actId: State.activity.id, val: val });
+    Show('scr-lobby');
+    alert("Response Submitted!");
+}
+
+/* --- HISTORY & UTILS --- */
+function RenderHist() {
+    const list = $('hist-list');
+    const myNotes = State.notes.filter(n => n.boardId === State.boardId).sort((a,b) => b.ts - a.ts);
+    
+    if(myNotes.length === 0) {
+        list.innerHTML = `<div style="text-align:center; color:#cbd5e1; padding:20px">No contributions yet.</div>`;
+        return;
+    }
+    
+    list.innerHTML = myNotes.map(n => `
+        <div class="note-card n-${n.sub}">
+            ${n.sub==='sketch' ? `<img src="${n.src}" style="width:100%; border-radius:8px; background:#f1f5f9;">` : `<div>${n.text}</div>`}
+            <div class="note-controls">
+                <button class="mini-btn" onclick="DeleteNote('${n.id}')">Delete</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function DeleteNote(id) {
+    if(confirm("Delete this note?")) {
+        DB.delNote(id);
+        SafeSend({ type:'DELETE_NOTE', id: id });
+    }
+}
+
+// Init
+window.onload = () => {
+    DB.init().then(() => {
+        if(State.me.name) Setup();
+    });
+};
+</script>
+</body>
+</html>

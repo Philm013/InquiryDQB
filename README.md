@@ -1,0 +1,2 @@
+# InquiryDQB
+Repository for InquiryDQB

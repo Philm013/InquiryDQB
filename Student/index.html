@@ -80,7 +80,10 @@
             display: flex; justify-content: space-between; align-items: center;
             position: sticky; top: 0; z-index: 10;
         }
-        .user-badge { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.1rem; }
+        .user-badge { 
+            display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.1rem;
+            padding: 4px 8px; border-radius: 8px; transition: 0.3s; border: 2px solid transparent;
+        }
         .status-pill {
             font-size: 0.75rem; padding: 4px 10px; border-radius: 20px; 
             background: #cbd5e1; color: #475569; font-weight: 700; text-transform: uppercase;
@@ -294,7 +297,7 @@
                 <div id="zone-buttons-cer" style="display:none; grid-template-columns:1fr 1fr 1fr; gap:8px">
                     <button class="btn" style="background:#d97706; padding:10px; font-size:0.9rem" onclick="Draft('claim')">Claim</button>
                     <button class="btn" style="background:#0284c7; padding:10px; font-size:0.9rem" onclick="Draft('evidence')">Evidence</button>
-                    <button class="btn" style="background:#16a34a; padding:10px; font-size:0.9rem" onclick="Draft('reasoning')">Reasoning</button>
+                    <button class="btn" style="background:#166534; padding:10px; font-size:0.9rem" onclick="Draft('reasoning')">Reasoning</button>
                 </div>
             </div>
         </div>
@@ -443,10 +446,16 @@
 <script>
 const $ = id => document.getElementById(id);
 const genId = () => Math.random().toString(36).substr(2, 9);
+const sanitizeHTML = (str) => {
+    if (str === null || str === undefined) return '';
+    const temp = document.createElement('div');
+    temp.textContent = str;
+    return temp.innerHTML;
+};
 
 /* --- GLOBAL STATE --- */
 const State = {
-    me: { name: '', av: '😀' },
+    me: { name: '', av: '😀', color: null },
     notes: [],
     // Active Activity State
     activity: { 
@@ -670,6 +679,14 @@ function Handle(d) {
             DB.delNote(d.id);
         }
     }
+    else if (d.type === 'SET_COLOR') {
+        State.me.color = d.color;
+        const badge = document.querySelector('.user-badge');
+        if (badge) {
+            badge.style.borderColor = d.color || 'transparent';
+            badge.style.backgroundColor = d.color ? `${d.color}20` : 'transparent';
+        }
+    }
     else if(d.type === 'COMMENT') {
         // Future: Could display comment alerts, but for now student client doesn't need to do anything.
     }
@@ -710,8 +727,8 @@ function SetActivityState(type, id=null, title=null, subType=null, items=[]) {
         else {
             // Default Zone (Add Notes / CER / Consensus)
             $('state-zone').style.display = 'block';
-            $('zone-title').innerText = title || 'Activity';
-            $('zone-type-badge').innerText = subType === 'consensus' ? 'Consensus Model' : (subType === 'cer' ? 'CER Builder' : 'Zone Activity');
+            $('zone-title').innerHTML = sanitizeHTML(title) || 'Activity';
+            $('zone-type-badge').innerHTML = sanitizeHTML(subType === 'consensus' ? 'Consensus Model' : (subType === 'cer' ? 'CER Builder' : 'Zone Activity'));
             
             if(subType === 'consensus') $('zone-desc').innerText = "Contribute your pieces to the class model.";
             else if(subType === 'cer') $('zone-desc').innerText = "Build the argument: Claim, Evidence, Reasoning.";
@@ -742,7 +759,7 @@ function RenderVoteUI(items) {
     list.innerHTML = items.map(i => `
         <div class="vote-item" onclick="SelectVote('${i.id}', this)">
             <div style="font-size:1.2rem; margin-right:8px">${i.sub ? (i.sub==='idea'?'💡':(i.sub==='wonder'?'❓':'👁️')) : '📝'}</div>
-            <div style="font-weight:600; font-size:0.95rem">${i.text.substring(0,60)}...</div>
+            <div style="font-weight:600; font-size:0.95rem">${sanitizeHTML(i.text.substring(0,60))}...</div>
         </div>
     `).join('');
     State.selectedVote = null;
@@ -772,7 +789,7 @@ function RenderSortUI(items) {
         list.innerHTML = State.sortOrder.map((i, idx) => `
             <div class="sort-item">
                 <div style="font-weight:bold; color:#94a3b8">#${idx+1}</div>
-                <div style="flex:1; font-size:0.9rem">${i.text.substring(0,50)}</div>
+                <div style="flex:1; font-size:0.9rem">${sanitizeHTML(i.text.substring(0,50))}</div>
                 <div class="sort-controls">
                     <button class="sort-btn" onclick="MoveItem(${idx}, -1)">▲</button>
                     <button class="sort-btn" onclick="MoveItem(${idx}, 1)">▼</button>
@@ -805,7 +822,7 @@ function RenderDiscussUI(items) {
                 <span>${i.sub ? (i.sub==='idea'?'💡 IDEA':(i.sub==='wonder'?'❓ WONDER':'👁️ NOTICE')) : '📝 NOTE'}</span>
                 <span>Tap to comment</span>
             </div>
-            <div style="font-weight:600; color:#334155">${i.text.substring(0, 100)}${i.text.length>100?'...':''}</div>
+            <div style="font-weight:600; color:#334155">${sanitizeHTML(i.text.substring(0, 100))}${i.text.length>100?'...':''}</div>
         </div>
     `).join('');
 }
@@ -814,7 +831,7 @@ let currentDiscussTarget = null;
 
 function OpenDiscussModal(id, text, sub) {
     currentDiscussTarget = id;
-    $('md-text').innerText = text.substring(0, 60) + "...";
+    $('md-text').innerHTML = sanitizeHTML(text.substring(0, 60)) + "...";
     $('md-input').value = '';
     $('modal-discuss').classList.add('active');
     $('md-input').focus();
@@ -926,7 +943,6 @@ function InitCanvas() {
     
     ctx = c.getContext('2d');
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    // REMOVED: No white background fill for transparency
     
     SetTool('pen');
     
@@ -962,7 +978,6 @@ function SetTool(t) {
 
 function ClearSketch() {
     ctx.clearRect(0,0,1000,1000);
-    // REMOVED: No white background fill
     ctx.beginPath();
 }
 
@@ -991,9 +1006,9 @@ function SendSketch() {
 
 /* --- WIDGETS --- */
 function RenderPoll(d) {
-    $('wid-title').innerText = d.q;
+    $('wid-title').innerHTML = sanitizeHTML(d.q);
     const c = $('wid-content');
-    c.innerHTML = d.opts.map((o,i) => `<button class="btn btn-s mc-opt" onclick="SubmitPoll(${i}, this)">${o.lbl}</button>`).join('');
+    c.innerHTML = d.opts.map((o,i) => `<button class="btn btn-s mc-opt" onclick="SubmitPoll(${i}, this)">${sanitizeHTML(o.lbl)}</button>`).join('');
     $('wid-input-area').style.display = 'none';
     $('wid-submit').style.display = 'none'; // Auto submit on click
 }
@@ -1006,7 +1021,7 @@ function SubmitPoll(idx, btn) {
 }
 
 function RenderGraphInput(d) {
-    $('wid-title').innerText = d.title;
+    $('wid-title').innerHTML = sanitizeHTML(d.title);
     $('wid-content').innerHTML = '';
     $('wid-input-area').style.display = 'block';
     $('wid-submit').style.display = 'block';
@@ -1021,7 +1036,7 @@ function RenderGraphInput(d) {
 
 /* --- EXIT TICKET --- */
 function RenderExit(d) {
-    $('exit-prompt').innerText = d.prompt;
+    $('exit-prompt').innerHTML = sanitizeHTML(d.prompt);
     const area = $('exit-area');
     area.innerHTML = '';
     
@@ -1047,7 +1062,7 @@ function RenderExit(d) {
     }
     else if(d.mode === 'mc' || d.mode === 'multi') {
         d.opts.forEach(o => {
-            const b = document.createElement('div'); b.className='mc-opt'; b.innerText=o;
+            const b = document.createElement('div'); b.className='mc-opt'; b.innerHTML=sanitizeHTML(o);
             b.onclick = () => {
                 if(d.mode === 'mc') {
                     document.querySelectorAll('.mc-opt').forEach(x=>x.classList.remove('selected'));
@@ -1094,7 +1109,7 @@ function RenderHist() {
     
     list.innerHTML = myNotes.map(n => `
         <div class="note-card n-${n.sub}">
-            ${n.sub==='sketch' ? `<img src="${n.src}" style="width:100%; border-radius:8px; background:#f1f5f9;">` : `<div>${n.text}</div>`}
+            ${n.sub==='sketch' ? `<img src="${n.src}" style="width:100%; border-radius:8px; background:#f1f5f9;">` : `<div>${sanitizeHTML(n.text)}</div>`}
             <div class="note-controls">
                 <button class="mini-btn" onclick="DeleteNote('${n.id}')">Delete</button>
             </div>

@@ -241,7 +241,7 @@
         .caption-in { width: 100%; height: 40px; border: none; border-top: 1px solid rgba(0,0,0,0.1); background: rgba(255,255,255,0.8); padding: 8px; font-family: var(--font-ui); font-size: 0.9rem; resize: none; color: #1e293b; flex-shrink: 0; }
 
         .i-body { flex: 1; position: relative; min-height: 0; display: flex; flex-direction: column; }
-        .zone-label { position:absolute; top:-25px; left:0; color: var(--accent); font-weight:800; letter-spacing:1px; font-size:0.9rem; white-space:nowrap; text-shadow: 0 2px 4px rgba(0,0,0,0.5); pointer-events: none; }
+        .zone-label { position:absolute; top:-25px; left:0; color: var(--accent); font-weight:800; letter-spacing:1px; font-size:0.9rem; white-space:nowrap; text-shadow: 0 2px 4px rgba(0,0,0,0.5); pointer-events: none; transition: color 0.2s; }
         .cer-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; height: 100%; width: 100%; pointer-events: none; }
         .cer-col { border-right: 2px dashed #cbd5e1; position: relative; display: flex; justify-content: center; padding-top: 10px; font-weight: 800; color: #94a3b8; letter-spacing: 1px; font-size: 0.8rem; }
         .consensus-bg { background-image: radial-gradient(#bae6fd 1px, transparent 1px); background-size: 20px 20px; background-color: #f0f9ff; }
@@ -625,12 +625,18 @@
 <script>
 const $ = id => document.getElementById(id);
 const genId = () => Math.random().toString(36).substr(2, 9);
+const sanitizeHTML = (str) => {
+    if (str === null || str === undefined) return '';
+    const temp = document.createElement('div');
+    temp.textContent = str;
+    return temp.innerHTML;
+};
 
 /* --- CONSTANTS --- */
 window.TYPES = {
     notice: { col: '#fef3c7', bor: '#d97706', icon: '👁️', lbl: 'Notice' },
     wonder: { col: '#bae6fd', bor: '#0284c7', icon: '❓', lbl: 'Wonder' },
-    idea:   { col: '#bbf7d0', bor: '#16a34a', icon: '💡', lbl: 'Idea' },
+    idea:   { col: '#bbf7d0', bor: '#166534', icon: '💡', lbl: 'Idea' },
     test:   { col: '#fecaca', bor: '#dc2626', icon: '🧪', lbl: 'Testable' },
     meta:   { col: '#f8fafc', bor: '#64748b', icon: '📝', lbl: 'Note' },
     sketch: { col: '#ffffff', bor: '#64748b', icon: '✏️', lbl: 'Sketch' },
@@ -1182,11 +1188,41 @@ window.DB = {
         };
         req.onsuccess = e => { DB.db = e.target.result; resolve(); Board.list(); };
     }),
-    save: (board) => { 
-        if(State.isCoHost) return; // Co-hosts don't save to local DB
-        const tx = DB.db.transaction('boards', 'readwrite'); tx.objectStore('boards').put(board); return new Promise(r => tx.oncomplete = r); 
+    save: (board) => {
+        if (State.isCoHost) return Promise.resolve();
+        if (!board || !board.id || typeof board.id !== 'string') {
+            const errorMsg = "Attempted to save board with invalid ID.";
+            console.error(errorMsg, board);
+            return Promise.reject(new Error(errorMsg));
+        }
+        return new Promise((resolve, reject) => {
+            try {
+                const tx = DB.db.transaction('boards', 'readwrite');
+                tx.oncomplete = resolve;
+                tx.onerror = event => reject(event.target.error);
+                tx.objectStore('boards').put(board);
+            } catch (err) {
+                reject(err);
+            }
+        });
     },
-    saveTemplate: (tpl) => { const tx = DB.db.transaction('templates', 'readwrite'); tx.objectStore('templates').put(tpl); return new Promise(r => tx.oncomplete = r); },
+    saveTemplate: (tpl) => {
+        if (!tpl || !tpl.id || typeof tpl.id !== 'string') {
+            const errorMsg = "Attempted to save template with invalid ID.";
+            console.error(errorMsg, tpl);
+            return Promise.reject(new Error(errorMsg));
+        }
+        return new Promise((resolve, reject) => {
+            try {
+                const tx = DB.db.transaction('templates', 'readwrite');
+                tx.oncomplete = resolve;
+                tx.onerror = event => reject(event.target.error);
+                tx.objectStore('templates').put(tpl);
+            } catch (err) {
+                reject(err);
+            }
+        });
+    },
     getAll: (store) => new Promise(resolve => { const req = DB.db.transaction(store, 'readonly').objectStore(store).getAll(); req.onsuccess = () => resolve(req.result); })
 };
 
@@ -1204,7 +1240,12 @@ window.Board = {
         ActionHistory.stack=[]; ActionHistory.index=-1; ActionHistory.push();
         Board.start(); 
     },
-    load: async (id) => { 
+    load: async (id) => {
+        if (!id) {
+            console.error("Attempted to load a board with a null or undefined ID.");
+            UI.toast("Error: Could not load board due to missing ID.");
+            return;
+        }
         const b = (await DB.getAll('boards')).find(x => x.id === id); 
         if(b) { 
             State.id=b.id; State.items=b.items; State.ink=b.ink||[]; State.name=b.name; 
@@ -1229,9 +1270,14 @@ window.Board = {
         Board.save(true);
         UI.toast("✅ Start view set and saved!");
     },
-    save: async (silent) => { 
-        await DB.save({ id: State.id, name: State.name, items: State.items, ink: State.ink, view: State.view, ts: Date.now() }); 
-        if(!silent) UI.toast("💾 Board Saved"); 
+    save: async (silent) => {
+        try {
+            await DB.save({ id: State.id, name: State.name, items: State.items, ink: State.ink, view: State.view, ts: Date.now() }); 
+            if(!silent) UI.toast("💾 Board Saved"); 
+        } catch (error) {
+            console.error("Board.save failed:", error);
+            if(!silent) UI.toast("❌ Save Failed!");
+        }
     },
     exit: () => { localStorage.removeItem('lastBoard'); location.reload(); },
     import: (input) => {
@@ -1364,7 +1410,40 @@ window.Render = {
 
         State.items.forEach(i => {
             let el = document.getElementById(i.id);
-            if(!el) { el = Render.createItem(i); layer.appendChild(el); }
+            if(!el) { 
+                el = Render.createItem(i); 
+                layer.appendChild(el); 
+            } else {
+                // Item exists, let's update its dynamic parts
+                const btn = el.querySelector(`#zbtn-${i.id}`);
+                if (btn) {
+                    const isActive = !!i.isOpen;
+                    if (btn.classList.contains('active') !== isActive) {
+                        btn.classList.toggle('active', isActive);
+                        let btnText = btn.innerText; // Keep current text as default
+                        if (i.type === 'zone' && i.zoneType !== 'exit') {
+                            btnText = isActive ? "🟢 Open" : "📡 Open";
+                        } else if (i.type === 'poll' || i.type === 'graph' || i.zoneType === 'exit') {
+                            btnText = isActive ? "🔴 Stop" : "📡 Broadcast";
+                        }
+                        btn.innerText = btnText;
+                    }
+                }
+                const wrapper = el.querySelector('.jiggle-wrapper');
+                if (wrapper && i.type === 'zone') {
+                    const label = el.querySelector('.zone-label');
+                    if (i.color) {
+                        wrapper.style.border = `2px solid ${i.color}`;
+                        if (label) label.style.color = i.color;
+                    } else {
+                        // Reset to default styles from Render.createItem
+                        wrapper.style.border = '2px dashed #cbd5e1';
+                        if(i.zoneType === 'consensus') { wrapper.style.border = '2px solid #0ea5e9'; } 
+                        else if(i.zoneType === 'exit') { wrapper.style.border = '2px solid #6366f1'; }
+                        if (label) label.style.color = 'var(--accent)';
+                    }
+                }
+            }
             
             if(!el.style.transform) el.style.transform = `translate(${i.x}px, ${i.y}px)`;
             
@@ -1444,7 +1523,7 @@ window.Render = {
         State.items.forEach(i => {
             ctx.fillStyle = i.type === 'zone' ? 'rgba(255, 255, 255, 0.2)' : (TYPES[i.sub] ? TYPES[i.sub].bor : '#94a3b8');
             if (i.type === 'zone') {
-                ctx.strokeStyle = '#cbd5e1';
+                ctx.strokeStyle = i.color || '#cbd5e1';
                 ctx.lineWidth = 1;
                 ctx.strokeRect(mapX(i.x), mapY(i.y), i.w * scale, i.h * scale);
             } else {
@@ -1463,14 +1542,11 @@ window.Render = {
     createItem: (d) => {
         const el = document.createElement('div'); el.id=d.id; el.className=`item ${d.type}`;
         
-        // --- CONSENSUS LOGIC ---
-        // Check if this item belongs to a Consensus Zone
         const parent = d.parentZone ? State.items.find(x => x.id === d.parentZone) : null;
         const isConsensusChild = parent && parent.zoneType === 'consensus';
         if (isConsensusChild) {
             el.classList.add('consensus-child');
         }
-        // -----------------------
 
         let inner = '';
         
@@ -1491,13 +1567,11 @@ window.Render = {
 
         if(d.type === 'note') {
             if(d.sub === 'sketch' || d.src) {
-                // Sketch or Image Note
                 inner = `<div style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
                     <img src="${d.src}" draggable="false" style="flex:1;width:100%;object-fit:contain;background:${isConsensusChild ? 'transparent' : '#f8fafc'}">
                     ${!isConsensusChild ? `<textarea class="caption-in" placeholder="Caption...">${d.text||''}</textarea>` : ''}
                 </div>`;
             } else {
-                // Text Note
                 inner = `<textarea class="note-in" placeholder="Empty note..." ${isConsensusChild ? 'style="border:none;background:transparent;resize:none;font-weight:bold"' : ''}>${d.text||''}</textarea>`;
             }
         } else if (d.type === 'zone') {
@@ -1505,15 +1579,15 @@ window.Render = {
             else if(d.zoneType === 'consensus') inner = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#cbd5e1;font-weight:bold;font-size:1.5rem;opacity:0.5;pointer-events:none">CONSENSUS AREA</div>`;
             else if(d.zoneType === 'exit') {
                 inner = `<div style="padding:15px; text-align:center; color:#1e293b; font-weight:bold; border-bottom:1px solid #e2e8f0; background:#f8fafc">
-                    ${d.prompt}
+                    ${sanitizeHTML(d.prompt)}
                 </div><div style="flex:1; position:relative"></div>`;
             }
             else inner = `<div style="padding:20px;text-align:center;color:#94a3b8;pointer-events:none;display:flex;align-items:center;justify-content:center;height:100%"></div>`;
 
             inner += `<div id="zr-${d.id}" class="zone-res-box"></div>`;
-            el.innerHTML = `<div class="zone-label">${d.title}</div>` + el.innerHTML;
+            el.innerHTML = `<div class="zone-label">${sanitizeHTML(d.title)}</div>` + el.innerHTML;
         } else {
-             if(d.type === 'poll') { inner = `<div class="poll-q" style="padding:8px;font-weight:bold">${d.q}</div><div class="poll-opts"></div>`; }
+             if(d.type === 'poll') { inner = `<div class="poll-q" style="padding:8px;font-weight:bold">${sanitizeHTML(d.q)}</div><div class="poll-opts"></div>`; }
              else if(d.type === 'graph') { inner = `<div class="graph-bars" style="display:flex;align-items:flex-end;height:100%;padding:10px;gap:5px"></div>`; }
              else if(d.type === 'spin') inner = `<div style="padding:10px; display:flex; flex-direction:column; align-items:center"><svg class="spin-svg" viewBox="0 0 100 100" width="120" height="120"></svg><button class="btn-s" style="margin-top:8px; padding:4px 8px; font-size:0.8rem" onpointerdown="event.stopPropagation()" onclick="Actions.spin('${d.id}')">SPIN</button></div>`;
         }
@@ -1528,7 +1602,7 @@ window.Render = {
                 <div class="i-head">
                     <div style="display:flex;gap:5px;align-items:center">
                         <span class="icon-span">${d.type==='note'?head.icon:(d.type==='poll'?'📊':(d.type==='spin'?'🎡':(d.type==='graph'?'📈':'')))}</span>
-                        <span class="auth-span">${title}</span>
+                        <span class="auth-span">${sanitizeHTML(title)}</span>
                         ${btnHtml}
                         ${resBtn}
                     </div>
@@ -1553,6 +1627,11 @@ window.Render = {
             if(d.zoneType === 'consensus') { w.classList.add('consensus-bg'); w.style.border = '2px solid #0ea5e9'; } 
             else if(d.zoneType === 'exit') { w.style.border = '2px solid #6366f1'; w.style.background = '#fefeff'; }
             else { w.style.background = 'rgba(255,255,255,0.5)'; }
+            if (d.color) {
+                w.style.border = `2px solid ${d.color}`;
+                const label = el.querySelector('.zone-label');
+                if (label) label.style.color = d.color;
+            }
         }
 
         const ta = el.querySelector('textarea');
@@ -1566,7 +1645,7 @@ window.Render = {
     },
     updatePoll: (el, d) => {
         const tot = d.opts.reduce((a,b)=>a+b.v, 0);
-        el.querySelector('.poll-opts').innerHTML = d.opts.map(o => `<div style="margin:5px;background:#f1f5f9;border-radius:4px;position:relative;height:24px"><div style="position:absolute;height:100%;background:#93c5fd;border-radius:4px;width:${tot?(o.v/tot)*100:0}%"></div><div style="position:absolute;inset:0;display:flex;justify-content:space-between;padding:0 8px;align-items:center;font-size:0.8rem;font-weight:700"><span>${o.lbl}</span><span>${o.v}</span></div></div>`).join('');
+        el.querySelector('.poll-opts').innerHTML = d.opts.map(o => `<div style="margin:5px;background:#f1f5f9;border-radius:4px;position:relative;height:24px"><div style="position:absolute;height:100%;background:#93c5fd;border-radius:4px;width:${tot?(o.v/tot)*100:0}%"></div><div style="position:absolute;inset:0;display:flex;justify-content:space-between;padding:0 8px;align-items:center;font-size:0.8rem;font-weight:700"><span>${sanitizeHTML(o.lbl)}</span><span>${o.v}</span></div></div>`).join('');
     },
     updateGraph: (el, d) => {
         const max = Math.max(...d.data, 10);
@@ -1705,6 +1784,14 @@ window.Actions = {
                     <button class="ctx-btn" onclick="Network.startActivity('sort')">🔢 Rank</button>
                     <button class="ctx-btn" onclick="Network.startActivity('discuss')">💬 Discuss</button>
                 </div>
+                <div class="ctx-row" style="border-top:1px solid #e2e8f0; margin-top:5px; padding-top:5px">
+                    <button class="ctx-btn" style="background:#ef4444" onclick="Actions.setZoneColor('${id}', '#ef4444')"></button>
+                    <button class="ctx-btn" style="background:#3b82f6" onclick="Actions.setZoneColor('${id}', '#3b82f6')"></button>
+                    <button class="ctx-btn" style="background:#10b981" onclick="Actions.setZoneColor('${id}', '#10b981')"></button>
+                    <button class="ctx-btn" style="background:#f97316" onclick="Actions.setZoneColor('${id}', '#f97316')"></button>
+                    <button class="ctx-btn" style="background:#8b5cf6" onclick="Actions.setZoneColor('${id}', '#8b5cf6')"></button>
+                    <button class="ctx-btn" onclick="Actions.setZoneColor('${id}', null)">✕</button>
+                </div>
                 <div class="ctx-row"><button class="ctx-btn" onclick="Actions.rename('${id}')">Rename</button></div>
                 <div class="ctx-row">
                     <button class="ctx-btn btn-del" onclick="Actions.delete('${id}')">Delete</button>
@@ -1717,6 +1804,16 @@ window.Actions = {
         }
         
         menu.innerHTML = html; menu.style.display = 'block'; Actions.posMenu(menu, e);
+    },
+    setZoneColor: (id, color) => {
+        const item = State.items.find(i => i.id === id);
+        if (item && item.type === 'zone') {
+            item.color = item.color === color ? null : color;
+            Render.all();
+            Board.save(true);
+            Network.broadcast({ type: 'NOTE_UPDATE', note: item }); // Re-use NOTE_UPDATE for simplicity
+            UI.closeAllMenus();
+        }
     },
     saveSelectionAsTemplate: async () => {
         if(State.selection.length === 0) return;
@@ -2663,12 +2760,6 @@ window.Network = {
     transitionTo: (type, targetId = null, payload = null) => {
         State.items.forEach(i => {
             i.isOpen = false;
-            const btn = document.getElementById(`zbtn-${i.id}`);
-            if(btn) {
-                btn.classList.remove('active');
-                if(i.type === 'zone' && i.zoneType !== 'exit') btn.innerText = "📡 Open";
-                else if(i.type === 'poll' || i.type === 'graph' || i.zoneType === 'exit') btn.innerText = "📡 Broadcast";
-            }
         });
 
         $('act-controls').style.display = 'none';
@@ -2687,10 +2778,8 @@ window.Network = {
             const item = State.items.find(i => i.id === targetId);
             if(item) {
                 item.isOpen = true;
-                const btn = document.getElementById(`zbtn-${item.id}`);
                 
                 if (type === 'ZONE_ACT') {
-                    if(btn) { btn.innerText = "🟢 Open"; btn.classList.add('active'); }
                     // CRITICAL FIX: Send 'type' as the specific activity subtype so student client recognizes it immediately
                     const finalPayload = { ...payload, type: payload.subType };
                     Network.broadcast(finalPayload); 
@@ -2709,7 +2798,6 @@ window.Network = {
                     $('act-results').innerHTML = html;
                 } 
                 else if (type === 'WIDGET_ACT' || type === 'EXIT_TICKET') {
-                    if(btn) { btn.innerText = "🔴 Stop"; btn.classList.add('active'); }
                     Network.broadcast(payload); 
                 }
             }
@@ -2827,6 +2915,16 @@ window.Network = {
         });
     },
 
+    assignStudentColor: (pid, color) => {
+        const student = State.students[pid];
+        if (student) {
+            student.color = student.color === color ? null : color;
+            SafeSend(student.conn, { type: 'SET_COLOR', color: student.color });
+            Roster();
+            UI.toast(`${student.name} assigned ${student.color ? 'a color' : 'no color'}.`);
+        }
+    },
+
     handle: (pid, d, conn) => {
         if(d.type === 'JOIN') { State.students[pid] = { name:d.name, avatar:d.avatar, conn:conn }; Roster(); } 
         else if(d.type === 'AUTH_COHOST') { 
@@ -2875,61 +2973,36 @@ window.Network = {
             $('viewport').appendChild(dot);
             setTimeout(() => dot.remove(), 500);
         }
-        else if(d.type === 'NOTE') {
-            // Auto-Target Active Zone
-            if (!d.zoneId && (State.activity.type === 'ZONE_ACT' || State.activity.type === 'OPEN_ZONE')) {
+        else if(d.type === 'NOTE' || d.type === 'IMG_NOTE') {
+            if (State.activity.type === 'ZONE_ACT' && State.activity.payload && State.activity.payload.subType === 'OPEN_ZONE') {
                 d.zoneId = State.activity.targetId;
             }
-
-            let i = State.items.find(x => x.id === d.id);
-            if(!i) {
-                i = { id:d.id, type:'note', sub:d.sub, text:d.text, author:State.students[pid]?.name, w:200, h:150, votes:0, groupId: null };
-                
-                // Initialize default placement first
-                const pos = Board.getFreeSpace(-State.view.x+100, -State.view.y+100, 200, 150);
-                i.x = pos.x; i.y = pos.y;
-                State.items.push(i);
-
-                if(d.zoneId) {
-                    const zone = State.items.find(z => z.id === d.zoneId);
-                    if(zone) {
-                        i.x = zone.x + zone.w/2 - i.w/2;
-                        i.y = zone.y + zone.h/2 - i.h/2;
-                    }
-                    Actions.addToZone(d.zoneId, i.id); 
-                }
-            } else { i.text = d.text; i.sub = d.sub; }
-            
-            if(d.zoneId) LayoutSystem.update(d.zoneId);
-            Render.all(); Board.save(true);
-            Network.broadcast(d); // Rebroadcast to other co-hosts
-        }
-        else if(d.type === 'IMG_NOTE') {
-             if (!d.src) return;
-             
-             // Auto-Target Active Zone
-             if (!d.zoneId && (State.activity.type === 'ZONE_ACT' || State.activity.type === 'OPEN_ZONE')) {
-                 d.zoneId = State.activity.targetId;
-             }
-
-             let i = { id:d.id, type:'note', sub:'sketch', src:d.src, text:d.text, author:State.students[pid]?.name, w:200, h:200, votes:0, groupId: null };
-             
-             const pos = Board.getFreeSpace(-State.view.x+100, -State.view.y+100, 200, 200);
-             i.x = pos.x; i.y = pos.y;
-             State.items.push(i);
-
-             if(d.zoneId) {
+            if (d.zoneId) {
                 const zone = State.items.find(z => z.id === d.zoneId);
-                if(zone) {
-                    i.x = zone.x + zone.w/2 - i.w/2;
-                    i.y = zone.y + zone.h/2 - i.h/2;
+                const student = State.students[pid];
+                if (zone && zone.color && (!student || student.color !== zone.color)) {
+                    return; // Student color doesn't match zone color, ignore submission.
                 }
-                Actions.addToZone(d.zoneId, i.id); 
-             }
-             
-             if(d.zoneId) LayoutSystem.update(d.zoneId);
-             Render.all(); Board.save(true);
-             Network.broadcast(d);
+            }
+            let i = State.items.find(x => x.id === d.id);
+            if (d.type === 'NOTE') {
+                if(!i) {
+                    i = { id:d.id, type:'note', sub:d.sub, text:d.text, author:State.students[pid]?.name, w:200, h:150, votes:0, groupId: null };
+                    State.items.push(i);
+                } else { i.text = d.text; i.sub = d.sub; }
+            } else { // IMG_NOTE
+                if (!d.src) return;
+                i = { id:d.id, type:'note', sub:'sketch', src:d.src, text:d.text, author:State.students[pid]?.name, w:200, h:200, votes:0, groupId: null };
+                State.items.push(i);
+            }
+            if (d.zoneId) {
+                Actions.addToZone(d.zoneId, i.id);
+            } else {
+                const pos = Board.getFreeSpace(-State.view.x+100, -State.view.y+100, i.w, i.h);
+                i.x = pos.x; i.y = pos.y;
+            }
+            Render.all(); Board.save(true);
+            Network.broadcast(d);
         }
         else if(d.type === 'DELETE_NOTE') { HierarchyManager.delete(d.id); }
         else if(d.type === 'POLL_VOTE') { 
@@ -2979,7 +3052,7 @@ window.Network = {
         submissions.forEach(sub => { if(Array.isArray(sub)) sub.forEach((itemId, idx) => { scores[itemId] = (scores[itemId] || 0) + (sub.length - idx); }); else scores[sub] = (scores[sub] || 0) + 1; });
         const results = Object.keys(scores).map(id => { const item = State.items.find(x=>x.id===id); return { text: item ? item.text.substring(0,30) : "Unknown", score: scores[id] }; }).sort((a,b) => b.score - a.score);
         const max = results.length ? results[0].score : 1;
-        const html = `<div style="margin-bottom:10px;font-weight:bold;color:#64748b">${submissions.length} Responses</div>${results.map((r, i) => `<div class="result-row"><div style="width:20px;font-weight:bold;color:#64748b">#${i+1}</div><div style="flex:2; font-weight:600; color:#334155">${r.text}</div><div class="bar-bg"><div class="bar-fill" style="width:${(r.score/max)*100}%"></div></div><div style="font-size:0.8rem;font-weight:bold;color:#6366f1">${r.score}</div></div>`).join('')}`;
+        const html = `<div style="margin-bottom:10px;font-weight:bold;color:#64748b">${submissions.length} Responses</div>${results.map((r, i) => `<div class="result-row"><div style="width:20px;font-weight:bold;color:#64748b">#${i+1}</div><div style="flex:2; font-weight:600; color:#334155">${sanitizeHTML(r.text)}</div><div class="bar-bg"><div class="bar-fill" style="width:${(r.score/max)*100}%"></div></div><div style="font-size:0.8rem;font-weight:bold;color:#6366f1">${r.score}</div></div>`).join('')}`;
         const zContainer = $(`zr-${actId}`); if(zContainer) zContainer.innerHTML = `<h4 style="margin:0 0 10px 0; color:#475569">Activity Results</h4>` + html;
         if($('act-results')) $('act-results').innerHTML = html;
     },
@@ -2996,7 +3069,7 @@ window.Network = {
              return false;
         });
 
-        const html = relevant.map(c => { const item = State.items.find(x=>x.id===c.targetId); const txt = item ? item.text.substring(0,20)+'...' : 'Unknown'; return `<div class="disc-item"><div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#94a3b8;margin-bottom:4px"><span>${c.author}</span><span>Ref: ${txt}</span></div><span class="disc-tag dt-${c.tag}">${c.tag.toUpperCase()}</span><div style="color:#334155">${c.text}</div></div>`; }).reverse().join('');
+        const html = relevant.map(c => { const item = State.items.find(x=>x.id===c.targetId); const txt = item ? item.text.substring(0,20)+'...' : 'Unknown'; return `<div class="disc-item"><div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#94a3b8;margin-bottom:4px"><span>${sanitizeHTML(c.author)}</span><span>Ref: ${sanitizeHTML(txt)}</span></div><span class="disc-tag dt-${c.tag}">${c.tag.toUpperCase()}</span><div style="color:#334155">${sanitizeHTML(c.text)}</div></div>`; }).reverse().join('');
         const zContainer = $(`zr-${actId}`); if(zContainer) zContainer.innerHTML = `<h4 style="margin:0 0 10px 0; color:#475569">Discussion</h4>` + html;
         if($('act-results')) $('act-results').innerHTML = html;
     },
@@ -3018,8 +3091,36 @@ window.setTool = function(t) {
 };
 
 window.SafeSend = function(conn, data) { if(conn && conn.open) conn.send(JSON.stringify(data)); };
-window.Roster = function() { const s = Object.values(State.students); $('conn-badge').innerText = s.length; if(s.length===0) $('roster').innerHTML = '<div style="padding:20px; text-align:center">Waiting for connections...</div>'; else $('roster').innerHTML = s.map(x => `<div style="display:flex; gap:10px; padding:8px 16px; border-bottom:1px solid #374151; align-items:center"><span style="font-size:1.2rem">${x.avatar}</span><b>${x.name}</b></div>`).join(''); };
-window.Tab = function(n) { document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===n)); document.querySelectorAll('.tab-content').forEach((c,i) => c.classList.toggle('active', i===n)); };
+window.Roster = function() { 
+    const s = Object.values(State.students); 
+    $('conn-badge').innerText = s.length; 
+    if(s.length===0) {
+        $('roster').innerHTML = '<div style="padding:20px; text-align:center">Waiting for connections...</div>';
+        return;
+    }
+    const colors = ['#ef4444', '#3b82f6', '#10b981', '#f97316', '#8b5cf6'];
+    $('roster').innerHTML = Object.keys(State.students).map(pid => {
+        const x = State.students[pid];
+        let colorHtml = '';
+        if (pid !== 'HOST' && x.name !== 'Co-Host') {
+            const colorButtons = colors.map(c => 
+                `<div onclick="Network.assignStudentColor('${pid}', '${c}')" style="width:20px; height:20px; background:${c}; border-radius:50%; cursor:pointer; border: 2px solid ${x.color === c ? 'white' : 'transparent'};"></div>`
+            ).join('');
+            colorHtml = `<div style="display:flex; gap: 6px; padding-left: 34px; margin-top: 8px;">${colorButtons}</div>`;
+        }
+        return `<div style="padding:8px 16px; border-bottom:1px solid #374151;">
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <span style="font-size:1.2rem">${x.avatar}</span>
+                        <b>${sanitizeHTML(x.name)}</b>
+                    </div>
+                    ${colorHtml}
+                </div>`;
+    }).join(''); 
+};
+window.Tab = function(n) { 
+    document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===n)); 
+    document.querySelectorAll('.tab-content').forEach((c,i) => c.classList.toggle('active', i===n)); 
+};
 
 window.onload = () => {
     DB.init();

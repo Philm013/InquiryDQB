@@ -389,6 +389,10 @@
 <div id="modal-templates" class="modal-bg">
     <div class="modal">
         <h2 style="margin-top:0; color:var(--accent)">Templates</h2>
+        <div class="tab-head" style="margin-bottom: 20px; border-radius: 12px;">
+            <div class="tab-btn active" onclick="UI.renderTplList('system')">System</div>
+            <div class="tab-btn" onclick="UI.renderTplList('user')">My Templates</div>
+        </div>
         <div id="tpl-list" style="display:flex; flex-direction:column; gap:8px"></div>
         <button class="btn-s" style="margin-top:20px" onclick="$('modal-templates').style.display='none'">Close</button>
     </div>
@@ -459,18 +463,20 @@
             <div class="tab-btn active" onclick="Tab(0)">Roster <span id="conn-badge">0</span></div>
             <div class="tab-btn" onclick="Tab(1)">Activity</div>
         </div>
-        <div id="tab-roster" class="tab-content active" style="color: #d1d5db;">
-            <div id="roster"><div style="padding:20px; text-align:center">Waiting for connections...</div></div>
-        </div>
-        <div id="tab-activity" class="tab-content" style="color: #d1d5db;">
-            <div id="act-controls" style="display:none; margin-bottom:10px">
-                <div style="padding:10px; background:#374151; border-radius:8px; margin-bottom:10px">
-                    <div style="font-weight:bold; color:#60a5fa;">Active Session</div>
-                    <div id="act-info" style="font-size:0.8rem;"></div>
-                </div>
-                <button class="btn-s" style="background:#7f1d1d; color:#fecaca" onclick="Network.stopActivity()">Stop Activity</button>
+        <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+            <div id="tab-roster" class="tab-content active" style="color: #d1d5db;">
+                <div id="roster"><div style="padding:20px; text-align:center">Waiting for connections...</div></div>
             </div>
-            <div id="act-results"><div style="padding:20px; text-align:center">Select a Zone to see activity or create an Exit Ticket.</div></div>
+            <div id="tab-activity" class="tab-content" style="color: #d1d5db;">
+                <div id="act-controls" style="display:none; margin-bottom:10px">
+                    <div style="padding:10px; background:#374151; border-radius:8px; margin-bottom:10px">
+                        <div style="font-weight:bold; color:#60a5fa;">Active Session</div>
+                        <div id="act-info" style="font-size:0.8rem;"></div>
+                    </div>
+                    <button class="btn-s" style="background:#7f1d1d; color:#fecaca" onclick="Network.stopActivity()">Stop Activity</button>
+                </div>
+                <div id="act-results"><div style="padding:20px; text-align:center">Select a Zone to see activity or create an Exit Ticket.</div></div>
+            </div>
         </div>
         <!-- Sidebar Actions -->
         <div style="margin-top:auto; padding:15px; border-top:1px solid #374151; display:flex; flex-direction:column; gap:8px;">
@@ -1062,6 +1068,11 @@ window.UI = {
         UI.toast("Template Saved");
     },
     renderTplList: async (type) => {
+        const modal = $('modal-templates');
+        const buttons = modal.querySelectorAll('.tab-btn');
+        buttons[0].classList.toggle('active', type === 'system');
+        buttons[1].classList.toggle('active', type === 'user');
+
         const list = $('tpl-list');
         if(type === 'system') {
             const sysTpls = [

@@ -194,6 +194,9 @@
         .n-wonder { border-color: #0284c7; background: #f0f9ff; }
         .n-idea { border-color: #16a34a; background: #f0fdf4; }
         .n-sketch { border-color: #64748b; background: white; }
+        .n-claim { border-color: #d97706; background: #fffbeb; }
+        .n-evidence { border-color: #0284c7; background: #f0f9ff; }
+        .n-reasoning { border-color: #16a34a; background: #f0fdf4; }
         
         .note-controls { 
             margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(0,0,0,0.05); 
@@ -225,6 +228,20 @@
         .emoji-opt.selected { opacity: 1; transform: scale(1.3); }
         .mc-opt { width: 100%; padding: 16px; margin-bottom: 8px; border: 2px solid #e2e8f0; border-radius: 12px; font-weight: bold; text-align: left; background: white; transition: 0.2s; }
         .mc-opt.selected { border-color: var(--accent); background: #e0e7ff; color: var(--accent-dark); }
+        
+        /* --- NEW: CONSENSUS MODELING --- */
+        #consensus-canvas {
+            touch-action: none;
+            cursor: crosshair;
+        }
+        #consensus-toolbar .tool-btn {
+            border: 3px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #consensus-toolbar .tool-btn.active {
+            transform: scale(1.15);
+            border-color: var(--accent);
+        }
 
     </style>
 </head>
@@ -295,9 +312,9 @@
                 
                 <!-- CER Buttons -->
                 <div id="zone-buttons-cer" style="display:none; grid-template-columns:1fr 1fr 1fr; gap:8px">
-                    <button class="btn" style="background:#d97706; padding:10px; font-size:0.9rem" onclick="Draft('claim')">Claim</button>
-                    <button class="btn" style="background:#0284c7; padding:10px; font-size:0.9rem" onclick="Draft('evidence')">Evidence</button>
-                    <button class="btn" style="background:#166534; padding:10px; font-size:0.9rem" onclick="Draft('reasoning')">Reasoning</button>
+                    <button class="btn" style="background:#d97706; padding:10px; font-size:0.9rem" onclick="Draft('claim')">🤔 Claim</button>
+                    <button class="btn" style="background:#0284c7; padding:10px; font-size:0.9rem" onclick="Draft('evidence')">📊 Evidence</button>
+                    <button class="btn" style="background:#166534; padding:10px; font-size:0.9rem" onclick="Draft('reasoning')">🔗 Reasoning</button>
                 </div>
             </div>
         </div>
@@ -368,9 +385,9 @@
             <div class="cat-chip" id="c-wonder" onclick="SetDraftType('wonder')">❓ Wonder</div>
             <div class="cat-chip" id="c-idea" onclick="SetDraftType('idea')">💡 Idea</div>
             <div class="cat-chip" id="c-test" onclick="SetDraftType('test')">🧪 Test</div>
-            <div class="cat-chip" id="c-claim" onclick="SetDraftType('claim')">Claim</div>
-            <div class="cat-chip" id="c-evidence" onclick="SetDraftType('evidence')">Evidence</div>
-            <div class="cat-chip" id="c-reasoning" onclick="SetDraftType('reasoning')">Reasoning</div>
+            <div class="cat-chip" id="c-claim" onclick="SetDraftType('claim')">🤔 Claim</div>
+            <div class="cat-chip" id="c-evidence" onclick="SetDraftType('evidence')">📊 Evidence</div>
+            <div class="cat-chip" id="c-reasoning" onclick="SetDraftType('reasoning')">🔗 Reasoning</div>
         </div>
 
         <textarea id="w-txt" rows="6" placeholder="Type your thoughts here..."></textarea>
@@ -443,6 +460,26 @@
     </div>
 </div>
 
+<!-- CONSENSUS MODELING SCREEN -->
+<div id="scr-consensus" class="screen" style="padding:0; max-width:none;">
+    <div class="lobby-header" style="background:var(--accent); color:white;">
+        <div style="font-weight:bold;">Modeling Mode</div>
+        <div id="consensus-perms" style="font-size:0.8rem; background:rgba(255,255,255,0.2); padding: 4px 8px; border-radius:12px;">View Only</div>
+    </div>
+    <div id="consensus-canvas-container" style="flex:1; position:relative; background:#f1f5f9;">
+        <canvas id="consensus-canvas" style="position:absolute; top:0; left:0;"></canvas>
+    </div>
+    <div id="consensus-toolbar" style="padding:10px; background:white; display:none; flex-direction:column; gap:8px; border-top:1px solid #e2e8f0;">
+        <div style="display:flex; justify-content:center; gap:8px;">
+             <div class="tool-btn active" onclick="Consensus.setTool('draw', '#ef4444')" style="background:#ef4444; border-color:#ef4444"></div>
+             <div class="tool-btn" onclick="Consensus.setTool('draw', '#3b82f6')" style="background:#3b82f6; border-color:#3b82f6"></div>
+             <div class="tool-btn" onclick="Consensus.setTool('draw', '#10b981')" style="background:#10b981; border-color:#10b981"></div>
+             <div class="tool-btn" onclick="Consensus.setTool('draw', '#000000')" style="background:#000000; border-color:#000000"></div>
+             <div class="tool-btn" onclick="Consensus.setTool('eraser')">🧼</div>
+        </div>
+    </div>
+</div>
+
 <script>
 const $ = id => document.getElementById(id);
 const genId = () => Math.random().toString(36).substr(2, 9);
@@ -457,23 +494,17 @@ const sanitizeHTML = (str) => {
 const State = {
     me: { name: '', av: '😀', color: null },
     notes: [],
-    // Active Activity State
     activity: { 
-        type: 'LOCKED', // LOCKED, OPEN, ZONE, WIDGET, EXIT
-        id: null,       // zoneId or actId
-        title: null,
-        subType: null,   // For CER, Consensus, etc.
-        items: []       // For Vote/Sort/Discuss
+        type: 'LOCKED', id: null, title: null,
+        subType: null, items: []
     },
     draft: { id: null, sub: 'notice', text: '' },
-    hostId: null,
-    boardId: null,
-    lastHeartbeat: 0,
-    
-    // Temp state for specific activities
-    selectedVote: null,
-    sortOrder: [],
-    discussTag: 'feedback'
+    hostId: null, boardId: null, lastHeartbeat: 0,
+    selectedVote: null, sortOrder: [], discussTag: 'feedback',
+    consensus: {
+        active: false, canDraw: false, ink: [],
+        tool: 'draw', color: '#ef4444', width: 4
+    }
 };
 
 /* --- DATABASE (IndexedDB) --- */
@@ -519,7 +550,6 @@ EMOJIS.forEach(e => {
     d.onclick = () => { document.querySelectorAll('.av-item').forEach(x=>x.classList.remove('sel')); d.classList.add('sel'); State.me.av=e; };
     g.appendChild(d);
 });
-// Select first by default
 setTimeout(() => { if(g.children[0]) g.children[0].click(); }, 100);
 
 function Setup() {
@@ -534,7 +564,6 @@ function Setup() {
 function Show(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     $(id).classList.add('active');
-    // Mobile scroll fix
     window.scrollTo(0,0);
 }
 
@@ -552,37 +581,21 @@ function Connect(id) {
     id = id.trim();
     State.hostId = id;
     localStorage.setItem('dqb_host_id', id);
-    
     UpdateStatus("Connecting...", "warn");
-    
     if(peer) peer.destroy();
     peer = new Peer();
-    
-    peer.on('open', () => {
-        conn = peer.connect(id);
-        SetupConn(conn);
-    });
-    
+    peer.on('open', () => { conn = peer.connect(id); SetupConn(conn); });
     peer.on('error', err => {
         console.error(err);
         UpdateStatus("Error", "error");
         if(err.type === 'peer-unavailable') {
             localStorage.removeItem('dqb_host_id');
             setTimeout(() => Show('scr-join'), 2000);
-        } else {
-            setTimeout(() => Connect(State.hostId), 3000); // Retry
-        }
+        } else { setTimeout(() => Connect(State.hostId), 3000); }
     });
-
-    // Heartbeat / Reconnect Watchdog
     State.lastHeartbeat = Date.now();
     if(hbInt) clearInterval(hbInt);
-    hbInt = setInterval(() => {
-        if(Date.now() - State.lastHeartbeat > 8000) {
-            UpdateStatus("Reconnecting...", "warn");
-            Connect(State.hostId);
-        }
-    }, 2000);
+    hbInt = setInterval(() => { if(Date.now() - State.lastHeartbeat > 8000) { UpdateStatus("Reconnecting...", "warn"); Connect(State.hostId); } }, 2000);
 }
 
 function SetupConn(c) {
@@ -604,532 +617,211 @@ function UpdateStatus(msg, type) {
     b.className = `status-pill ${type}`;
 }
 
-function ManualDisconnect() {
-    if(confirm("Leave session?")) {
-        if(conn) conn.close();
-        localStorage.removeItem('dqb_host_id');
-        location.reload();
-    }
-}
+function ManualDisconnect() { if(confirm("Leave session?")) { if(conn) conn.close(); localStorage.removeItem('dqb_host_id'); location.reload(); } }
 
 /* --- LOGIC HANDLER --- */
 function Handle(d) {
     State.lastHeartbeat = Date.now();
-    if(d.type === 'HEARTBEAT') return;
-
-    if(d.type === 'WELCOME') {
-        State.boardId = d.boardId;
-        SyncNotes(d.sync);
-        RenderHist();
-        // Restore state if teacher is already in an activity
-        if(d.payload) {
-            // Ensure payload has the correct structure for SetActivityState
-            Handle(d.payload);
-        }
-        else if(d.mode) Handle({ type: 'MODE', val: d.mode });
-    }
-    
-    // --- MODE SWITCHING ---
-    else if(d.type === 'MODE') {
-        SetActivityState(d.val === 'OPEN' ? 'OPEN' : 'LOCKED');
-    }
-    
-    // --- ZONE ACTIVITY (GENERIC OR SPECIFIC) ---
-    else if(d.type === 'ZONE_ACT' || d.type === 'OPEN_ZONE' || d.type === 'ACT_VOTE' || d.type === 'ACT_SORT' || d.type === 'ACT_DISCUSS') {
-        // Normalize the call
-        SetActivityState('ZONE_ACT', d.actId, d.title, d.subType, d.items);
-    }
-    
-    else if(d.type === 'CLOSE_ZONE') {
-        SetActivityState('LOCKED');
-    }
-    
-    // --- WIDGETS ---
-    else if(d.type === 'ACT_POLL') {
-        SetActivityState('WIDGET', d.actId, d.q);
-        RenderPoll(d);
-    }
-    else if(d.type === 'ACT_GRAPH') {
-        SetActivityState('WIDGET', d.actId, d.title);
-        RenderGraphInput(d);
-    }
-    
-    // --- EXIT TICKET ---
-    else if(d.type === 'EXIT_TICKET') {
-        SetActivityState('EXIT', d.actId, "Exit Ticket");
-        RenderExit(d);
-    }
-    else if(d.type === 'STOP_ACT' || d.type === 'STOP_EXIT') {
-        SetActivityState('LOCKED');
-        Show('scr-lobby');
-    }
-    
-    // --- NOTE SYNC & UPDATES ---
-    else if(d.type === 'NOTE_UPDATE') {
-        const noteToUpdate = State.notes.find(n => n.id === d.note.id);
-        if (noteToUpdate) {
-            noteToUpdate.text = d.note.text;
-            noteToUpdate.sub = d.note.sub;
-            DB.saveNote(noteToUpdate);
-        }
-    }
-    else if(d.type === 'DELETE_NOTE') {
-        const noteExists = State.notes.some(n => n.id === d.id);
-        if (noteExists) {
-            DB.delNote(d.id);
-        }
-    }
-    else if (d.type === 'SET_COLOR') {
-        State.me.color = d.color;
-        const badge = document.querySelector('.user-badge');
-        if (badge) {
-            badge.style.borderColor = d.color || 'transparent';
-            badge.style.backgroundColor = d.color ? `${d.color}20` : 'transparent';
-        }
-    }
-    else if(d.type === 'COMMENT') {
-        // Future: Could display comment alerts, but for now student client doesn't need to do anything.
+    switch(d.type) {
+        case 'HEARTBEAT': break;
+        case 'WELCOME':
+            State.boardId = d.boardId;
+            SyncNotes(d.sync);
+            RenderHist();
+            if(d.payload) Handle(d.payload); else if(d.mode) Handle({ type: 'MODE', val: d.mode });
+            break;
+        case 'MODE': SetActivityState(d.val === 'OPEN' ? 'OPEN' : 'LOCKED'); break;
+        case 'ZONE_ACT': case 'OPEN_ZONE': case 'ACT_VOTE': case 'ACT_SORT': case 'ACT_DISCUSS':
+            SetActivityState('ZONE_ACT', d.actId, d.title, d.type, d.items);
+            break;
+        case 'ACT_POLL': SetActivityState('WIDGET', d.actId, d.q); RenderPoll(d); break;
+        case 'ACT_GRAPH': SetActivityState('WIDGET', d.actId, d.title); RenderGraphInput(d); break;
+        case 'EXIT_TICKET': SetActivityState('EXIT', d.actId, "Exit Ticket"); RenderExit(d); break;
+        case 'STOP_ACT': case 'STOP_EXIT': SetActivityState('LOCKED'); Show('scr-lobby'); break;
+        case 'NOTE_UPDATE':
+            const noteToUpdate = State.notes.find(n => n.id === d.note.id);
+            if (noteToUpdate) { noteToUpdate.text = d.note.text; noteToUpdate.sub = d.note.sub; DB.saveNote(noteToUpdate); }
+            break;
+        case 'DELETE_NOTE': if (State.notes.some(n => n.id === d.id)) DB.delNote(d.id); break;
+        case 'SET_COLOR':
+            State.me.color = d.color;
+            const badge = $('.user-badge');
+            if (badge) { badge.style.borderColor = d.color || 'transparent'; badge.style.backgroundColor = d.color ? `${d.color}20` : 'transparent'; }
+            break;
+        // Consensus Model Cases
+        case 'CONSENSUS_START': Consensus.startSession(d.ink); break;
+        case 'CONSENSUS_STOP': Consensus.stopSession(); break;
+        case 'CONSENSUS_PERMS': Consensus.setPerms(d.canDraw); break;
+        case 'CONSENSUS_INK': State.consensus.ink.push(d.ink); Consensus.render(); break;
+        case 'CONSENSUS_CLEAR': State.consensus.ink = []; Consensus.render(); break;
+        case 'CONSENSUS_SET_INK': State.consensus.ink = d.ink; Consensus.render(); break;
     }
 }
 
 function SetActivityState(type, id=null, title=null, subType=null, items=[]) {
     State.activity = { type, id, title, subType, items };
+    $('state-locked').style.display = 'none'; $('state-open').style.display = 'none';
+    $('state-zone').style.display = 'none'; $('act-vote').style.display = 'none';
+    $('act-sort').style.display = 'none'; $('act-discuss').style.display = 'none';
     
-    // Hide All Containers
-    $('state-locked').style.display = 'none';
-    $('state-open').style.display = 'none';
-    $('state-zone').style.display = 'none';
-    $('act-vote').style.display = 'none';
-    $('act-sort').style.display = 'none';
-    $('act-discuss').style.display = 'none';
-    
-    // Route to correct UI
-    if(type === 'LOCKED') {
-        $('state-locked').style.display = 'block';
-    } 
-    else if (type === 'OPEN') {
-        $('state-open').style.display = 'block';
-    }
+    if(type === 'LOCKED') { $('state-locked').style.display = 'block'; } 
+    else if (type === 'OPEN') { $('state-open').style.display = 'block'; }
     else if (type === 'ZONE_ACT') {
-        // Branch based on subType
-        if (subType === 'ACT_VOTE') {
-            $('act-vote').style.display = 'block';
-            RenderVoteUI(items);
-        }
-        else if (subType === 'ACT_SORT') {
-            $('act-sort').style.display = 'block';
-            RenderSortUI(items);
-        }
-        else if (subType === 'ACT_DISCUSS') {
-            $('act-discuss').style.display = 'block';
-            RenderDiscussUI(items);
-        }
+        if (subType === 'ACT_VOTE') { $('act-vote').style.display = 'block'; RenderVoteUI(items); }
+        else if (subType === 'ACT_SORT') { $('act-sort').style.display = 'block'; RenderSortUI(items); }
+        else if (subType === 'ACT_DISCUSS') { $('act-discuss').style.display = 'block'; RenderDiscussUI(items); }
         else {
-            // Default Zone (Add Notes / CER / Consensus)
             $('state-zone').style.display = 'block';
             $('zone-title').innerHTML = sanitizeHTML(title) || 'Activity';
             $('zone-type-badge').innerHTML = sanitizeHTML(subType === 'consensus' ? 'Consensus Model' : (subType === 'cer' ? 'CER Builder' : 'Zone Activity'));
-            
-            if(subType === 'consensus') $('zone-desc').innerText = "Contribute your pieces to the class model.";
-            else if(subType === 'cer') $('zone-desc').innerText = "Build the argument: Claim, Evidence, Reasoning.";
-            else $('zone-desc').innerText = "Contribute notes or sketches to this zone.";
-
-            // Toggle Button Sets
-            if(subType === 'cer') {
-                $('zone-buttons-default').style.display = 'none';
-                $('zone-buttons-cer').style.display = 'grid';
-            } else {
-                $('zone-buttons-default').style.display = 'block';
-                $('zone-buttons-cer').style.display = 'none';
-            }
+            $('zone-desc').innerText = subType === 'consensus' ? "Contribute to the class model." : (subType === 'cer' ? "Build the argument." : "Contribute notes or sketches.");
+            const isCER = subType === 'cer';
+            $('zone-buttons-default').style.display = isCER ? 'none' : 'block';
+            $('zone-buttons-cer').style.display = isCER ? 'grid' : 'none';
         }
     }
-    else if (type === 'WIDGET') {
-        Show('scr-widget');
-    }
-    else if (type === 'EXIT') {
-        Show('scr-exit');
-    }
+    else if (type === 'WIDGET') { Show('scr-widget'); }
+    else if (type === 'EXIT') { Show('scr-exit'); }
 }
+
+/* --- CONSENSUS MODELING --- */
+const Consensus = {
+    ctx: null, isDrawing: false, currentPath: [],
+    init: () => {
+        const c = $('consensus-canvas'), cont = $('consensus-canvas-container');
+        c.width = cont.clientWidth; c.height = cont.clientHeight;
+        Consensus.ctx = c.getContext('2d');
+        Consensus.ctx.lineCap = 'round'; Consensus.ctx.lineJoin = 'round';
+        c.onmousedown = (e) => Consensus.startDraw(e); c.onmousemove = (e) => Consensus.moveDraw(e);
+        c.onmouseup = () => Consensus.endDraw(); c.onmouseleave = () => Consensus.endDraw();
+        c.ontouchstart = (e) => { e.preventDefault(); Consensus.startDraw(e.touches[0]); };
+        c.ontouchmove = (e) => { e.preventDefault(); Consensus.moveDraw(e.touches[0]); };
+        c.ontouchend = () => Consensus.endDraw();
+        new ResizeObserver(() => { c.width = cont.clientWidth; c.height = cont.clientHeight; Consensus.render(); }).observe(cont);
+    },
+    startSession: (initialInk) => {
+        State.consensus.active = true; State.consensus.ink = initialInk || [];
+        Show('scr-consensus');
+        if (!Consensus.ctx) Consensus.init();
+        Consensus.render();
+    },
+    stopSession: () => { State.consensus.active = false; State.consensus.canDraw = false; Show('scr-lobby'); },
+    setPerms: (canDraw) => {
+        State.consensus.canDraw = canDraw;
+        $('consensus-perms').innerText = canDraw ? "You can draw!" : "View Only";
+        $('consensus-toolbar').style.display = canDraw ? 'flex' : 'none';
+    },
+    setTool: (tool, color) => {
+        State.consensus.tool = tool; if (color) State.consensus.color = color;
+        document.querySelectorAll('#consensus-toolbar .tool-btn').forEach(b => b.classList.remove('active'));
+        if(event) event.currentTarget.classList.add('active');
+    },
+    render: () => {
+        if (!Consensus.ctx) return;
+        const c = $('consensus-canvas');
+        Consensus.ctx.clearRect(0, 0, c.width, c.height);
+        State.consensus.ink.forEach(stroke => {
+            Consensus.ctx.beginPath();
+            if (!stroke.points || stroke.points.length === 0) return;
+            Consensus.ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+            for (let i = 1; i < stroke.points.length; i++) Consensus.ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+            Consensus.ctx.strokeStyle = stroke.color; Consensus.ctx.lineWidth = stroke.width;
+            Consensus.ctx.globalCompositeOperation = 'source-over'; Consensus.ctx.stroke();
+        });
+    },
+    startDraw: (e) => {
+        if (!State.consensus.canDraw) return;
+        Consensus.isDrawing = true;
+        const { x, y } = Consensus.getCoords(e);
+        Consensus.currentPath = [{ x, y }];
+        Consensus.ctx.beginPath(); Consensus.ctx.moveTo(x, y);
+        Consensus.ctx.lineWidth = State.consensus.tool === 'eraser' ? 20 : State.consensus.width;
+        Consensus.ctx.strokeStyle = State.consensus.color;
+        Consensus.ctx.globalCompositeOperation = State.consensus.tool === 'eraser' ? 'destination-out' : 'source-over';
+    },
+    moveDraw: (e) => {
+        if (!Consensus.isDrawing || !State.consensus.canDraw) return;
+        const { x, y } = Consensus.getCoords(e);
+        Consensus.currentPath.push({ x, y });
+        Consensus.ctx.lineTo(x, y); Consensus.ctx.stroke();
+        Consensus.ctx.beginPath(); Consensus.ctx.moveTo(x, y);
+    },
+    endDraw: () => {
+        if (!Consensus.isDrawing || !State.consensus.canDraw) return;
+        Consensus.isDrawing = false; Consensus.ctx.beginPath();
+        if (State.consensus.tool === 'draw' && Consensus.currentPath.length > 1) {
+            SafeSend({ type: 'CONSENSUS_INK', ink: { id: genId(), points: Consensus.currentPath, color: State.consensus.color, width: State.consensus.width } });
+        }
+        Consensus.currentPath = [];
+    },
+    getCoords: (e) => { const rect = $('consensus-canvas').getBoundingClientRect(); return { x: e.clientX - rect.left, y: e.clientY - rect.top }; }
+};
+
 
 /* --- SPECIAL ACTIVITY RENDERERS --- */
-
 function RenderVoteUI(items) {
-    const list = $('vote-list');
-    list.innerHTML = items.map(i => `
-        <div class="vote-item" onclick="SelectVote('${i.id}', this)">
-            <div style="font-size:1.2rem; margin-right:8px">${i.sub ? (i.sub==='idea'?'💡':(i.sub==='wonder'?'❓':'👁️')) : '📝'}</div>
-            <div style="font-weight:600; font-size:0.95rem">${sanitizeHTML(i.text.substring(0,60))}...</div>
-        </div>
-    `).join('');
-    State.selectedVote = null;
-    $('btn-submit-vote').disabled = true;
-    $('btn-submit-vote').onclick = () => {
-        if(State.selectedVote) {
-            SafeSend({ type: 'SUBMIT_VOTE', actId: State.activity.id, choiceId: State.selectedVote });
-            alert("Vote Submitted!");
-            $('btn-submit-vote').disabled = true;
-            $('btn-submit-vote').innerText = "Submitted";
-        }
-    };
+    $('vote-list').innerHTML = items.map(i => `<div class="vote-item" onclick="SelectVote('${i.id}', this)"><div>${i.sub ? (i.sub==='idea'?'💡':(i.sub==='wonder'?'❓':'👁️')) : '📝'}</div><div>${sanitizeHTML(i.text.substring(0,60))}...</div></div>`).join('');
+    State.selectedVote = null; $('btn-submit-vote').disabled = true; $('btn-submit-vote').innerText = "Submit Vote";
+    $('btn-submit-vote').onclick = () => { if(State.selectedVote) { SafeSend({ type: 'SUBMIT_VOTE', actId: State.activity.id, choiceId: State.selectedVote }); alert("Vote Submitted!"); $('btn-submit-vote').disabled = true; $('btn-submit-vote').innerText = "Submitted"; } };
 }
-
-function SelectVote(id, el) {
-    document.querySelectorAll('.vote-item').forEach(e => e.classList.remove('selected'));
-    el.classList.add('selected');
-    State.selectedVote = id;
-    $('btn-submit-vote').disabled = false;
-}
-
+function SelectVote(id, el) { document.querySelectorAll('.vote-item').forEach(e => e.classList.remove('selected')); el.classList.add('selected'); State.selectedVote = id; $('btn-submit-vote').disabled = false; }
 function RenderSortUI(items) {
-    State.sortOrder = [...items]; // Clone
-    const list = $('sort-list');
-    
-    const render = () => {
-        list.innerHTML = State.sortOrder.map((i, idx) => `
-            <div class="sort-item">
-                <div style="font-weight:bold; color:#94a3b8">#${idx+1}</div>
-                <div style="flex:1; font-size:0.9rem">${sanitizeHTML(i.text.substring(0,50))}</div>
-                <div class="sort-controls">
-                    <button class="sort-btn" onclick="MoveItem(${idx}, -1)">▲</button>
-                    <button class="sort-btn" onclick="MoveItem(${idx}, 1)">▼</button>
-                </div>
-            </div>
-        `).join('');
-    };
+    State.sortOrder = [...items]; const list = $('sort-list');
+    const render = () => list.innerHTML = State.sortOrder.map((i, idx) => `<div class="sort-item"><div>#${idx+1}</div><div style="flex:1">${sanitizeHTML(i.text.substring(0,50))}</div><div class="sort-controls"><button class="sort-btn" onclick="MoveItem(${idx},-1)">▲</button><button class="sort-btn" onclick="MoveItem(${idx},1)">▼</button></div></div>`).join('');
     render();
-    
-    window.MoveItem = (idx, dir) => {
-        if(idx+dir < 0 || idx+dir >= State.sortOrder.length) return;
-        const temp = State.sortOrder[idx];
-        State.sortOrder[idx] = State.sortOrder[idx+dir];
-        State.sortOrder[idx+dir] = temp;
-        render();
-    };
+    window.MoveItem = (idx, dir) => { if(idx+dir<0||idx+dir>=State.sortOrder.length) return; const temp=State.sortOrder[idx]; State.sortOrder[idx]=State.sortOrder[idx+dir]; State.sortOrder[idx+dir]=temp; render(); };
 }
-
-function SubmitSort() {
-    const order = State.sortOrder.map(i => i.id);
-    SafeSend({ type: 'SUBMIT_SORT', actId: State.activity.id, order: order });
-    alert("Ranking Submitted!");
-}
-
-function RenderDiscussUI(items) {
-    const list = $('discuss-items');
-    list.innerHTML = items.map(i => `
-        <div class="discuss-card" onclick="OpenDiscussModal('${i.id}', '${i.text.replace(/'/g, "\\'")}', '${i.sub}')">
-            <div class="d-meta">
-                <span>${i.sub ? (i.sub==='idea'?'💡 IDEA':(i.sub==='wonder'?'❓ WONDER':'👁️ NOTICE')) : '📝 NOTE'}</span>
-                <span>Tap to comment</span>
-            </div>
-            <div style="font-weight:600; color:#334155">${sanitizeHTML(i.text.substring(0, 100))}${i.text.length>100?'...':''}</div>
-        </div>
-    `).join('');
-}
-
+function SubmitSort() { SafeSend({ type: 'SUBMIT_SORT', actId: State.activity.id, order: State.sortOrder.map(i=>i.id) }); alert("Ranking Submitted!"); }
+function RenderDiscussUI(items) { $('discuss-items').innerHTML = items.map(i => `<div class="discuss-card" onclick="OpenDiscussModal('${i.id}', '${i.text.replace(/'/g, "\\'")}', '${i.sub}')"><div class="d-meta"><span>${i.sub?(i.sub==='idea'?'💡 IDEA':(i.sub==='wonder'?'❓ WONDER':'👁️ NOTICE')):'📝 NOTE'}</span><span>Tap to comment</span></div><div>${sanitizeHTML(i.text.substring(0,100))}${i.text.length>100?'...':''}</div></div>`).join(''); }
 let currentDiscussTarget = null;
-
-function OpenDiscussModal(id, text, sub) {
-    currentDiscussTarget = id;
-    $('md-text').innerHTML = sanitizeHTML(text.substring(0, 60)) + "...";
-    $('md-input').value = '';
-    $('modal-discuss').classList.add('active');
-    $('md-input').focus();
-}
-
-function CloseDiscussModal() {
-    $('modal-discuss').classList.remove('active');
-    currentDiscussTarget = null;
-}
-
-function SetDiscussTag(el, tag) {
-    document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'));
-    el.classList.add('active');
-    State.discussTag = tag;
-}
-
-function SubmitDiscussComment() {
-    const txt = $('md-input').value.trim();
-    if(!txt || !currentDiscussTarget) return;
-    
-    SafeSend({
-        type: 'COMMENT',
-        targetId: currentDiscussTarget, // Specific Note ID
-        text: txt,
-        author: State.me.name,
-        tag: State.discussTag
-    });
-    
-    CloseDiscussModal();
-    alert("Comment Posted!");
-}
-
-
-/* --- NOTES SYNC --- */
-function SyncNotes(serverNotes) {
-    if(!serverNotes) return;
-    serverNotes.forEach(sn => {
-        const local = State.notes.find(n => n.id === sn.id);
-        if(local) {
-            local.text = sn.text;
-            local.sub = sn.sub;
-            DB.saveNote(local);
-        }
-    });
-}
-
+function OpenDiscussModal(id, text, sub) { currentDiscussTarget = id; $('md-text').innerHTML = sanitizeHTML(text.substring(0,60)) + "..."; $('md-input').value = ''; $('modal-discuss').classList.add('active'); $('md-input').focus(); }
+function CloseDiscussModal() { $('modal-discuss').classList.remove('active'); currentDiscussTarget = null; }
+function SetDiscussTag(el, tag) { document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active')); el.classList.add('active'); State.discussTag = tag; }
+function SubmitDiscussComment() { const txt = $('md-input').value.trim(); if(!txt || !currentDiscussTarget) return; SafeSend({ type:'COMMENT', targetId:currentDiscussTarget, text:txt, author:State.me.name, tag:State.discussTag }); CloseDiscussModal(); alert("Comment Posted!"); }
+function SyncNotes(serverNotes) { if(!serverNotes) return; serverNotes.forEach(sn => { const local = State.notes.find(n => n.id === sn.id); if(local) { local.text = sn.text; local.sub = sn.sub; DB.saveNote(local); } }); }
 
 /* --- DRAFTING & SENDING --- */
 function Draft(sub) {
     State.draft = { id: genId(), sub: sub, text: '' };
-    $('w-head').innerText = sub === 'notice' ? 'I Notice...' : (sub==='wonder'?'I Wonder...':'New Note');
-    $('w-txt').value = '';
-    
-    // Update Category Chips
-    document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
-    const chip = $(`c-${sub}`);
-    if(chip) { 
-        chip.classList.add('active'); 
-        chip.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    }
-    
-    Show('scr-write');
+    SetDraftType(sub); Show('scr-write');
     setTimeout(() => $('w-txt').focus(), 300);
 }
-
 function SetDraftType(sub) {
-    State.draft.sub = sub;
-    $('w-head').innerText = sub.toUpperCase();
+    State.draft.sub = sub; $('w-head').innerText = sub.charAt(0).toUpperCase() + sub.slice(1);
     document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
-    $(`c-${sub}`).classList.add('active');
+    const chip = $(`c-${sub}`);
+    if(chip) { chip.classList.add('active'); chip.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); }
 }
-
-function SendNote() {
-    const txt = $('w-txt').value.trim();
-    if(!txt) return;
-    
-    const n = {
-        id: State.draft.id,
-        sub: State.draft.sub,
-        text: txt,
-        ts: Date.now(),
-        boardId: State.boardId
-    };
-    
-    DB.saveNote(n);
-    
-    // CRITICAL: Attach Zone ID if active
-    const zoneId = (State.activity.type === 'ZONE_ACT') ? State.activity.id : null;
-    
-    SafeSend({ type:'NOTE', id:n.id, sub:n.sub, text:n.text, zoneId: zoneId });
-    Show('scr-lobby');
-}
+function SendNote() { const txt = $('w-txt').value.trim(); if(!txt) return; const n = { id: State.draft.id, sub: State.draft.sub, text: txt, ts: Date.now(), boardId: State.boardId }; DB.saveNote(n); SafeSend({ type:'NOTE', id:n.id, sub:n.sub, text:n.text, zoneId: (State.activity.type === 'ZONE_ACT') ? State.activity.id : null }); Show('scr-lobby'); }
 
 /* --- SKETCHING --- */
 let ctx, isDrawing=false;
-
-function DraftSketch() {
-    State.draft = { id: genId(), sub: 'sketch' };
-    $('sketch-caption').value = '';
-    Show('scr-sketch');
-    InitCanvas();
-}
-
+function DraftSketch() { State.draft = { id: genId(), sub: 'sketch' }; $('sketch-caption').value = ''; Show('scr-sketch'); InitCanvas(); }
 function InitCanvas() {
-    const c = $('sketch-canvas');
-    const p = c.parentElement;
-    c.width = p.clientWidth - 40; // padding
-    c.height = 300;
-    
-    ctx = c.getContext('2d');
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    
-    SetTool('pen');
-    
-    // Events
-    const start = (e) => { isDrawing=true; Draw(e); };
-    const move = (e) => { if(isDrawing) Draw(e); };
-    const end = () => isDrawing=false;
-    
+    const c = $('sketch-canvas'), p = c.parentElement; c.width = p.clientWidth - 40; c.height = 300;
+    ctx = c.getContext('2d'); ctx.lineCap='round'; ctx.lineJoin='round'; SetTool('pen');
+    const start = (e) => { isDrawing=true; Draw(e); }; const move = (e) => { if(isDrawing) Draw(e); }; const end = () => isDrawing=false;
     c.onmousedown = start; c.onmousemove = move; c.onmouseup = end;
-    c.ontouchstart = (e) => { e.preventDefault(); start(e.touches[0]); };
-    c.ontouchmove = (e) => { e.preventDefault(); move(e.touches[0]); };
-    c.ontouchend = end;
+    c.ontouchstart = (e) => { e.preventDefault(); start(e.touches[0]); }; c.ontouchmove = (e) => { e.preventDefault(); move(e.touches[0]); }; c.ontouchend = end;
 }
+function Draw(e) { const r = $('sketch-canvas').getBoundingClientRect(), x = e.clientX-r.left, y = e.clientY-r.top; ctx.lineTo(x,y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x,y); }
+function SetTool(t) { ctx.beginPath(); if(t==='pen') { ctx.globalCompositeOperation='source-over'; ctx.lineWidth=3; ctx.strokeStyle='#000'; } else { ctx.globalCompositeOperation='destination-out'; ctx.lineWidth=20; } document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active')); if(t==='pen') $('tb-pen').classList.add('active'); else $('tb-era').classList.add('active'); }
+function ClearSketch() { ctx.clearRect(0,0,1000,1000); ctx.beginPath(); }
+function SendSketch() { const data=$('sketch-canvas').toDataURL('image/png'), cap=$('sketch-caption').value.trim()||'Sketch'; const n={id:State.draft.id,sub:'sketch',text:cap,src:data,ts:Date.now(),boardId:State.boardId}; DB.saveNote(n); SafeSend({type:'IMG_NOTE',id:n.id,src:data,text:cap,zoneId:(State.activity.type==='ZONE_ACT')?State.activity.id:null}); Show('scr-lobby'); }
 
-function Draw(e) {
-    const r = $('sketch-canvas').getBoundingClientRect();
-    const x = e.clientX - r.left; const y = e.clientY - r.top;
-    
-    ctx.lineTo(x, y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-}
-
-function SetTool(t) {
-    ctx.beginPath();
-    if(t==='pen') { ctx.globalCompositeOperation='source-over'; ctx.lineWidth=3; ctx.strokeStyle='#000'; }
-    else { ctx.globalCompositeOperation='destination-out'; ctx.lineWidth=20; }
-    
-    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-    if(t==='pen') $('tb-pen').classList.add('active'); else $('tb-era').classList.add('active');
-}
-
-function ClearSketch() {
-    ctx.clearRect(0,0,1000,1000);
-    ctx.beginPath();
-}
-
-function SendSketch() {
-    const c = $('sketch-canvas');
-    // Send as transparent PNG
-    const data = c.toDataURL('image/png');
-    const cap = $('sketch-caption').value.trim() || 'Sketch';
-    
-    const n = {
-        id: State.draft.id,
-        sub: 'sketch',
-        text: cap,
-        src: data,
-        ts: Date.now(),
-        boardId: State.boardId
-    };
-    
-    DB.saveNote(n);
-    
-    const zoneId = (State.activity.type === 'ZONE_ACT') ? State.activity.id : null;
-    
-    SafeSend({ type:'IMG_NOTE', id:n.id, src:data, text:cap, zoneId: zoneId });
-    Show('scr-lobby');
-}
-
-/* --- WIDGETS --- */
-function RenderPoll(d) {
-    $('wid-title').innerHTML = sanitizeHTML(d.q);
-    const c = $('wid-content');
-    c.innerHTML = d.opts.map((o,i) => `<button class="btn btn-s mc-opt" onclick="SubmitPoll(${i}, this)">${sanitizeHTML(o.lbl)}</button>`).join('');
-    $('wid-input-area').style.display = 'none';
-    $('wid-submit').style.display = 'none'; // Auto submit on click
-}
-
-function SubmitPoll(idx, btn) {
-    document.querySelectorAll('.mc-opt').forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-    SafeSend({ type:'POLL_VOTE', actId: State.activity.id, idx: idx });
-    Show('scr-lobby');
-}
-
-function RenderGraphInput(d) {
-    $('wid-title').innerHTML = sanitizeHTML(d.title);
-    $('wid-content').innerHTML = '';
-    $('wid-input-area').style.display = 'block';
-    $('wid-submit').style.display = 'block';
-    $('graph-val').value = '';
-    $('wid-submit').onclick = () => {
-        const v = parseFloat($('graph-val').value);
-        if(isNaN(v)) return alert("Enter a number");
-        SafeSend({ type:'DATA_SUBMIT', actId: State.activity.id, val: v });
-        Show('scr-lobby');
-    };
-}
-
-/* --- EXIT TICKET --- */
-function RenderExit(d) {
-    $('exit-prompt').innerHTML = sanitizeHTML(d.prompt);
-    const area = $('exit-area');
-    area.innerHTML = '';
-    
-    let val = null;
-    let multi = [];
-    
-    if(d.mode === 'short') {
-        area.innerHTML = `<textarea id="exit-txt" rows="5" placeholder="Answer here..."></textarea>`;
-        $('exit-submit').onclick = () => SubmitExit($('exit-txt').value);
-    }
-    else if(d.mode === 'smiley') {
-        const row = document.createElement('div'); row.className='emoji-row';
-        ['😡','🙁','😐','🙂','😀'].forEach(e => {
-            const b = document.createElement('div'); b.className='emoji-opt'; b.innerText=e;
-            b.onclick = () => { 
-                document.querySelectorAll('.emoji-opt').forEach(x=>x.classList.remove('selected'));
-                b.classList.add('selected'); val=e; 
-            };
-            row.appendChild(b);
-        });
-        area.appendChild(row);
-        $('exit-submit').onclick = () => SubmitExit(val);
-    }
-    else if(d.mode === 'mc' || d.mode === 'multi') {
-        d.opts.forEach(o => {
-            const b = document.createElement('div'); b.className='mc-opt'; b.innerHTML=sanitizeHTML(o);
-            b.onclick = () => {
-                if(d.mode === 'mc') {
-                    document.querySelectorAll('.mc-opt').forEach(x=>x.classList.remove('selected'));
-                    b.classList.add('selected'); val=o;
-                } else {
-                    b.classList.toggle('selected');
-                    if(b.classList.contains('selected')) multi.push(o); else multi = multi.filter(x=>x!==o);
-                }
-            };
-            area.appendChild(b);
-        });
-        $('exit-submit').onclick = () => SubmitExit(d.mode==='mc'?val:multi);
-    }
-    else if(d.mode === 'lw') {
-        area.innerHTML = `
-            <label style="font-weight:bold; color:#166534">I Learned:</label>
-            <input id="exit-l" placeholder="...">
-            <label style="font-weight:bold; color:#0369a1">I Wonder:</label>
-            <input id="exit-w" placeholder="...">
-        `;
-        $('exit-submit').onclick = () => {
-            const l = $('exit-l').value; const w = $('exit-w').value;
-            if(l && w) SubmitExit({l, w}); else alert("Fill both");
-        };
-    }
-}
-
-function SubmitExit(val) {
-    if(!val || (Array.isArray(val) && val.length===0)) return alert("Please answer.");
-    SafeSend({ type:'EXIT_SUBMIT', actId: State.activity.id, val: val });
-    Show('scr-lobby');
-    alert("Response Submitted!");
-}
+/* --- WIDGETS & EXIT --- */
+function RenderPoll(d) { $('wid-title').innerHTML=sanitizeHTML(d.q); $('wid-content').innerHTML = d.opts.map((o,i) => `<button class="btn btn-s mc-opt" onclick="SubmitPoll(${i}, this)">${sanitizeHTML(o.lbl)}</button>`).join(''); $('wid-input-area').style.display='none'; $('wid-submit').style.display='none'; }
+function SubmitPoll(idx, btn) { document.querySelectorAll('.mc-opt').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); SafeSend({ type:'POLL_VOTE', actId: State.activity.id, idx: idx }); Show('scr-lobby'); }
+function RenderGraphInput(d) { $('wid-title').innerHTML=sanitizeHTML(d.title); $('wid-content').innerHTML=''; $('wid-input-area').style.display='block'; $('wid-submit').style.display='block'; $('graph-val').value=''; $('wid-submit').onclick = () => { const v = parseFloat($('graph-val').value); if(isNaN(v)) return alert("Enter a number"); SafeSend({ type:'DATA_SUBMIT', actId: State.activity.id, val: v }); Show('scr-lobby'); }; }
+function RenderExit(d) { $('exit-prompt').innerHTML = sanitizeHTML(d.prompt); const area=$('exit-area'); area.innerHTML=''; let val=null, multi=[]; if(d.mode==='short'){area.innerHTML=`<textarea id="exit-txt" rows="5" placeholder="Answer here..."></textarea>`;$('exit-submit').onclick=()=>SubmitExit($('exit-txt').value);}else if(d.mode==='smiley'){const r=document.createElement('div');r.className='emoji-row';['😡','🙁','😐','🙂','😀'].forEach(e=>{const b=document.createElement('div');b.className='emoji-opt';b.innerText=e;b.onclick=()=>{document.querySelectorAll('.emoji-opt').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');val=e;};r.appendChild(b);});area.appendChild(r);$('exit-submit').onclick=()=>SubmitExit(val);}else if(d.mode==='mc'||d.mode==='multi'){d.opts.forEach(o=>{const b=document.createElement('div');b.className='mc-opt';b.innerHTML=sanitizeHTML(o);b.onclick=()=>{if(d.mode==='mc'){document.querySelectorAll('.mc-opt').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');val=o;}else{b.classList.toggle('selected');if(b.classList.contains('selected'))multi.push(o);else multi=multi.filter(x=>x!==o);}};area.appendChild(b);});$('exit-submit').onclick=()=>SubmitExit(d.mode==='mc'?val:multi);}else if(d.mode==='lw'){area.innerHTML=`<label>I Learned:</label><input id="exit-l"><label>I Wonder:</label><input id="exit-w">`;$('exit-submit').onclick=()=>{const l=$('exit-l').value,w=$('exit-w').value;if(l&&w)SubmitExit({l,w});else alert("Fill both");};}}
+function SubmitExit(val) { if(!val || (Array.isArray(val) && val.length===0)) return alert("Please answer."); SafeSend({ type:'EXIT_SUBMIT', actId: State.activity.id, val: val }); Show('scr-lobby'); alert("Response Submitted!"); }
 
 /* --- HISTORY & UTILS --- */
-function RenderHist() {
-    const list = $('hist-list');
-    const myNotes = State.notes.filter(n => n.boardId === State.boardId).sort((a,b) => b.ts - a.ts);
-    
-    if(myNotes.length === 0) {
-        list.innerHTML = `<div style="text-align:center; color:#cbd5e1; padding:20px">No contributions yet.</div>`;
-        return;
-    }
-    
-    list.innerHTML = myNotes.map(n => `
-        <div class="note-card n-${n.sub}">
-            ${n.sub==='sketch' ? `<img src="${n.src}" style="width:100%; border-radius:8px; background:#f1f5f9;">` : `<div>${sanitizeHTML(n.text)}</div>`}
-            <div class="note-controls">
-                <button class="mini-btn" onclick="DeleteNote('${n.id}')">Delete</button>
-            </div>
-        </div>
-    `).join('');
-}
-
-function DeleteNote(id) {
-    if(confirm("Delete this note?")) {
-        DB.delNote(id);
-        SafeSend({ type:'DELETE_NOTE', id: id });
-    }
-}
+function RenderHist() { const list=$('hist-list'), myNotes=State.notes.filter(n=>n.boardId===State.boardId).sort((a,b)=>b.ts-a.ts); if(myNotes.length===0){list.innerHTML=`<div style="text-align:center; color:#cbd5e1; padding:20px">No contributions yet.</div>`;return;} list.innerHTML=myNotes.map(n=>`<div class="note-card n-${n.sub}">${n.sub==='sketch'?`<img src="${n.src}" style="width:100%; border-radius:8px; background:#f1f5f9;">`:`<div>${sanitizeHTML(n.text)}</div>`}<div class="note-controls"><button class="mini-btn" onclick="DeleteNote('${n.id}')">Delete</button></div></div>`).join(''); }
+function DeleteNote(id) { if(confirm("Delete this note?")) { DB.delNote(id); SafeSend({ type:'DELETE_NOTE', id: id }); } }
 
 // Init
-window.onload = () => {
-    DB.init().then(() => {
-        if(State.me.name) Setup();
-    });
-};
+window.onload = () => DB.init().then(() => { if(State.me.name) Setup(); });
 </script>
 </body>
 </html>

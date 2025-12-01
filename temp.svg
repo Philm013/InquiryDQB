@@ -1,0 +1,87 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <!-- Filter for a subtle shadow under the fold -->
+        <filter id="foldShadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="1" result="blur"/>
+            <feOffset in="blur" dx="-1" dy="-1" result="offsetBlur"/>
+            <feFlood flood-color="rgba(0,0,0,0.3)" result="color"/>
+            <feComposite in="color" in2="offsetBlur" operator="in" result="shadow"/>
+            <feMerge>
+                <feMergeNode in="shadow"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+    </defs>
+
+    <!-- Main Background rounded square -->
+    <rect x="10" y="10" width="492" height="492" rx="100" fill="#ffffff" />
+    
+    <!-- Graphic Group centered -->
+    <g transform="translate(256, 230) scale(1.1)">
+        
+        <!-- Layer 1: Yellow/Orange Sticky Note (Bottom, rotated 30deg) -->
+        <g transform="rotate(30)" opacity="0.6">
+            <!-- Main Note Body: Cut off bottom-right corner -->
+            <polygon points="-80,-80 80,-80 80,60 60,80 -80,80" fill="#F1C40F" stroke="#F1C40F" stroke-width="2" stroke-linejoin="round"/>
+            <!-- Folded Corner: Triangle -->
+            <polygon points="80,60 60,80 60,60" fill="#D4AC0D" filter="url(#foldShadow)" stroke="#D4AC0D" stroke-width="1" stroke-linejoin="round"/>
+        </g>
+
+        <!-- Layer 2: Green Sticky Note (Middle, rotated -15deg) -->
+        <g transform="rotate(-15)" opacity="0.6">
+            <!-- Main Note Body -->
+            <polygon points="-80,-80 80,-80 80,60 60,80 -80,80" fill="#2ECC71" stroke="#2ECC71" stroke-width="2" stroke-linejoin="round"/>
+            <!-- Folded Corner -->
+            <polygon points="80,60 60,80 60,60" fill="#27AE60" filter="url(#foldShadow)" stroke="#27AE60" stroke-width="1" stroke-linejoin="round"/>
+        </g>
+
+        <!-- Layer 3: Blue Sticky Note (Top, rotated 10deg) -->
+        <g transform="rotate(10)" opacity="0.6">
+            <!-- Main Note Body -->
+            <polygon points="-80,-80 80,-80 80,60 60,80 -80,80" fill="#3498DB" stroke="#3498DB" stroke-width="2" stroke-linejoin="round"/>
+            <!-- Folded Corner -->
+            <polygon points="80,60 60,80 60,60" fill="#2980B9" filter="url(#foldShadow)" stroke="#2980B9" stroke-width="1" stroke-linejoin="round"/>
+        </g>
+
+        <!-- Tech Question Mark -->
+        <g fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+            <!-- Square Base with dot -->
+            <rect x="-16" y="75" width="32" height="32" rx="4" stroke-width="4" />
+            <circle cx="0" cy="91" r="5" fill="#ffffff" stroke="none"/>
+            
+            <!-- Connection Line -->
+            <line x1="0" y1="75" x2="0" y2="40" stroke-width="5" />
+            
+            <!-- Question Mark Hook -->
+            <!-- Smoother Bezier curve path -->
+            <path d="M 0,40 
+                     C 0,0 55,-5 55,-55 
+                     C 55,-105 -35,-115 -55,-75" 
+                  stroke-width="5" />
+            
+            <!-- Circuit Nodes/Decorations -->
+            <!-- 1. Node at the very top end of the hook -->
+            <circle cx="-55" cy="-75" r="5" fill="none" stroke-width="3" />
+            <line x1="-55" y1="-75" x2="-65" y2="-65" stroke-width="3" />
+
+            <!-- 2. Node on the right-hand curve (solid dot) -->
+            <circle cx="53" cy="-45" r="4" fill="#ffffff" stroke="none" />
+            <line x1="53" y1="-45" x2="68" y2="-45" stroke-width="3" />
+            
+            <!-- 3. Node near the stem junction (hollow ring) -->
+            <circle cx="10" cy="-5" r="4" fill="none" stroke-width="3" />
+            <line x1="10" y1="-5" x2="25" y2="5" stroke-width="3" />
+            
+            <!-- 4. Small accent dot inside the top curve -->
+            <circle cx="0" cy="-85" r="3" fill="#ffffff" stroke="none"/>
+        </g>
+    </g>
+
+    <!-- Text Group -->
+    <g font-family="'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif" font-weight="bold" font-size="70" text-anchor="middle">
+        <!-- "Inquiry" in Dark Slate -->
+        <text x="195" y="440" fill="#2c3e50">Inquiry</text>
+        <!-- "DQB" in Blue -->
+        <text x="390" y="440" fill="#5DADE2">DQB</text>
+    </g>
+</svg>

@@ -339,55 +339,15 @@
 
         #marquee { position: absolute; border: 1px solid var(--accent); background: rgba(99,102,241,0.1); display: none; pointer-events: none; z-index: 100; }
 
-        .tab-head { display: flex; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; min-height: 50px; border-radius: 12px 12px 0 0; flex-shrink: 0; }
+        .tab-head { display: flex; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; min-height: 50px; border-radius: 12px 12px 0 0; }
         .tab-btn { flex: 1; padding: 12px; text-align: center; font-weight: 700; font-size: 0.9rem; cursor: pointer; color: #64748b; }
         .tab-btn.active { background: white; color: var(--accent); border-bottom: 2px solid var(--accent); }
-        
-        /* Sidebar Tab Content Fix */
-        .tab-content {
-            display: none;
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-            flex-direction: column;
-            color: #d1d5db;
-            min-height: 0; /* Prevents flexbox from overflowing its container */
-        }
-        .tab-content.active {
-            display: flex;
-        }
+        .tab-content { display: none; flex: 1; overflow-y: auto; padding: 10px; flex-direction: column; }
+        .tab-content.active { display: flex; }
 
         #landing { position: fixed; inset:0; background: #f1f5f9; z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #1f2937; }
         .land-card { background: white; padding: 40px; border-radius: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 500px; max-width: 90%; text-align: center; }
         .board-row { padding: 16px; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; justify-content: space-between; align-items: center; text-align: left; }
-
-        /* --- NEW: CONSENSUS MODEL OVERLAY --- */
-        #consensus-overlay {
-            position: fixed; inset: 0; background: var(--bg);
-            z-index: 5000; display: none; flex-direction: row;
-        }
-        #consensus-main {
-            flex: 1; position: relative;
-            background-image: radial-gradient(#374151 2px, transparent 2px); 
-            background-size: 32px 32px;
-            cursor: crosshair;
-        }
-        #consensus-sidebar {
-            width: 280px; background: var(--panel);
-            border-left: 1px solid var(--panel-border);
-            display: flex; flex-direction: column;
-        }
-        #consensus-participants {
-            flex: 1; overflow-y: auto; padding: 10px;
-        }
-        .participant-row {
-            display: flex; align-items: center; gap: 10px;
-            padding: 8px; border-radius: 8px;
-            margin-bottom: 5px; cursor: pointer;
-        }
-        .participant-row:hover { background: #374151; }
-        .participant-row.active { background: var(--accent); color: white; }
-        .participant-row input { width: 20px; height: 20px; }
 
         /* RESPONSIVE SWITCHING */
         @media (min-width: 769px) {
@@ -492,7 +452,7 @@
 <div id="app">
     <!-- SIDEBAR -->
     <div id="sidebar" class="closed">
-        <div style="padding:15px; border-bottom:1px solid #374151; display:flex; justify-content:space-between; align-items:flex-start; flex-shrink: 0;">
+        <div style="padding:15px; border-bottom:1px solid #374151; display:flex; justify-content:space-between; align-items:flex-start;">
             <div style="flex:1">
                 <div style="font-size:0.75rem; color:#9ca3af; font-weight:800; text-transform:uppercase; margin-bottom:6px;">Board Name</div>
                 <input class="in-txt" id="board-name" value="My Board" oninput="State.name=this.value; Board.save(true)">
@@ -503,21 +463,23 @@
             <div class="tab-btn active" onclick="Tab(0)">Roster <span id="conn-badge">0</span></div>
             <div class="tab-btn" onclick="Tab(1)">Activity</div>
         </div>
-        <div id="tab-roster" class="tab-content active">
-            <div id="roster" style="width: 100%;"><div style="text-align:center">Waiting for connections...</div></div>
-        </div>
-        <div id="tab-activity" class="tab-content">
-            <div id="act-controls" style="display:none; margin-bottom:10px; width: 100%;">
-                <div style="padding:10px; background:#374151; border-radius:8px; margin-bottom:10px">
-                    <div style="font-weight:bold; color:#60a5fa;">Active Session</div>
-                    <div id="act-info" style="font-size:0.8rem;"></div>
-                </div>
-                <button class="btn-s" style="background:#7f1d1d; color:#fecaca" onclick="Network.stopActivity()">Stop Activity</button>
+        <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+            <div id="tab-roster" class="tab-content active" style="color: #d1d5db;">
+                <div id="roster"><div style="padding:20px; text-align:center">Waiting for connections...</div></div>
             </div>
-            <div id="act-results" style="width: 100%;"><div style="text-align:center">Select a Zone to see activity or create an Exit Ticket.</div></div>
+            <div id="tab-activity" class="tab-content" style="color: #d1d5db;">
+                <div id="act-controls" style="display:none; margin-bottom:10px">
+                    <div style="padding:10px; background:#374151; border-radius:8px; margin-bottom:10px">
+                        <div style="font-weight:bold; color:#60a5fa;">Active Session</div>
+                        <div id="act-info" style="font-size:0.8rem;"></div>
+                    </div>
+                    <button class="btn-s" style="background:#7f1d1d; color:#fecaca" onclick="Network.stopActivity()">Stop Activity</button>
+                </div>
+                <div id="act-results"><div style="padding:20px; text-align:center">Select a Zone to see activity or create an Exit Ticket.</div></div>
+            </div>
         </div>
         <!-- Sidebar Actions -->
-        <div style="margin-top:auto; padding:15px; border-top:1px solid #374151; display:flex; flex-direction:column; gap:8px; flex-shrink: 0;">
+        <div style="margin-top:auto; padding:15px; border-top:1px solid #374151; display:flex; flex-direction:column; gap:8px;">
             <button class="sub-btn" onclick="window.UI.toggleA11y()">♿ Accessibility View</button>
             <button class="sub-btn" style="background:#7f1d1d; color:#fecaca" onclick="Board.exit()">🚪 Exit Board</button>
         </div>
@@ -666,38 +628,6 @@
     </div>
 </div>
 
-<!-- NEW: CONSENSUS MODELING OVERLAY -->
-<div id="consensus-overlay">
-    <div id="consensus-main">
-        <svg id="consensus-ink-layer" style="position:absolute; inset:0; pointer-events:none;"></svg>
-    </div>
-    <div id="consensus-sidebar">
-        <div style="padding:15px; border-bottom:1px solid var(--panel-border); text-align:center;">
-            <h3 style="margin:0; color:var(--accent);">Modeling Mode</h3>
-            <div id="consensus-zone-name" style="font-size:0.9rem; color:#9ca3af;"></div>
-        </div>
-        <div style="padding:10px; border-bottom:1px solid var(--panel-border);">
-            <div style="font-weight:bold; margin-bottom:10px;">Drawing Tools</div>
-            <div class="tool-row">
-                <div class="color-btn" style="background:#ef4444" onclick="Consensus.setDrawTool('draw', '#ef4444')"></div>
-                <div class="color-btn" style="background:#3b82f6" onclick="Consensus.setDrawTool('draw', '#3b82f6')"></div>
-                <div class="color-btn" style="background:#10b981" onclick="Consensus.setDrawTool('draw', '#10b981')"></div>
-                <div class="color-btn" style="background:#ffffff; border-color:#6b7280" onclick="Consensus.setDrawTool('draw', '#ffffff')"></div>
-            </div>
-             <div class="tool-row">
-                <button class="sub-btn" onclick="Consensus.setDrawTool('eraser')">🧹 Eraser</button>
-                <button class="sub-btn" onclick="Consensus.clearInk()">🗑️ Clear</button>
-            </div>
-        </div>
-        <div style="padding:10px; font-weight:bold;">Participants</div>
-        <div id="consensus-participants"></div>
-        <div style="padding:15px; border-top:1px solid var(--panel-border);">
-            <button class="btn-s" style="background:#7f1d1d; color:#fecaca" onclick="Consensus.stop()">Stop Modeling Session</button>
-        </div>
-    </div>
-</div>
-
-
 <script>
 const $ = id => document.getElementById(id);
 const genId = () => Math.random().toString(36).substr(2, 9);
@@ -728,19 +658,9 @@ window.State = {
     view: { x: 0, y: 0, z: 1 },
     tool: 'pan', students: {}, drag: null,
     
-    // Centralized Activity State
+    // NEW: Centralized Activity State
+    // Types: 'LOCKED' | 'OPEN' | 'ZONE_ACT' | 'WIDGET_ACT' | 'EXIT_TICKET'
     activity: { type: 'LOCKED', targetId: null, payload: null }, 
-    
-    // NEW: Consensus Modeling State
-    consensusMode: {
-        active: false,
-        zoneId: null,
-        ink: [],
-        participants: [], // Array of student peer IDs with drawing permission
-        tool: 'draw',
-        color: '#ef4444',
-        width: 4
-    },
     
     activeSorts: {}, comments: [],
     touch: { dist: 0 },
@@ -784,6 +704,7 @@ window.AutoScroll = {
     active: false,
     vx: 0, vy: 0,
     margin: 50,
+    // Max pixel shift per frame relative to screen size (not world size)
     maxSpeed: 15,
     interval: null,
     lastEvt: null,
@@ -810,6 +731,9 @@ window.AutoScroll = {
         AutoScroll.vx = 0; 
         AutoScroll.vy = 0;
 
+        // Calculate intensity (0 to 1) based on closeness to edge
+        // Apply maxSpeed and adjust for zoom level so it feels consistent
+        // We clamp the zoom divisor so it doesn't go crazy when zoomed way out
         const zFactor = Math.max(0.5, State.view.z);
 
         if (e.clientX < m) {
@@ -837,6 +761,7 @@ window.AutoScroll = {
             State.view.y += AutoScroll.vy;
             Render.sync();
             
+            // Re-trigger move logic to update item position relative to new view
             if (State.drag && State.drag.mode === 'move' && AutoScroll.lastEvt) {
                 Modes.Move.move(AutoScroll.lastEvt);
             }
@@ -934,42 +859,43 @@ window.LayoutSystem = {
     gap: 15,
     headerH: 50,
     
+    // Main entry point
     update: (zoneId, ghostItem = null, ghostIndex = -1) => {
         const zone = State.items.find(i => i.id === zoneId);
         if(!zone || !zone.children) return;
 
+        // 1. Get real children objects
         let items = zone.children
             .map(id => State.items.find(i => i.id === id))
-            .filter(i => i); 
+            .filter(i => i); // Filter out potential nulls
 
+        // 2. Filter out the item currently being dragged (it will be represented by ghostItem)
         if(ghostItem) {
             items = items.filter(i => i.id !== ghostItem.id);
         }
 
+        // 3. Insert Ghost Item for calculation if present
         if (ghostItem && ghostIndex > -1) {
+            // Clamp index
             if(ghostIndex > items.length) ghostIndex = items.length;
             items.splice(ghostIndex, 0, ghostItem);
         }
 
+        // 4. Delegate to specific layout strategy
         let contentHeight = 0;
         if (zone.zoneType === 'cer') {
             contentHeight = LayoutSystem.layoutColumns(zone, items, 3);
         } else if (zone.zoneType === 'consensus') {
-            // Consensus layout is now free-form, height is managed manually or by content.
-            // We just need to calculate the bounding box of its children.
-            let maxY = 0;
-            items.forEach(item => {
-                const bottom = (item.y - zone.y) + item.h;
-                if (bottom > maxY) maxY = bottom;
-            });
-            contentHeight = maxY + LayoutSystem.padding;
+            contentHeight = LayoutSystem.layoutConsensus(zone, items);
         } else {
             contentHeight = LayoutSystem.layoutFlow(zone, items);
         }
 
+        // 5. Update Zone Height to fit content (with minimum)
         const minH = 300; 
         const newH = Math.max(minH, contentHeight + 40);
         
+        // Only update DOM/State if height changed significantly to avoid jitter
         if(Math.abs(zone.h - newH) > 2) {
             zone.h = newH;
             const el = document.getElementById(zoneId);
@@ -977,6 +903,7 @@ window.LayoutSystem = {
         }
     },
 
+    // Standard Multi-Row Flow Layout
     layoutFlow: (zone, items) => {
         const effectiveW = zone.w - (LayoutSystem.padding * 2);
         let x = LayoutSystem.padding;
@@ -984,30 +911,39 @@ window.LayoutSystem = {
         let currentRowH = 0;
 
         items.forEach(item => {
+            // Check if wrapping is needed
             if (x + item.w > effectiveW + LayoutSystem.padding && x > LayoutSystem.padding) {
+                // Wrap to next row
                 x = LayoutSystem.padding;
                 y += currentRowH + LayoutSystem.gap;
                 currentRowH = 0;
             }
 
             LayoutSystem.apply(zone, item, x, y);
+
+            // Advance X
             x += item.w + LayoutSystem.gap;
+            
+            // Track max height of current row
             if (item.h > currentRowH) currentRowH = item.h;
         });
 
         return y + currentRowH + LayoutSystem.padding;
     },
 
+    // Column Layout (CER)
     layoutColumns: (zone, items, colCount) => {
         const colW = (zone.w - (LayoutSystem.padding * 2)) / colCount;
         const colY = new Array(colCount).fill(LayoutSystem.headerH + 10);
 
         items.forEach(item => {
+            // Determine column based on Semantic Type
             let colIdx = 0;
             if (item.sub === 'claim') colIdx = 0;
             else if (item.sub === 'evidence') colIdx = 1;
             else if (item.sub === 'reasoning') colIdx = 2;
             else {
+                // Fallback: Geometric position
                 if(item._isVirtual) {
                    const relX = item._dragX - zone.x;
                    colIdx = Math.floor(relX / colW);
@@ -1020,6 +956,7 @@ window.LayoutSystem = {
             if(colIdx < 0) colIdx = 0;
             if(colIdx >= colCount) colIdx = colCount - 1;
 
+            // Center item in column
             const tx = LayoutSystem.padding + (colIdx * colW) + (colW/2 - item.w/2);
             const ty = colY[colIdx];
 
@@ -1031,6 +968,38 @@ window.LayoutSystem = {
         return Math.max(...colY) + LayoutSystem.padding;
     },
 
+    // Consensus Layout (Scatter/Random Fill for manual arrangement)
+    layoutConsensus: (zone, items) => {
+        // Consensus layout is a "Free Canvas". 
+        // We do not force positions unless item is new/virtual and needs a default.
+        // We mainly calculate the required height.
+        
+        let maxY = 0;
+
+        items.forEach(item => {
+            // Calculate relative position
+            let relX = item.x - zone.x;
+            let relY = item.y - zone.y;
+
+            // If virtual (dragging), use drag pos
+            if (item._isVirtual) {
+                relX = item._dragX - zone.x;
+                relY = item._dragY - zone.y;
+            }
+
+            // Apply position to DOM/Ghost (ensures visual sync)
+            LayoutSystem.apply(zone, item, relX, relY);
+
+            // Track max height
+            const bottom = relY + item.h;
+            if (bottom > maxY) maxY = bottom;
+        });
+
+        // Return calculated height with padding, but don't shrink below current unless dragged up
+        return Math.max(zone.h, maxY + 50);
+    },
+
+    // Apply calculated position to DOM or Ghost
     apply: (zone, item, relX, relY) => {
         const absX = zone.x + relX;
         const absY = zone.y + relY;
@@ -1117,13 +1086,13 @@ window.UI = {
             list.innerHTML = sysTpls.map((t,i) => `<button class="btn-s" onclick='UI.loadTemplate(${JSON.stringify(t)})'>${t.name}</button>`).join('');
         } else {
             const userTpls = await DB.getAll('templates');
-            list.innerHTML = userTpls.length ? userTpls.map(t => `<button class="btn-s" onclick='UI.loadTemplate(${JSON.stringify(t)})'>${t.name}</button>`).join('') : '<div style="text-align:center; color:#94a3b8; padding: 20px 0;">No saved templates</div>';
+            list.innerHTML = userTpls.length ? userTpls.map(t => `<button class="btn-s" onclick='UI.loadTemplate(${JSON.stringify(t)})'>${t.name}</button>`).join('') : '<div>No saved templates</div>';
         }
     },
     loadTemplate: (t) => {
-        const groupId = genId(); 
+        const groupId = genId(); // Create a new group for this template
         t.items.forEach(i => {
-            const item = { ...i, id: genId(), groupId: groupId }; 
+            const item = { ...i, id: genId(), groupId: groupId }; // Assign new ID and group ID
             item.x += -State.view.x + 100; item.y += -State.view.y + 100;
             State.items.push(item);
         });
@@ -1160,6 +1129,7 @@ window.UI = {
     showSettingsModal: () => {
         $('modal-settings').style.display = 'flex';
         UI.settingsTab(0);
+        // Ensure QR code and host ID are populated
         const hostId = localStorage.getItem('dqb_host_id');
         if (hostId) {
             $('settings-host-id').innerText = hostId;
@@ -1185,7 +1155,7 @@ window.UI = {
                 drawerBtn.style.background = '#c2410c';
                 drawerBtn.style.color = '#fef2f2';
             } else {
-                drawerBtn.style.background = ''; 
+                drawerBtn.style.background = ''; // Revert to default .sub-btn style
                 drawerBtn.style.color = '';
             }
         }
@@ -1327,11 +1297,15 @@ window.Board = {
         r.onload = e => { const d = JSON.parse(e.target.result); State.id=genId(); State.items=d.items||[]; State.ink=d.ink||[]; State.name=d.name||"Imported"; Board.start(); };
         r.readAsText(f);
     },
+    // Collision-Aware Placement Algorithm
     getFreeSpace: (x, y, w, h) => {
         let attempts = 0;
         let nx = x, ny = y;
+        
+        // Define padding for overlap check
         const pad = 10; 
         
+        // Helper to check if rect (nx, ny, w, h) collides with any item in State.items
         const checkCollision = (cx, cy) => {
             return State.items.some(i => 
                 cx < i.x + i.w + pad && cx + w + pad > i.x &&
@@ -1339,6 +1313,7 @@ window.Board = {
             );
         };
 
+        // Spiral search
         let angle = 0;
         let radius = 0;
         const step = 20;
@@ -1354,6 +1329,7 @@ window.Board = {
             ny = y + Math.sin(angle) * radius;
         }
         
+        // If still colliding after 150 tries, just offset slightly from original
         if (attempts >= 150) {
             nx = x + (Math.random() * 40 - 20);
             ny = y + (Math.random() * 40 - 20);
@@ -1372,10 +1348,9 @@ window.InkManager = {
     move: (x, y) => { InkManager.currentPath.push({x,y}); InkManager.renderTemp(); },
     end: () => {
         if(InkManager.currentPath.length > 1) {
-            const newInk = { id: genId(), points: [...InkManager.currentPath], color: State.draw.color, width: State.draw.width };
-            State.ink.push(newInk);
+            State.ink.push({ id: genId(), points: [...InkManager.currentPath], color: State.draw.color, width: State.draw.width });
             Render.ink(); ActionHistory.push(); Board.save(true);
-            if(State.isCoHost || Network.peer) Network.broadcast({type:'INK_ADD', ink:newInk});
+            if(State.isCoHost || Network.peer) Network.broadcast({type:'INK_ADD', ink:State.ink[State.ink.length-1]});
         }
         InkManager.currentPath = []; InkManager.renderTemp();
     },
@@ -1389,17 +1364,13 @@ window.InkManager = {
         path.setAttribute("fill", "none"); path.setAttribute("stroke-linecap", "round");
         path.id = "temp-ink"; svg.appendChild(path);
     },
-    pointsToPath: (pts) => { if(!pts || pts.length===0) return ""; let d=`M ${pts[0].x} ${pts[0].y}`; for(let i=1;i<pts.length;i++) d+=` L ${pts[i].x} ${pts[i].y}`; return d; },
+    pointsToPath: (pts) => { if(pts.length===0) return ""; let d=`M ${pts[0].x} ${pts[0].y}`; for(let i=1;i<pts.length;i++) d+=` L ${pts[i].x} ${pts[i].y}`; return d; },
     clear: () => { if(confirm("Clear all drawings?")) { State.ink = []; Render.ink(); ActionHistory.push(); Board.save(true); Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink}); } },
-    eraseAt: (x, y, inkArray) => {
+    eraseAt: (x, y) => {
         const thresh = 20 / State.view.z;
-        const initLen = inkArray.length;
-        const filteredInk = inkArray.filter(s => { return !s.points.some(p => Math.hypot(p.x - x, p.y - y) < thresh); });
-        
-        if (filteredInk.length !== initLen) {
-            return { changed: true, newInk: filteredInk };
-        }
-        return { changed: false, newInk: inkArray };
+        const initLen = State.ink.length;
+        State.ink = State.ink.filter(s => { return !s.points.some(p => Math.hypot(p.x - x, p.y - y) < thresh); });
+        if(State.ink.length !== initLen) { Render.ink(); ActionHistory.push(); Board.save(true); Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink}); }
     }
 };
 
@@ -1416,6 +1387,7 @@ window.Render = {
         State.items.forEach(i => {
             const el = document.getElementById(i.id);
             if(el) {
+                // Dragging is handled by direct transform in Modes.Move.move for performance
                 if (!isDragging || !State.drag.moveTargets.find(t => t.id === i.id)) {
                      el.style.transform = `translate(${i.x}px, ${i.y}px)`;
                 }
@@ -1453,13 +1425,14 @@ window.Render = {
                 el = Render.createItem(i); 
                 layer.appendChild(el); 
             } else {
+                // Item exists, let's update its dynamic parts
                 const btn = el.querySelector(`#zbtn-${i.id}`);
                 if (btn) {
                     const isActive = !!i.isOpen;
                     if (btn.classList.contains('active') !== isActive) {
                         btn.classList.toggle('active', isActive);
-                        let btnText = btn.innerText; 
-                        if (i.type === 'zone' && i.zoneType !== 'exit' && i.zoneType !== 'consensus') {
+                        let btnText = btn.innerText; // Keep current text as default
+                        if (i.type === 'zone' && i.zoneType !== 'exit') {
                             btnText = isActive ? "🟢 Open" : "📡 Open";
                         } else if (i.type === 'poll' || i.type === 'graph' || i.zoneType === 'exit') {
                             btnText = isActive ? "🔴 Stop" : "📡 Broadcast";
@@ -1474,6 +1447,7 @@ window.Render = {
                         wrapper.style.border = `2px solid ${i.color}`;
                         if (label) label.style.color = i.color;
                     } else {
+                        // Reset to default styles from Render.createItem
                         wrapper.style.border = '2px dashed #cbd5e1';
                         if(i.zoneType === 'consensus') { wrapper.style.border = '2px solid #0ea5e9'; } 
                         else if(i.zoneType === 'exit') { wrapper.style.border = '2px solid #6366f1'; }
@@ -1597,9 +1571,6 @@ window.Render = {
              if(d.zoneType === 'exit') btnAction = `Network.toggleZone('${d.id}')`;
              else if(d.type === 'poll') btnAction = `Network.broadcastPoll('${d.id}')`; 
              else if(d.type === 'graph') btnAction = `Network.broadcastGraph('${d.id}')`;
-        } else if (d.zoneType === 'consensus') {
-            btnText = "Start Modeling";
-            btnAction = `Consensus.start('${d.id}')`;
         }
 
         let btnHtml = `<span id="zbtn-${d.id}" class="${btnClass}" onpointerdown="event.stopPropagation()" onclick="${btnAction}">${btnText}</span>`;
@@ -1616,10 +1587,7 @@ window.Render = {
             }
         } else if (d.type === 'zone') {
             if(d.zoneType === 'cer') inner = `<div class="cer-grid"><div class="cer-col">CLAIM</div><div class="cer-col">EVIDENCE</div><div class="cer-col">REASONING</div></div>`;
-            else if(d.zoneType === 'consensus') {
-                const inkContent = (d.ink || []).map(s => `<path d="${InkManager.pointsToPath(s.points)}" stroke="${s.color}" stroke-width="${s.width}" fill="none" stroke-linecap="round"/>`).join('');
-                inner = `<svg style="width:100%; height:100%; pointer-events:none;">${inkContent}</svg>`;
-            }
+            else if(d.zoneType === 'consensus') inner = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#cbd5e1;font-weight:bold;font-size:1.5rem;opacity:0.5;pointer-events:none">CONSENSUS AREA</div>`;
             else if(d.zoneType === 'exit') {
                 inner = `<div style="padding:15px; text-align:center; color:#1e293b; font-weight:bold; border-bottom:1px solid #e2e8f0; background:#f8fafc">
                     ${sanitizeHTML(d.prompt)}
@@ -1722,7 +1690,7 @@ window.Actions = {
             it.title=name; it.w=300; it.h=300; it.children=[];
         }
         if(type==='cer') { it.type='zone'; it.zoneType='cer'; it.title="Argument Builder (CER)"; it.w=600; it.h=400; it.children=[]; }
-        if(type==='consensus') { it.type='zone'; it.zoneType='consensus'; it.title="Consensus Model"; it.w=600; it.h=600; it.children=[]; it.ink = []; }
+        if(type==='consensus') { it.type='zone'; it.zoneType='consensus'; it.title="Consensus Model"; it.w=600; it.h=600; it.children=[]; }
         if(type==='poll') { it.q="Question?"; it.opts=[{lbl:'Yes',v:0},{lbl:'No',v:0}]; }
         if(type==='spin') { it.ang=0; it.opts=['A','B','C','D']; it.w=200; it.h=220; }
         if(type==='graph') { it.title="Class Data"; it.data=[]; it.w=300; it.h=200; }
@@ -1762,7 +1730,7 @@ window.Actions = {
             id, type: 'zone', zoneType: 'exit', exitMode: mode, 
             title: 'Exit Ticket', prompt: promptTxt, opts: opts,
             w: 400, h: 300, children: [],
-            x: cx, y: cy 
+            x: cx, y: cy // Will be overridden by free space
         };
 
         const pos = Board.getFreeSpace(cx, cy, it.w, it.h);
@@ -1794,15 +1762,18 @@ window.Actions = {
                 html += `<div class="ctx-row"><button class="ctx-btn" onclick="Actions.groupSelection()">Group Items</button></div>`;
             }
             
+            // ADDED: Check if notes are in the selection and add the "Move to Zone" button
             const hasNotesInSelection = selection.some(i => i.type === 'note');
             if (hasNotesInSelection) {
                 html += `<div class="ctx-row"><button class="ctx-btn" onclick="Actions.showZoneList(event)">Move to Zone ➡</button></div>`;
             }
 
+            // ADDED: Save as Template for selection
             html += `<div class="ctx-row"><button class="ctx-btn" onclick="Actions.saveSelectionAsTemplate()">💾 Save Template</button></div>`;
+
             html += `<div class="ctx-row"><button class="ctx-btn btn-del" onclick="Actions.delete()">Delete All</button></div>`;
 
-        } else { 
+        } else { // Single item selection logic remains the same
              if(item.type === 'note') {
                 html += `<div class="ctx-row">
                     <button class="ctx-btn" style="background:#fef3c7" onclick="Actions.setType('${id}','notice')">👁️</button>
@@ -1851,7 +1822,7 @@ window.Actions = {
             item.color = item.color === color ? null : color;
             Render.all();
             Board.save(true);
-            Network.broadcast({ type: 'NOTE_UPDATE', note: item }); 
+            Network.broadcast({ type: 'NOTE_UPDATE', note: item }); // Re-use NOTE_UPDATE for simplicity
             UI.closeAllMenus();
         }
     },
@@ -1860,10 +1831,14 @@ window.Actions = {
         const name = prompt("Template Name:");
         if(!name) return;
 
+        // Get items
         const selectedItems = State.selection.map(id => State.items.find(i => i.id === id)).filter(Boolean);
+
+        // Calculate bounding box to normalize positions
         const minX = Math.min(...selectedItems.map(i => i.x));
         const minY = Math.min(...selectedItems.map(i => i.y));
 
+        // Clone and offset
         const tplItems = selectedItems.map(i => {
             const clone = JSON.parse(JSON.stringify(i));
             clone.x -= minX;
@@ -2017,15 +1992,17 @@ window.Actions = {
         Render.all();
     },
     align: (mode) => {
+        // 1. Filter targets: Only items whose parent is NOT also selected
         const allSelected = State.selection.map(id => State.items.find(i => i.id === id)).filter(x=>x);
         if(allSelected.length < 2) return;
         
         const items = allSelected.filter(item => {
+            // If item has a parent zone, and that parent zone is also in the selection, exclude this item (it moves with parent)
             if (item.parentZone && State.selection.includes(item.parentZone)) return false;
             return true;
         });
         
-        if(items.length < 2) return;
+        if(items.length < 2) return; // Need at least 2 top-level items to align
 
         if(mode === 'left') { const min = Math.min(...items.map(i=>i.x)); items.forEach(i=>i.x=min); }
         if(mode === 'center') { const avg = items.reduce((a,b)=>a+(b.x+b.w/2),0)/items.length; items.forEach(i=>i.x=avg-i.w/2); }
@@ -2034,6 +2011,7 @@ window.Actions = {
         if(mode === 'middle') { const avg = items.reduce((a,b)=>a+(b.y+b.h/2),0)/items.length; items.forEach(i=>i.y=avg-i.h/2); }
         if(mode === 'bottom') { const max = Math.max(...items.map(i=>i.y+i.h)); items.forEach(i=>i.y=max-i.h); }
         
+        // Update children of any moved zones
         items.forEach(t => {
             if(t.type === 'zone') LayoutSystem.update(t.id);
         });
@@ -2093,6 +2071,7 @@ window.Actions = {
         
         if(items.length === 0) return;
 
+        // Filter out children if parent is also selected
         items = items.filter(item => !item.parentZone || !State.selection.includes(item.parentZone));
 
         const cols = Math.ceil(Math.sqrt(items.length)); const startX = Math.min(...items.map(i=>i.x)); const startY = Math.min(...items.map(i=>i.y)); const pad = 20;
@@ -2172,6 +2151,7 @@ window.Modes = {
             const item = State.items.find(i => i.id === id);
             if (!item || item.locked) return;
 
+            // Start AutoScroll
             AutoScroll.start();
 
             const r = $('viewport').getBoundingClientRect();
@@ -2214,6 +2194,7 @@ window.Modes = {
             const d = State.drag;
             if (!d) return;
             
+            // Update AutoScroll check
             AutoScroll.check(e);
 
             const primaryItem = State.items.find(i => i.id === d.primaryId);
@@ -2230,13 +2211,16 @@ window.Modes = {
             const potentialX = primaryTarget.startX + dx;
             const potentialY = primaryTarget.startY + dy;
 
+            // Check for zone hover first to decide whether to snap
             const cx = potentialX + primaryItem.w / 2;
             const cy = potentialY + primaryItem.h / 2;
             const hitZone = (primaryItem.type !== 'zone') && State.items.find(z => z.type === 'zone' && z.id !== primaryItem.id && cx > z.x && cx < z.x + z.w && cy > z.y && cy < z.y + z.h);
 
             if (hitZone) {
+                // If over a zone, disable snapping and clear guides
                 SnapSystem.clearGuides();
             } else {
+                // Not over a zone, so apply snapping
                 const snapResult = SnapSystem.getSnap(primaryItem, potentialX, potentialY);
                 dx = snapResult.x - primaryTarget.startX;
                 dy = snapResult.y - primaryTarget.startY;
@@ -2268,10 +2252,15 @@ window.Modes = {
                     d.hoverZoneId = currentHitZone.id;
                     document.getElementById(currentHitZone.id).classList.add('drag-over');
                     
+                    // Special Handling for Consensus Zones: No ghost slot logic, just free movement
                     if (currentHitZone.zoneType === 'consensus') {
-                         d.targetIndex = -1; 
-                         $('ghost-layer').innerHTML = '';
+                         d.targetIndex = -1; // No specific index
+                         // We still call update to potentially resize zone if we drag near bottom
+                         // but we pass isVirtual to show it inside
+                         const virt = { ...primaryItem, _isVirtual: true, _dragX: primaryItem.x, _dragY: primaryItem.y };
+                         LayoutSystem.update(currentHitZone.id, virt);
                     } else {
+                        // Standard Flow Layout Logic
                         const newIndex = LayoutSystem.getIndex(currentHitZone, currentCx, currentCy, primaryItem.id);
                         if (d.targetIndex !== newIndex) {
                             d.targetIndex = newIndex;
@@ -2286,6 +2275,7 @@ window.Modes = {
             const d = State.drag;
             if(!d) return;
 
+            // Stop AutoScroll
             AutoScroll.stop();
 
             SnapSystem.clearGuides();
@@ -2308,6 +2298,7 @@ window.Modes = {
                     const itemsToLink = updatedItems.filter(i => i && i.type !== 'zone');
                     const primaryItem = itemsToLink.find(i => i.id === d.primaryId);
                     
+                    // Link items to zone
                     if (primaryItem) {
                         HierarchyManager.link(primaryItem.id, d.hoverZoneId, d.targetIndex);
                         itemsToLink.forEach(item => {
@@ -2431,14 +2422,7 @@ window.Modes = {
             const r = $('viewport').getBoundingClientRect();
             const x = (e.clientX - r.left)/State.view.z - State.view.x;
             const y = (e.clientY - r.top)/State.view.z - State.view.y;
-            const { changed, newInk } = InkManager.eraseAt(x, y, State.ink);
-            if (changed) {
-                State.ink = newInk;
-                Render.ink(); 
-                ActionHistory.push(); 
-                Board.save(true); 
-                Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink});
-            }
+            InkManager.eraseAt(x, y);
         },
         up: () => { State.drag = null; }
     },
@@ -2460,10 +2444,6 @@ window.Modes = {
 /* --- INPUT CONTROLLER --- */
 window.InputController = {
     start: (e) => {
-        if (State.consensusMode.active) {
-            Consensus.inputStart(e);
-            return;
-        }
         if(e.target.closest('.drawer') || e.target.closest('.modal') || e.target.closest('.dock-btn') || e.target.closest('.tb-btn') || e.target.closest('input') || e.target.closest('textarea') || e.target.closest('select')) return;
         if(e.target.closest('.menu-trigger') || e.target.closest('[onclick]') || e.target.closest('.cmt-badge')) return;
         
@@ -2478,11 +2458,10 @@ window.InputController = {
             return;
         }
         if(e.target.closest('#minimap')) {
-            const canvas = $('minimap');
-            const rect = canvas.getBoundingClientRect();
+            const rect = $('minimap').getBoundingClientRect();
             const mx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
             const my = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-            const info = canvas.worldInfo;
+            const info = $('minimap').worldInfo;
             if(info && info.scale > 0) {
                 const wx = (mx / info.scale) + info.minX;
                 const wy = (my / info.scale) + info.minY;
@@ -2517,10 +2496,6 @@ window.InputController = {
         else if(State.tool === 'laser') { Modes.Laser.down(evt); return; }
     },
     move: (e) => {
-        if (State.consensusMode.active) {
-            Consensus.inputMove(e);
-            return;
-        }
         if(e.touches && e.touches.length === 2) {
             const dist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
             const delta = dist - State.touch.dist;
@@ -2543,10 +2518,6 @@ window.InputController = {
         else if(m === 'laser') Modes.Laser.move(evt);
     },
     end: (e) => {
-        if (State.consensusMode.active) {
-            Consensus.inputEnd(e);
-            return;
-        }
         if(!State.drag) return;
         const m = State.drag.mode;
         if(m === 'pan') {
@@ -2603,7 +2574,10 @@ window.SnapSystem = {
                 left: other.x, right: other.x + other.w, top: other.y, bottom: other.y + other.h,
                 cx: other.x + other.w / 2, cy: other.y + other.h / 2
             };
+
+            // STRICT EDGE-TO-EDGE AND MIDDLE-TO-MIDDLE LOGIC
             
+            // X-Axis Edges (Left/Right to Left/Right)
             ['left', 'right'].forEach(p1 => {
                 ['left', 'right'].forEach(p2 => {
                     const dist = Math.abs(itemBounds[p1] - otherBounds[p2]);
@@ -2613,11 +2587,13 @@ window.SnapSystem = {
                 });
             });
 
+            // X-Axis Centers (CX to CX)
             const distCx = Math.abs(itemBounds.cx - otherBounds.cx);
             if (distCx < threshold && distCx < bestSnapX.dist) {
                 bestSnapX = { dist: distCx, val: otherBounds.cx - (itemBounds.cx - newX), guide: otherBounds.cx };
             }
 
+            // Y-Axis Edges (Top/Bottom to Top/Bottom)
             ['top', 'bottom'].forEach(p1 => {
                 ['top', 'bottom'].forEach(p2 => {
                     const dist = Math.abs(itemBounds[p1] - otherBounds[p2]);
@@ -2627,6 +2603,7 @@ window.SnapSystem = {
                 });
             });
 
+            // Y-Axis Centers (CY to CY)
             const distCy = Math.abs(itemBounds.cy - otherBounds.cy);
             if (distCy < threshold && distCy < bestSnapY.dist) {
                 bestSnapY = { dist: distCy, val: otherBounds.cy - (itemBounds.cy - newY), guide: otherBounds.cy };
@@ -2654,7 +2631,7 @@ window.SnapSystem = {
             if (g.type === 'v') {
                 el.style.left = `${g.pos}px`;
                 el.style.top = '0';
-                el.style.height = '10000px'; 
+                el.style.height = '10000px'; // A large number
                 el.style.transform = 'translateY(-5000px)';
             } else {
                 el.style.top = `${g.pos}px`;
@@ -2712,7 +2689,7 @@ window.Network = {
                 UI.toast(`Student Joined`); 
             });
             c.on('data', d => { try { Network.handle(c.peer, JSON.parse(d), c); } catch(e) { console.error(e); } });
-            c.on('close', () => { delete State.students[c.peer]; Roster(); Consensus.renderParticipants(); });
+            c.on('close', () => { delete State.students[c.peer]; Roster(); });
             c.on('error', (e) => console.error("Connection Error", e));
         });
         Network.peer.on('error', (err) => {
@@ -2744,7 +2721,9 @@ window.Network = {
                     Network.submitJoin();
                 });
             },
-            (errorMessage) => {}
+            (errorMessage) => {
+                // Ignore parse errors, scanning is continuous
+            }
         ).catch(err => {
             console.error(err);
             UI.toast("Camera access failed");
@@ -2801,7 +2780,7 @@ window.Network = {
         if (type !== 'OPEN') Network.broadcast({ type: 'MODE', val: 'LOCKED' });
 
         State.activity = { type, targetId, payload };
-        Board.save(true); 
+        Board.save(true); // Save activity state change
 
         if (type === 'OPEN') {
             Network.broadcast({ type: 'MODE', val: 'OPEN' });
@@ -2812,6 +2791,7 @@ window.Network = {
                 item.isOpen = true;
                 
                 if (type === 'ZONE_ACT') {
+                    // CRITICAL FIX: Send 'type' as the specific activity subtype so student client recognizes it immediately
                     const finalPayload = { ...payload, type: payload.subType };
                     Network.broadcast(finalPayload); 
                     
@@ -2820,7 +2800,7 @@ window.Network = {
                     $('act-info').innerText = `Mode: ${payload.subType.replace('ACT_','')} | Items: ${payload.items.length}`;
                     
                     const modeLabel = payload.subType === 'ACT_DISCUSS' ? 'Discussion' : 'Results';
-                    const html = `<div style="color:#64748b">Waiting for ${modeLabel}...</div>`;
+                    const html = `<div style="padding:10px;color:#64748b">Waiting for ${modeLabel}...</div>`;
                     const zContainer = $(`zr-${targetId}`); 
                     if(zContainer) { 
                         zContainer.innerHTML = `<h4 style="margin:0 0 10px 0; color:#475569">${modeLabel}</h4>` + html; 
@@ -2895,7 +2875,7 @@ window.Network = {
             Network.broadcastPoll(id);
         } else if (item.type === 'graph') {
             Network.broadcastGraph(id);
-        } else if (item.type === 'zone' && item.zoneType !== 'consensus') {
+        } else if (item.type === 'zone') {
             Network.openZone(id);
         }
     },
@@ -2957,176 +2937,126 @@ window.Network = {
     },
 
     handle: (pid, d, conn) => {
-        // MODULARIZATION: Refactored from if/else to switch for clarity
-        switch(d.type) {
-            case 'JOIN':
-                State.students[pid] = { name:d.name, avatar:d.avatar, conn:conn }; 
-                Roster();
-                Consensus.renderParticipants();
-                break;
-            case 'AUTH_COHOST':
-                State.students[pid] = { name: "Co-Host", avatar: "👑", conn: conn }; 
-                Roster(); 
-                SafeSend(conn, {type:'FULL_SYNC', items:State.items, ink:State.ink, activity: State.activity});
-                break;
-            case 'SYNC_REQ':
-                SafeSend(conn, {type:'FULL_SYNC', items:State.items, ink:State.ink, activity: State.activity});
-                break;
-            case 'FULL_SYNC':
-                State.items = d.items; State.ink = d.ink; if (d.activity) State.activity = d.activity; 
-                Render.all(); 
-                UI.updateOpenNotesButton(State.activity.type === 'OPEN');
-                break;
-            case 'UPDATE_POS': {
-                const i = State.items.find(x=>x.id===d.id); 
-                if(i) { i.x=d.x; i.y=d.y; if(d.w) i.w=d.w; if(d.h) i.h=d.h; Render.sync(); } 
-                break;
-            }
-            case 'BATCH_UPDATE':
-                d.items.forEach(u => {
-                    const i = State.items.find(x=>x.id===u.id);
-                    if(i) { Object.assign(i, u); }
+        if(d.type === 'JOIN') { State.students[pid] = { name:d.name, avatar:d.avatar, conn:conn }; Roster(); } 
+        else if(d.type === 'AUTH_COHOST') { 
+            State.students[pid] = { name: "Co-Host", avatar: "👑", conn: conn }; 
+            Roster(); 
+            SafeSend(conn, {type:'FULL_SYNC', items:State.items, ink:State.ink, activity: State.activity});
+        }
+        else if(d.type === 'SYNC_REQ') { SafeSend(conn, {type:'FULL_SYNC', items:State.items, ink:State.ink, activity: State.activity}); }
+        else if(d.type === 'FULL_SYNC') { 
+            State.items = d.items; State.ink = d.ink; if (d.activity) State.activity = d.activity; 
+            Render.all(); 
+            UI.updateOpenNotesButton(State.activity.type === 'OPEN');
+        }
+        else if(d.type === 'UPDATE_POS') { 
+            const i = State.items.find(x=>x.id===d.id); 
+            if(i) { i.x=d.x; i.y=d.y; if(d.w) i.w=d.w; if(d.h) i.h=d.h; Render.sync(); } 
+        }
+        else if(d.type === 'BATCH_UPDATE') {
+             d.items.forEach(u => {
+                 const i = State.items.find(x=>x.id===u.id);
+                 if(i) { Object.assign(i, u); }
+             });
+             Render.all();
+        }
+        else if(d.type === 'GROUP_ITEMS') { d.ids.forEach(id => { const i = State.items.find(x=>x.id===id); if(i) i.groupId = d.groupId; }); Render.all(); }
+        else if(d.type === 'UNGROUP_ITEMS') { State.items.forEach(i => { if(i.groupId === d.groupId) i.groupId = null; }); Render.all(); }
+        else if(d.type === 'ADD_ITEM') { State.items.push(d.item); Render.all(); }
+        else if(d.type === 'LINK_ITEMS') { d.ids.forEach(id => HierarchyManager.link(id, d.zoneId)); LayoutSystem.update(d.zoneId); Render.all(); }
+        else if(d.type === 'ZONE_REORDER') {
+            const z = State.items.find(i => i.id === d.zoneId);
+            if(z) {
+                z.children = d.children;
+                // Ensure all children point to this parent
+                z.children.forEach(cid => {
+                    const c = State.items.find(x => x.id === cid);
+                    if(c) c.parentZone = z.id;
                 });
+                LayoutSystem.update(z.id);
                 Render.all();
-                break;
-            case 'GROUP_ITEMS':
-                d.ids.forEach(id => { const i = State.items.find(x=>x.id===id); if(i) i.groupId = d.groupId; }); 
-                Render.all();
-                break;
-            case 'UNGROUP_ITEMS':
-                State.items.forEach(i => { if(i.groupId === d.groupId) i.groupId = null; }); 
-                Render.all();
-                break;
-            case 'ADD_ITEM':
-                State.items.push(d.item); 
-                Render.all();
-                break;
-            case 'LINK_ITEMS':
-                d.ids.forEach(id => HierarchyManager.link(id, d.zoneId)); 
-                LayoutSystem.update(d.zoneId); 
-                Render.all();
-                break;
-            case 'ZONE_REORDER': {
-                const z = State.items.find(i => i.id === d.zoneId);
-                if(z) {
-                    z.children = d.children;
-                    z.children.forEach(cid => {
-                        const c = State.items.find(x => x.id === cid);
-                        if(c) c.parentZone = z.id;
-                    });
-                    LayoutSystem.update(z.id);
-                    Render.all();
-                }
-                break;
             }
-            case 'INK_ADD':
-                State.ink.push(d.ink); 
-                Render.ink();
-                break;
-            case 'LASER': {
-                const dot = document.createElement('div');
-                dot.style.cssText = `position:absolute;left:${d.x}px;top:${d.y}px;width:10px;height:10px;background:red;border-radius:50%;pointer-events:none;z-index:9999;opacity:0.8;box-shadow:0 0 5px red`;
-                $('viewport').appendChild(dot);
-                setTimeout(() => dot.remove(), 500);
-                break;
+        }
+        else if(d.type === 'INK_ADD') { State.ink.push(d.ink); Render.ink(); }
+        else if(d.type === 'LASER') { 
+            const dot = document.createElement('div');
+            dot.style.cssText = `position:absolute;left:${d.x}px;top:${d.y}px;width:10px;height:10px;background:red;border-radius:50%;pointer-events:none;z-index:9999;opacity:0.8;box-shadow:0 0 5px red`;
+            $('viewport').appendChild(dot);
+            setTimeout(() => dot.remove(), 500);
+        }
+        else if(d.type === 'NOTE' || d.type === 'IMG_NOTE') {
+            if (State.activity.type === 'ZONE_ACT' && State.activity.payload && State.activity.payload.subType === 'OPEN_ZONE') {
+                d.zoneId = State.activity.targetId;
             }
-            case 'NOTE':
-            case 'IMG_NOTE': {
-                if (State.activity.type === 'ZONE_ACT' && State.activity.payload && State.activity.payload.subType === 'OPEN_ZONE') {
-                    d.zoneId = State.activity.targetId;
+            if (d.zoneId) {
+                const zone = State.items.find(z => z.id === d.zoneId);
+                const student = State.students[pid];
+                if (zone && zone.color && (!student || student.color !== zone.color)) {
+                    return; // Student color doesn't match zone color, ignore submission.
                 }
-                if (d.zoneId) {
-                    const zone = State.items.find(z => z.id === d.zoneId);
-                    const student = State.students[pid];
-                    if (zone && zone.color && (!student || student.color !== zone.color)) {
-                        return; 
-                    }
-                }
-                let i = State.items.find(x => x.id === d.id);
-                if (d.type === 'NOTE') {
-                    if(!i) {
-                        i = { id:d.id, type:'note', sub:d.sub, text:d.text, author:State.students[pid]?.name, w:200, h:150, votes:0, groupId: null };
-                        State.items.push(i);
-                    } else { i.text = d.text; i.sub = d.sub; }
-                } else { 
-                    if (!d.src) return;
-                    i = { id:d.id, type:'note', sub:'sketch', src:d.src, text:d.text, author:State.students[pid]?.name, w:200, h:200, votes:0, groupId: null };
+            }
+            let i = State.items.find(x => x.id === d.id);
+            if (d.type === 'NOTE') {
+                if(!i) {
+                    i = { id:d.id, type:'note', sub:d.sub, text:d.text, author:State.students[pid]?.name, w:200, h:150, votes:0, groupId: null };
                     State.items.push(i);
-                }
-                if (d.zoneId) {
-                    Actions.addToZone(d.zoneId, i.id);
-                } else {
-                    const pos = Board.getFreeSpace(-State.view.x+100, -State.view.y+100, i.w, i.h);
-                    i.x = pos.x; i.y = pos.y;
-                }
+                } else { i.text = d.text; i.sub = d.sub; }
+            } else { // IMG_NOTE
+                if (!d.src) return;
+                i = { id:d.id, type:'note', sub:'sketch', src:d.src, text:d.text, author:State.students[pid]?.name, w:200, h:200, votes:0, groupId: null };
+                State.items.push(i);
+            }
+            if (d.zoneId) {
+                Actions.addToZone(d.zoneId, i.id);
+            } else {
+                const pos = Board.getFreeSpace(-State.view.x+100, -State.view.y+100, i.w, i.h);
+                i.x = pos.x; i.y = pos.y;
+            }
+            Render.all(); Board.save(true);
+            Network.broadcast(d);
+        }
+        else if(d.type === 'DELETE_NOTE') { HierarchyManager.delete(d.id); }
+        else if(d.type === 'POLL_VOTE') { 
+            const p = State.items.find(x => x.id === d.actId); 
+            if(p && p.opts[d.idx]) { p.opts[d.idx].v++; Render.all(); confetti({particleCount: 50, spread: 60, origin: { y: 0.8 }}); } 
+        }
+        else if(d.type === 'DATA_SUBMIT') { const g = State.items.find(x => x.id === d.actId); if(g) { g.data.push(d.val); Render.all(); } }
+        else if(d.type === 'SUBMIT_VOTE' || d.type === 'SUBMIT_SORT') {
+            if(!State.activeSorts[d.actId]) State.activeSorts[d.actId] = [];
+            State.activeSorts[d.actId].push(d.type==='SUBMIT_SORT' ? d.order : d.choiceId);
+            Network.updateResults(d.actId);
+        }
+        else if(d.type === 'COMMENT') { State.comments.push(d); Network.updateDiscussion(); Render.all(); }
+        else if(d.type === 'JIGGLE_NOTE') {
+            const el = document.getElementById(d.id); if(el) { el.classList.add('jiggling'); setTimeout(() => el.classList.remove('jiggling'), 2000); } }
+
+        else if(d.type === 'EXIT_SUBMIT') {
+            const zone = State.items.find(x => x.id === d.actId && x.zoneType === 'exit');
+            if(zone) {
+                let txt = d.val;
+                if(Array.isArray(d.val)) txt = d.val.join(', ');
+                if(typeof d.val === 'object' && d.val.l) txt = `L: ${d.val.l}\nW: ${d.val.w}`;
+
+                const noteId = genId();
+                const newNote = {
+                    id: noteId, type: 'note', sub: 'notice', text: txt,
+                    author: State.students[pid]?.name || 'Student',
+                    w: 200, h: 150, votes: 0,
+                    parentZone: zone.id
+                };
+                State.items.push(newNote);
+                if(!zone.children) zone.children = [];
+                zone.children.push(noteId);
+                LayoutSystem.update(zone.id);
                 Render.all(); Board.save(true);
                 Network.broadcast(d);
-                break;
             }
-            case 'DELETE_NOTE':
-                HierarchyManager.delete(d.id);
-                break;
-            case 'POLL_VOTE': {
-                const p = State.items.find(x => x.id === d.actId); 
-                if(p && p.opts[d.idx]) { p.opts[d.idx].v++; Render.all(); confetti({particleCount: 50, spread: 60, origin: { y: 0.8 }}); } 
-                break;
-            }
-            case 'DATA_SUBMIT': {
-                const g = State.items.find(x => x.id === d.actId); 
-                if(g) { g.data.push(d.val); Render.all(); } 
-                break;
-            }
-            case 'SUBMIT_VOTE':
-            case 'SUBMIT_SORT':
-                if(!State.activeSorts[d.actId]) State.activeSorts[d.actId] = [];
-                State.activeSorts[d.actId].push(d.type==='SUBMIT_SORT' ? d.order : d.choiceId);
-                Network.updateResults(d.actId);
-                break;
-            case 'COMMENT':
-                State.comments.push(d); 
-                Network.updateDiscussion(); 
-                Render.all();
-                break;
-            case 'JIGGLE_NOTE': {
-                const el = document.getElementById(d.id); 
-                if(el) { el.classList.add('jiggling'); setTimeout(() => el.classList.remove('jiggling'), 2000); } 
-                break;
-            }
-            case 'EXIT_SUBMIT': {
-                const zone = State.items.find(x => x.id === d.actId && x.zoneType === 'exit');
-                if(zone) {
-                    let txt = d.val;
-                    if(Array.isArray(d.val)) txt = d.val.join(', ');
-                    if(typeof d.val === 'object' && d.val.l) txt = `L: ${d.val.l}\nW: ${d.val.w}`;
-
-                    const noteId = genId();
-                    const newNote = {
-                        id: noteId, type: 'note', sub: 'notice', text: txt,
-                        author: State.students[pid]?.name || 'Student',
-                        w: 200, h: 150, votes: 0,
-                        parentZone: zone.id
-                    };
-                    State.items.push(newNote);
-                    if(!zone.children) zone.children = [];
-                    zone.children.push(noteId);
-                    LayoutSystem.update(zone.id);
-                    Render.all(); Board.save(true);
-                    Network.broadcast(d);
-                }
-                break;
-            }
-            // NEW: Handle incoming ink from students in consensus mode
-            case 'CONSENSUS_INK':
-                if (State.consensusMode.active && State.consensusMode.participants.includes(pid)) {
-                    Consensus.handleInk(d.ink);
-                }
-                break;
         }
     },
     
     updateResults: (actId) => {
         const btn = $(`btn-res-${actId}`);
-        if(btn) { btn.classList.add('active'); }
+        if(btn) { btn.style.display = 'inline-block'; }
 
         const submissions = State.activeSorts[actId] || [];
         const scores = {};
@@ -3142,7 +3072,7 @@ window.Network = {
         if(!State.activity || State.activity.type !== 'ZONE_ACT') return;
         const actId = State.activity.targetId;
         const btn = $(`btn-res-${actId}`);
-        if(btn) { btn.classList.add('active'); }
+        if(btn) { btn.style.display = 'inline-block'; }
 
         const relevant = State.comments.filter(c => {
              if (c.targetId === actId) return true;
@@ -3156,148 +3086,8 @@ window.Network = {
     },
     
     broadcast: (msg) => {
-        if(State.students['HOST']) SafeSend(State.students['HOST'].conn, msg); 
-        Object.values(State.students).forEach(s => { SafeSend(s.conn, msg); }); 
-    }
-};
-
-/* --- NEW: CONSENSUS MODELING MANAGER --- */
-window.Consensus = {
-    currentPath: [],
-
-    start: (zoneId) => {
-        const zone = State.items.find(i => i.id === zoneId);
-        if (!zone) return;
-
-        State.consensusMode.active = true;
-        State.consensusMode.zoneId = zoneId;
-        State.consensusMode.ink = JSON.parse(JSON.stringify(zone.ink || [])); // Deep copy
-        State.consensusMode.participants = [];
-        
-        $('consensus-zone-name').innerText = zone.title;
-        $('consensus-overlay').style.display = 'flex';
-        
-        Consensus.renderParticipants();
-        Consensus.renderInk();
-
-        Network.broadcast({ type: 'CONSENSUS_START', zoneId: zoneId, ink: State.consensusMode.ink });
-        UI.closeAllMenus();
-    },
-
-    stop: () => {
-        const zone = State.items.find(i => i.id === State.consensusMode.zoneId);
-        if (zone) {
-            zone.ink = JSON.parse(JSON.stringify(State.consensusMode.ink));
-            Render.all(); // Re-render the zone item with the new ink
-            Board.save(true);
-        }
-
-        State.consensusMode.active = false;
-        State.consensusMode.zoneId = null;
-        State.consensusMode.ink = [];
-        
-        $('consensus-overlay').style.display = 'none';
-        Network.broadcast({ type: 'CONSENSUS_STOP' });
-    },
-
-    renderParticipants: () => {
-        const container = $('consensus-participants');
-        container.innerHTML = Object.entries(State.students).map(([pid, student]) => {
-            if (pid === 'HOST' || student.name === 'Co-Host') return '';
-            const isChecked = State.consensusMode.participants.includes(pid);
-            return `<div class="participant-row ${isChecked ? 'active' : ''}" onclick="Consensus.toggleParticipant('${pid}')">
-                        <input type="checkbox" ${isChecked ? 'checked' : ''} style="pointer-events:none;">
-                        <span>${student.avatar}</span>
-                        <span>${sanitizeHTML(student.name)}</span>
-                    </div>`;
-        }).join('');
-    },
-
-    toggleParticipant: (pid) => {
-        const idx = State.consensusMode.participants.indexOf(pid);
-        if (idx > -1) {
-            State.consensusMode.participants.splice(idx, 1);
-        } else {
-            State.consensusMode.participants.push(pid);
-        }
-        Consensus.renderParticipants();
-        
-        const student = State.students[pid];
-        if (student) {
-            SafeSend(student.conn, { type: 'CONSENSUS_PERMS', canDraw: idx === -1 });
-        }
-    },
-
-    renderInk: () => {
-        const svg = $('consensus-ink-layer');
-        svg.innerHTML = State.consensusMode.ink.map(s => `<path d="${InkManager.pointsToPath(s.points)}" stroke="${s.color}" stroke-width="${s.width}" fill="none" stroke-linecap="round"/>`).join('');
-    },
-
-    handleInk: (ink) => {
-        State.consensusMode.ink.push(ink);
-        Consensus.renderInk();
-        // Re-broadcast to other clients to keep everyone in sync
-        Network.broadcast({ type: 'CONSENSUS_INK', ink: ink });
-    },
-
-    setDrawTool: (tool, color) => {
-        State.consensusMode.tool = tool;
-        if (color) State.consensusMode.color = color;
-    },
-
-    clearInk: () => {
-        if (confirm("Clear the entire model drawing?")) {
-            State.consensusMode.ink = [];
-            Consensus.renderInk();
-            Network.broadcast({ type: 'CONSENSUS_CLEAR' });
-        }
-    },
-
-    // Input handlers for the overlay
-    inputStart: (e) => {
-        const rect = $('consensus-main').getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        
-        if (State.consensusMode.tool === 'draw') {
-            Consensus.currentPath = [{x, y}];
-        }
-        State.drag = { mode: 'consensus-draw' };
-    },
-    inputMove: (e) => {
-        if (!State.drag || State.drag.mode !== 'consensus-draw') return;
-        const rect = $('consensus-main').getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        if (State.consensusMode.tool === 'draw') {
-            Consensus.currentPath.push({x, y});
-            // Render temporary path locally for responsiveness
-            const temp = document.getElementById('temp-consensus-ink'); if(temp) temp.remove();
-            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            path.setAttribute("d", InkManager.pointsToPath(Consensus.currentPath));
-            path.setAttribute("stroke", State.consensusMode.color);
-            path.setAttribute("stroke-width", State.consensusMode.width);
-            path.setAttribute("fill", "none"); path.setAttribute("stroke-linecap", "round");
-            path.id = "temp-consensus-ink";
-            $('consensus-ink-layer').appendChild(path);
-        } else if (State.consensusMode.tool === 'eraser') {
-            const { changed, newInk } = InkManager.eraseAt(x, y, State.consensusMode.ink);
-            if (changed) {
-                State.consensusMode.ink = newInk;
-                Consensus.renderInk();
-                Network.broadcast({ type: 'CONSENSUS_SET_INK', ink: State.consensusMode.ink });
-            }
-        }
-    },
-    inputEnd: (e) => {
-        const temp = document.getElementById('temp-consensus-ink'); if(temp) temp.remove();
-        if (State.consensusMode.tool === 'draw' && Consensus.currentPath.length > 1) {
-            const newInk = { id: genId(), points: [...Consensus.currentPath], color: State.consensusMode.color, width: State.consensusMode.width };
-            Consensus.handleInk(newInk); // Adds locally and broadcasts
-        }
-        Consensus.currentPath = [];
-        State.drag = null;
+        if(State.students['HOST']) SafeSend(State.students['HOST'].conn, msg); // Send to Host
+        Object.values(State.students).forEach(s => { SafeSend(s.conn, msg); }); // Send to Clients
     }
 };
 
@@ -3316,7 +3106,7 @@ window.Roster = function() {
     const s = Object.values(State.students); 
     $('conn-badge').innerText = s.length; 
     if(s.length===0) {
-        $('roster').innerHTML = '<div style="text-align:center">Waiting for connections...</div>';
+        $('roster').innerHTML = '<div style="padding:20px; text-align:center">Waiting for connections...</div>';
         return;
     }
     const colors = ['#ef4444', '#3b82f6', '#10b981', '#f97316', '#8b5cf6'];
@@ -3329,7 +3119,7 @@ window.Roster = function() {
             ).join('');
             colorHtml = `<div style="display:flex; gap: 6px; padding-left: 34px; margin-top: 8px;">${colorButtons}</div>`;
         }
-        return `<div style="padding:8px 0; border-bottom:1px solid #374151;">
+        return `<div style="padding:8px 16px; border-bottom:1px solid #374151;">
                     <div style="display:flex; gap:10px; align-items:center;">
                         <span style="font-size:1.2rem">${x.avatar}</span>
                         <b>${sanitizeHTML(x.name)}</b>
@@ -3339,8 +3129,8 @@ window.Roster = function() {
     }).join(''); 
 };
 window.Tab = function(n) { 
-    document.querySelectorAll('#sidebar .tab-btn').forEach((b,i) => b.classList.toggle('active', i===n)); 
-    document.querySelectorAll('#sidebar .tab-content').forEach((c,i) => c.classList.toggle('active', i===n)); 
+    document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===n)); 
+    document.querySelectorAll('.tab-content').forEach((c,i) => c.classList.toggle('active', i===n)); 
 };
 
 window.onload = () => {
@@ -3355,6 +3145,7 @@ window.onload = () => {
     v.addEventListener('touchend', InputController.end);
     window.addEventListener('keydown', InputController.keydown);
     
+    // Global listeners for minimap dragging/resizing
     window.addEventListener('mousemove', e => {
         if (!State.drag) return;
         if (State.drag.mode === 'minimap-drag') {

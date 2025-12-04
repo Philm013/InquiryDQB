@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>InquiryDQB | Teacher Console</title>
-    
+    <!-- Add these inside the <head> tag -->
+<title>InquiryDQB | Teacher Console</title>
+<meta name="robots" content="noindex, nofollow">
     <!-- PWA MANIFEST -->
     <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIklucXVpcnlEUUIiLAogICJzaG9ydF9uYW1lIjogIkRRQiIsCiAgInN0YXJ0X3VybCI6ICIuIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjMTExODI3IiwKICAidGhlbWVfY29xvciI6ICIjMTExODI3IiwKICAiaWNvbnMiOiBbCiAgICB7CiAgICAgICJzcmMiOiAiaHR0cHM6Ly91aS1hdmF0YXJzLmNvbS9hcGkvP25hbWU9RFFCJmJhY2tncm91bmQ9NjM2NmYxJmNvbG9yPWZmZiZzaXplPTE5MiIsCiAgICAgICJzaXplcyI6ICIxOTJ4MTkyIiwKICAgICAgInR5cGUiOiAiaW1hZ2UvcG5nIgogICAgfQogIF0KfQ==">
 
@@ -173,7 +174,9 @@
             box-shadow: none !important;
             border: 2px solid transparent;
             overflow: visible;
+            cursor: grab;
         }
+        .item.consensus-child .jiggle-wrapper:active { cursor: grabbing; }
         .item.consensus-child.selected .jiggle-wrapper {
             border: 2px dashed var(--accent) !important;
         }
@@ -314,6 +317,7 @@
             display: flex; align-items: center; gap: 6px; flex: 1; justify-content: center;
         }
         .sub-btn:hover { background: #4b5563; }
+        .sub-btn.active { background: var(--accent); border-color: var(--accent); }
 
         /* SVG ICON BUTTONS */
         .icon-btn {
@@ -361,35 +365,34 @@
         .land-card { background: white; padding: 40px; border-radius: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 500px; max-width: 90%; text-align: center; }
         .board-row { padding: 16px; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; justify-content: space-between; align-items: center; text-align: left; }
 
-        /* --- NEW: CONSENSUS MODEL OVERLAY --- */
+        /* --- CONSENSUS MODEL OVERLAY --- */
         #consensus-overlay {
             position: fixed; inset: 0; background: var(--bg);
             z-index: 5000; display: none; flex-direction: row;
         }
         #consensus-main {
-            flex: 1; position: relative;
+            flex: 1; position: relative; overflow: hidden;
             background-image: radial-gradient(#374151 2px, transparent 2px); 
-            background-size: 32px 32px;
-            cursor: crosshair;
+            background-size: 32px 32px; cursor: default;
         }
+        #consensus-main.cm-pan { cursor: grab; }
+        #consensus-main.cm-pan:active { cursor: grabbing; }
+        #consensus-main.cm-draw { cursor: crosshair; }
+
+        #consensus-world { position: absolute; top:0; left:0; transform-origin: 0 0; will-change: transform; }
+        #consensus-items-layer { position:absolute; inset:0; pointer-events: none; }
+        #consensus-ink-layer { position:absolute; inset:0; pointer-events:none; }
+        
         #consensus-sidebar {
             width: 280px; background: var(--panel);
             border-left: 1px solid var(--panel-border);
             display: flex; flex-direction: column;
+            flex-shrink: 0;
         }
-        #consensus-participants {
-            flex: 1; overflow-y: auto; padding: 10px;
-        }
-        .participant-row {
-            display: flex; align-items: center; gap: 10px;
-            padding: 8px; border-radius: 8px;
-            margin-bottom: 5px; cursor: pointer;
-        }
-        .participant-row:hover { background: #374151; }
-        .participant-row.active { background: var(--accent); color: white; }
-        .participant-row input { width: 20px; height: 20px; }
+        #cm-desktop-view { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+        #cm-mobile-view { display: none; }
 
-        /* RESPONSIVE SWITCHING */
+        /* RESPONSIVE & MOBILE CONSENSUS */
         @media (min-width: 769px) {
             #mobile-dock { display: none !important; }
             #desktop-toolbar { display: flex !important; }
@@ -398,6 +401,43 @@
             #desktop-toolbar { display: none !important; }
             #mobile-dock { display: flex !important; }
             #sidebar { position: fixed; width: 85%; max-width: 320px; }
+
+            /* Consensus Mobile Styles */
+            #consensus-overlay {
+                flex-direction: column;
+            }
+            #consensus-sidebar {
+                width: 100%;
+                height: auto;
+                border-left: none;
+                border-top: 1px solid var(--panel-border);
+            }
+            #consensus-sidebar .drawer {
+                bottom: 75px; /* Position above mobile toolbar */
+            }
+            #cm-desktop-view { display: none; }
+            #cm-mobile-view { display: block; }
+            #cm-mobile-toolbar {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                gap: 6px;
+                padding: 8px;
+                width: 100%;
+            }
+            .cm-dock-btn {
+                width: 44px; height: 44px; border-radius: 16px; border: none;
+                background: #374151; color: #e2e8f0; font-size: 1.6rem;
+                display: flex; align-items: center; justify-content: center;
+                cursor: pointer; transition: 0.2s; flex-shrink: 0;
+            }
+            .cm-dock-btn.active {
+                background: var(--accent); color: white;
+            }
+            .cm-sep { width:1px; height:24px; background:#4b5563; margin: 0 4px; }
+            #consensus-participants {
+              flex: none; /* Override desktop flex grow */
+            }
         }
     </style>
 </head>
@@ -666,33 +706,74 @@
     </div>
 </div>
 
-<!-- NEW: CONSENSUS MODELING OVERLAY -->
+<!-- CONSENSUS MODELING OVERLAY -->
 <div id="consensus-overlay">
     <div id="consensus-main">
-        <svg id="consensus-ink-layer" style="position:absolute; inset:0; pointer-events:none;"></svg>
+        <div id="consensus-world">
+            <div id="consensus-items-layer"></div>
+            <svg id="consensus-ink-layer"></svg>
+        </div>
     </div>
     <div id="consensus-sidebar">
+        <!-- Common Header -->
         <div style="padding:15px; border-bottom:1px solid var(--panel-border); text-align:center;">
             <h3 style="margin:0; color:var(--accent);">Modeling Mode</h3>
             <div id="consensus-zone-name" style="font-size:0.9rem; color:#9ca3af;"></div>
         </div>
-        <div style="padding:10px; border-bottom:1px solid var(--panel-border);">
-            <div style="font-weight:bold; margin-bottom:10px;">Drawing Tools</div>
-            <div class="tool-row">
-                <div class="color-btn" style="background:#ef4444" onclick="Consensus.setDrawTool('draw', '#ef4444')"></div>
-                <div class="color-btn" style="background:#3b82f6" onclick="Consensus.setDrawTool('draw', '#3b82f6')"></div>
-                <div class="color-btn" style="background:#10b981" onclick="Consensus.setDrawTool('draw', '#10b981')"></div>
-                <div class="color-btn" style="background:#ffffff; border-color:#6b7280" onclick="Consensus.setDrawTool('draw', '#ffffff')"></div>
+
+        <!-- Desktop View -->
+        <div id="cm-desktop-view">
+            <div style="padding:10px; border-bottom:1px solid var(--panel-border);">
+                <div style="font-weight:bold; margin-bottom:10px;">Interaction Tools</div>
+                <div class="tool-row">
+                    <button class="sub-btn active" id="cm-btn-pan" onclick="Consensus.setTool('pan')">✋ Pan</button>
+                    <button class="sub-btn" id="cm-btn-select" onclick="Consensus.setTool('select')">⛝ Select</button>
+                </div>
+                <div style="font-weight:bold; margin-bottom:10px; margin-top:10px">Drawing Tools</div>
+                <div class="tool-row">
+                    <div class="color-btn" style="background:#ef4444" onclick="Consensus.setTool('draw', '#ef4444')"></div>
+                    <div class="color-btn" style="background:#3b82f6" onclick="Consensus.setTool('draw', '#3b82f6')"></div>
+                    <div class="color-btn" style="background:#10b981" onclick="Consensus.setTool('draw', '#10b981')"></div>
+                    <div class="color-btn" style="background:#ffffff; border-color:#6b7280" onclick="Consensus.setTool('draw', '#ffffff')"></div>
+                </div>
+                 <div class="tool-row">
+                    <button class="sub-btn" id="cm-btn-eraser" onclick="Consensus.setTool('eraser')">🧹 Eraser</button>
+                    <button class="sub-btn" onclick="Consensus.clearInk()">🗑️ Clear</button>
+                </div>
             </div>
-             <div class="tool-row">
-                <button class="sub-btn" onclick="Consensus.setDrawTool('eraser')">🧹 Eraser</button>
-                <button class="sub-btn" onclick="Consensus.clearInk()">🗑️ Clear</button>
+            <div style="padding:10px; font-weight:bold;">Participants</div>
+            <div id="consensus-participants" style="flex: 1; overflow-y: auto;"></div>
+            <div style="padding:15px; border-top:1px solid var(--panel-border); margin-top:auto;">
+                <button class="btn-s" style="background:#7f1d1d; color:#fecaca" onclick="Consensus.stop()">Stop Modeling Session</button>
             </div>
         </div>
-        <div style="padding:10px; font-weight:bold;">Participants</div>
-        <div id="consensus-participants"></div>
-        <div style="padding:15px; border-top:1px solid var(--panel-border);">
-            <button class="btn-s" style="background:#7f1d1d; color:#fecaca" onclick="Consensus.stop()">Stop Modeling Session</button>
+
+        <!-- Mobile View (Toolbar and Drawers) -->
+        <div id="cm-mobile-view">
+            <div id="cm-mobile-toolbar">
+                <button class="cm-dock-btn active" id="cm-mt-pan" onclick="Consensus.setTool('pan')">✋</button>
+                <button class="cm-dock-btn" id="cm-mt-select" onclick="Consensus.setTool('select')">⛝</button>
+                <button class="cm-dock-btn" id="cm-mt-draw" onclick="Consensus.toggleMobileDrawer('draw')">✏️</button>
+                <div class="cm-sep"></div>
+                <button class="cm-dock-btn" onclick="Consensus.toggleMobileDrawer('users')">👥</button>
+                <button class="cm-dock-btn" style="color:#fecaca;" onclick="Consensus.stop()">🛑</button>
+            </div>
+            <div id="cm-drawer-draw" class="drawer">
+                 <div class="tool-row">
+                    <div class="color-btn" style="background:#ef4444" onclick="Consensus.setTool('draw', '#ef4444')"></div>
+                    <div class="color-btn" style="background:#3b82f6" onclick="Consensus.setTool('draw', '#3b82f6')"></div>
+                    <div class="color-btn" style="background:#10b981" onclick="Consensus.setTool('draw', '#10b981')"></div>
+                    <div class="color-btn" style="background:#ffffff; border-color:#6b7280" onclick="Consensus.setTool('draw', '#ffffff')"></div>
+                </div>
+                 <div class="tool-row">
+                    <button class="sub-btn" id="cm-mt-eraser" onclick="Consensus.setTool('eraser')">🧹 Eraser</button>
+                    <button class="sub-btn" onclick="Consensus.clearInk()">🗑️ Clear</button>
+                </div>
+            </div>
+            <div id="cm-drawer-users" class="drawer" style="padding:10px; max-height: 250px; overflow-y: auto;">
+                 <div style="width:100%; text-align:center; color:#9ca3af; font-size:0.8rem; margin-bottom:8px; font-weight:bold">PARTICIPANTS</div>
+                 <div id="cm-mobile-participants"></div>
+            </div>
         </div>
     </div>
 </div>
@@ -736,8 +817,10 @@ window.State = {
         active: false,
         zoneId: null,
         ink: [],
+        items: [],
+        view: { x: 0, y: 0, z: 1 },
         participants: [], // Array of student peer IDs with drawing permission
-        tool: 'draw',
+        tool: 'pan',
         color: '#ef4444',
         width: 4
     },
@@ -747,6 +830,139 @@ window.State = {
     draw: { color: '#ef4444', width: 4 },
     isCoHost: false
 };
+
+/* --- STATE MANAGER with EVENTS --- */
+window.StateManager = {
+    _notify: (action, payload) => {
+        const event = new CustomEvent('statechange', { detail: { action, payload } });
+        window.dispatchEvent(event);
+    },
+    
+    // Full State
+    setFullState: (newState, options = { silent: false }) => {
+        State.items = newState.items || [];
+        State.ink = newState.ink || [];
+        if (newState.activity) State.activity = newState.activity;
+        if (newState.view) State.view = newState.view;
+        if (!options.silent) StateManager._notify('state:fullsync', newState);
+    },
+
+    // Items
+    addItem: (item, options = { silent: false }) => {
+        State.items.push(item);
+        if (!options.silent) StateManager._notify('items:add', { items: [item] });
+    },
+    addItems: (items, options = { silent: false }) => {
+        State.items.push(...items);
+        if (!options.silent) StateManager._notify('items:add', { items });
+    },
+    updateItem: (id, props, options = { silent: false }) => {
+        const item = State.items.find(i => i.id === id);
+        if (item) {
+            Object.assign(item, props);
+            if (!options.silent) StateManager._notify('items:update', { items: [{ id, ...props }] });
+        }
+    },
+    updateItems: (updates, options = { silent: false }) => { // updates = [{id, props}, ...]
+        const updatedItems = [];
+        updates.forEach(u => {
+            const item = State.items.find(i => i.id === u.id);
+            if (item) {
+                Object.assign(item, u.props);
+                updatedItems.push({id: u.id, ...u.props});
+            }
+        });
+        if (!options.silent && updatedItems.length > 0) StateManager._notify('items:update', { items: updatedItems });
+    },
+    deleteItems: (ids, options = { silent: false }) => {
+        State.items = State.items.filter(i => !ids.includes(i.id));
+        State.selection = State.selection.filter(id => !ids.includes(id));
+        if (!options.silent) StateManager._notify('items:delete', { ids });
+    },
+
+    // Selection
+    setSelection: (ids, options = { silent: false }) => {
+        State.selection = ids;
+        if (!options.silent) StateManager._notify('selection:set', { ids });
+    },
+
+    // Ink
+    addInk: (inkStroke, options = { silent: false }) => {
+        State.ink.push(inkStroke);
+        if (!options.silent) StateManager._notify('ink:add', { ink: inkStroke });
+    },
+    setInk: (inkArray, options = { silent: false }) => {
+        State.ink = inkArray;
+        if (!options.silent) StateManager._notify('ink:set', { ink: inkArray });
+    },
+    
+    // View
+    updateView: (props, options = { silent: false }) => {
+        Object.assign(State.view, props);
+        if (!options.silent) StateManager._notify('view:update', { view: State.view });
+    },
+    
+    // Activity
+    setActivity: (activity, options = { silent: false }) => {
+        State.activity = activity;
+        if (!options.silent) StateManager._notify('activity:set', { activity });
+    }
+};
+
+window.addEventListener('statechange', (e) => {
+    const { action, payload } = e.detail;
+
+    const dataChangingActions = [
+        'items:add', 'items:update', 'items:delete', 
+        'ink:add', 'ink:set', 'state:fullsync'
+    ];
+
+    if (dataChangingActions.includes(action)) {
+        ActionHistory.push();
+        Board.save(true);
+    }
+
+    // Handle rendering
+    if (action.startsWith('items:') || action.startsWith('selection:') || action === 'state:fullsync') {
+        Render.all();
+    } else if (action.startsWith('ink:')) {
+        Render.ink();
+    } else if (action.startsWith('view:')) {
+        Render.sync();
+    } else if (action === 'activity:set') {
+        Render.all();
+        UI.updateOpenNotesButton(payload.activity.type === 'OPEN');
+    }
+
+    // Handle networking
+    if (!State.isCoHost && Network.peer) {
+        switch(action) {
+            case 'items:add':
+                payload.items.forEach(item => Network.broadcast({ type: 'ADD_ITEM', item }));
+                break;
+            case 'items:update':
+                 if (payload.items.length === 1) {
+                     const item = State.items.find(i => i.id === payload.items[0].id);
+                     if(item) Network.broadcast({ type: 'NOTE_UPDATE', note: item });
+                 } else {
+                     const fullItems = payload.items.map(p => State.items.find(i => i.id === p.id)).filter(Boolean);
+                     if(fullItems.length > 0) Network.broadcast({ type: 'BATCH_UPDATE', items: fullItems });
+                 }
+                break;
+            case 'items:delete':
+                payload.ids.forEach(id => Network.broadcast({ type: 'DELETE_NOTE', id }));
+                break;
+            case 'ink:add':
+                Network.broadcast({ type: 'INK_ADD', ink: payload.ink });
+                break;
+            case 'ink:set':
+            case 'state:fullsync':
+                Network.broadcast({ type: 'FULL_SYNC', items: State.items, ink: State.ink });
+                break;
+        }
+    }
+});
+
 
 window.ActionHistory = {
     stack: [], index: -1,
@@ -761,20 +977,16 @@ window.ActionHistory = {
         if(ActionHistory.index > 0) {
             ActionHistory.index--;
             const s = JSON.parse(ActionHistory.stack[ActionHistory.index]);
-            State.items = s.items; State.ink = s.ink;
-            Render.all(); Board.save(true);
+            StateManager.setFullState(s);
             UI.toast("Undo");
-            if(State.isCoHost || Network.peer) Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink});
         }
     },
     redo: () => {
         if (ActionHistory.index < ActionHistory.stack.length - 1) {
             ActionHistory.index++;
             const s = JSON.parse(ActionHistory.stack[ActionHistory.index]);
-            State.items = s.items; State.ink = s.ink;
-            Render.all(); Board.save(true);
+            StateManager.setFullState(s);
             UI.toast("Redo");
-            if (State.isCoHost || Network.peer) Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink});
         }
     }
 };
@@ -833,9 +1045,7 @@ window.AutoScroll = {
         if (!AutoScroll.active) return;
         
         if (AutoScroll.vx !== 0 || AutoScroll.vy !== 0) {
-            State.view.x += AutoScroll.vx;
-            State.view.y += AutoScroll.vy;
-            Render.sync();
+            StateManager.updateView({ x: State.view.x + AutoScroll.vx, y: State.view.y + AutoScroll.vy });
             
             if (State.drag && State.drag.mode === 'move' && AutoScroll.lastEvt) {
                 Modes.Move.move(AutoScroll.lastEvt);
@@ -868,6 +1078,7 @@ window.HierarchyManager = {
             zone.children.push(childId);
         }
         child.parentZone = zoneId;
+        StateManager.updateItems([{id: child.id, props: {parentZone: zoneId}}, {id: zone.id, props: {children: zone.children}}]);
     },
 
     unlink: (childId) => {
@@ -875,10 +1086,15 @@ window.HierarchyManager = {
         if (!child || !child.parentZone) return;
 
         const zone = State.items.find(i => i.id === child.parentZone);
+        const oldParentZone = child.parentZone;
+        delete child.parentZone;
+
         if (zone && zone.children) {
             zone.children = zone.children.filter(id => id !== childId);
+            StateManager.updateItems([{id: childId, props: {parentZone: undefined}}, {id: zone.id, props: {children: zone.children}}]);
+        } else {
+            StateManager.updateItem(childId, {parentZone: undefined});
         }
-        delete child.parentZone;
     },
 
     getDescendants: (itemId) => {
@@ -916,14 +1132,9 @@ window.HierarchyManager = {
             if (item.parentZone) {
                 HierarchyManager.unlink(id);
             }
-            Network.broadcast({type:'DELETE_NOTE', id: id});
         });
 
-        State.items = State.items.filter(i => !finalIds.includes(i.id));
-        State.selection = State.selection.filter(id => !finalIds.includes(id));
-        Render.all();
-        ActionHistory.push();
-        Board.save(true);
+        StateManager.deleteItems(finalIds);
     }
 };
 
@@ -955,8 +1166,6 @@ window.LayoutSystem = {
         if (zone.zoneType === 'cer') {
             contentHeight = LayoutSystem.layoutColumns(zone, items, 3);
         } else if (zone.zoneType === 'consensus') {
-            // Consensus layout is now free-form, height is managed manually or by content.
-            // We just need to calculate the bounding box of its children.
             let maxY = 0;
             items.forEach(item => {
                 const bottom = (item.y - zone.y) + item.h;
@@ -970,10 +1179,8 @@ window.LayoutSystem = {
         const minH = 300; 
         const newH = Math.max(minH, contentHeight + 40);
         
-        if(Math.abs(zone.h - newH) > 2) {
-            zone.h = newH;
-            const el = document.getElementById(zoneId);
-            if(el) el.style.height = newH + 'px';
+        if (newH > zone.h) {
+            StateManager.updateItem(zone.id, { h: newH });
         }
     },
 
@@ -982,6 +1189,7 @@ window.LayoutSystem = {
         let x = LayoutSystem.padding;
         let y = LayoutSystem.headerH + (zone.zoneType === 'exit' ? 40 : 0);
         let currentRowH = 0;
+        const updates = [];
 
         items.forEach(item => {
             if (x + item.w > effectiveW + LayoutSystem.padding && x > LayoutSystem.padding) {
@@ -990,10 +1198,18 @@ window.LayoutSystem = {
                 currentRowH = 0;
             }
 
+            const newPos = { x: zone.x + x, y: zone.y + y };
             LayoutSystem.apply(zone, item, x, y);
+            if (!item._isVirtual) {
+                updates.push({ id: item.id, props: newPos });
+            }
             x += item.w + LayoutSystem.gap;
             if (item.h > currentRowH) currentRowH = item.h;
         });
+        
+        if (updates.length > 0) {
+            StateManager.updateItems(updates, { silent: true });
+        }
 
         return y + currentRowH + LayoutSystem.padding;
     },
@@ -1001,6 +1217,7 @@ window.LayoutSystem = {
     layoutColumns: (zone, items, colCount) => {
         const colW = (zone.w - (LayoutSystem.padding * 2)) / colCount;
         const colY = new Array(colCount).fill(LayoutSystem.headerH + 10);
+        const updates = [];
 
         items.forEach(item => {
             let colIdx = 0;
@@ -1023,10 +1240,18 @@ window.LayoutSystem = {
             const tx = LayoutSystem.padding + (colIdx * colW) + (colW/2 - item.w/2);
             const ty = colY[colIdx];
 
+            const newPos = { x: zone.x + tx, y: zone.y + ty };
             LayoutSystem.apply(zone, item, tx, ty);
+            if (!item._isVirtual) {
+                updates.push({ id: item.id, props: newPos });
+            }
             
             colY[colIdx] += item.h + LayoutSystem.gap;
         });
+        
+        if (updates.length > 0) {
+            StateManager.updateItems(updates, { silent: true });
+        }
 
         return Math.max(...colY) + LayoutSystem.padding;
     },
@@ -1049,23 +1274,25 @@ window.LayoutSystem = {
     },
 
     getIndex: (zone, x, y, excludeId = null) => {
-        if(!zone.children) return 0;
-        
-        const items = zone.children
-            .filter(id => id !== excludeId)
-            .map(id => State.items.find(i=>i.id===id))
-            .filter(i=>i);
-        
-        if (items.length === 0) return 0;
+        if (!zone.children) return 0;
 
-        for (let i = 0; i < items.length; i++) {
-            const item = items[i];
-            const itemCenterY = item.y + item.h / 2;
-            if (y < itemCenterY && x < (item.x + item.w)) {
-                return i;
+        const children = zone.children
+            .filter(id => id !== excludeId)
+            .map(id => State.items.find(i => i.id === id))
+            .filter(Boolean);
+
+        if (children.length === 0) return 0;
+
+        for (const child of children) {
+            const childCenterY = child.y + child.h / 2;
+            if (y < childCenterY - 20) {
+                return zone.children.indexOf(child.id);
+            }
+            if (y < child.y + child.h && x < child.x + child.w / 2) {
+                 return zone.children.indexOf(child.id);
             }
         }
-        return items.length;
+        return zone.children.filter(id => id !== excludeId).length;
     }
 };
 
@@ -1122,13 +1349,13 @@ window.UI = {
     },
     loadTemplate: (t) => {
         const groupId = genId(); 
-        t.items.forEach(i => {
+        const newItems = t.items.map(i => {
             const item = { ...i, id: genId(), groupId: groupId }; 
             item.x += -State.view.x + 100; item.y += -State.view.y + 100;
-            State.items.push(item);
+            return item;
         });
-        Render.all(); ActionHistory.push(); Board.save(true); $('modal-templates').style.display='none';
-        if(State.isCoHost || Network.peer) Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink});
+        StateManager.addItems(newItems);
+        $('modal-templates').style.display='none';
     },
     toggleA11y: () => {
         const v = $('a11y-view');
@@ -1275,8 +1502,8 @@ window.Board = {
         c.innerHTML = boards.map(b => `<div class="board-row" onclick="Board.load('${b.id}')"><div><b>${b.name}</b><br><span style="font-size:0.8rem; color:#64748b">${new Date(b.ts).toLocaleString()}</span></div><div>➡️</div></div>`).join('');
     },
     create: () => { 
-        State.id = genId(); State.items=[]; State.ink=[]; State.name="My Board"; 
-        State.view = { x: 0, y: 0, z: 1 };
+        State.id = genId(); State.name="My Board"; 
+        StateManager.setFullState({ items: [], ink: [], view: { x: 0, y: 0, z: 1 } });
         localStorage.setItem('lastBoard', State.id);
         ActionHistory.stack=[]; ActionHistory.index=-1; ActionHistory.push();
         Board.start(); 
@@ -1289,8 +1516,8 @@ window.Board = {
         }
         const b = (await DB.getAll('boards')).find(x => x.id === id); 
         if(b) { 
-            State.id=b.id; State.items=b.items; State.ink=b.ink||[]; State.name=b.name; 
-            State.view = b.view || { x: 0, y: 0, z: 1 };
+            State.id=b.id; State.name=b.name; 
+            StateManager.setFullState({ items: b.items, ink: b.ink || [], view: b.view || { x: 0, y: 0, z: 1 } });
             localStorage.setItem('lastBoard', State.id);
             ActionHistory.stack=[]; ActionHistory.index=-1; ActionHistory.push();
             Board.start(); 
@@ -1306,6 +1533,10 @@ window.Board = {
             const lastPeer = localStorage.getItem('dqb_host_id');
             Network.host(lastPeer);
         }
+        if (State.id) {
+            if (window._autoSaveInterval) clearInterval(window._autoSaveInterval);
+            window._autoSaveInterval = setInterval(() => Board.save(true), 30000);
+        }
     },
     setStartView: () => {
         Board.save(true);
@@ -1320,11 +1551,20 @@ window.Board = {
             if(!silent) UI.toast("❌ Save Failed!");
         }
     },
-    exit: () => { localStorage.removeItem('lastBoard'); location.reload(); },
+    exit: () => { 
+        if (window._autoSaveInterval) clearInterval(window._autoSaveInterval);
+        localStorage.removeItem('lastBoard'); 
+        location.reload(); 
+    },
     import: (input) => {
         const f = input.files[0]; if(!f) return;
         const r = new FileReader();
-        r.onload = e => { const d = JSON.parse(e.target.result); State.id=genId(); State.items=d.items||[]; State.ink=d.ink||[]; State.name=d.name||"Imported"; Board.start(); };
+        r.onload = e => { 
+            const d = JSON.parse(e.target.result); 
+            State.id=genId(); State.name=d.name||"Imported"; 
+            StateManager.setFullState({ items: d.items || [], ink: d.ink || [] });
+            Board.start(); 
+        };
         r.readAsText(f);
     },
     getFreeSpace: (x, y, w, h) => {
@@ -1373,9 +1613,7 @@ window.InkManager = {
     end: () => {
         if(InkManager.currentPath.length > 1) {
             const newInk = { id: genId(), points: [...InkManager.currentPath], color: State.draw.color, width: State.draw.width };
-            State.ink.push(newInk);
-            Render.ink(); ActionHistory.push(); Board.save(true);
-            if(State.isCoHost || Network.peer) Network.broadcast({type:'INK_ADD', ink:newInk});
+            StateManager.addInk(newInk);
         }
         InkManager.currentPath = []; InkManager.renderTemp();
     },
@@ -1390,7 +1628,7 @@ window.InkManager = {
         path.id = "temp-ink"; svg.appendChild(path);
     },
     pointsToPath: (pts) => { if(!pts || pts.length===0) return ""; let d=`M ${pts[0].x} ${pts[0].y}`; for(let i=1;i<pts.length;i++) d+=` L ${pts[i].x} ${pts[i].y}`; return d; },
-    clear: () => { if(confirm("Clear all drawings?")) { State.ink = []; Render.ink(); ActionHistory.push(); Board.save(true); Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink}); } },
+    clear: () => { if(confirm("Clear all drawings?")) { StateManager.setInk([]); } },
     eraseAt: (x, y, inkArray) => {
         const thresh = 20 / State.view.z;
         const initLen = inkArray.length;
@@ -1679,9 +1917,8 @@ window.Render = {
 
         const ta = el.querySelector('textarea');
         if(ta) ta.oninput = e => { 
-            d.text = e.target.value; 
             if(d._timeout) clearTimeout(d._timeout);
-            d._timeout = setTimeout(() => { Network.broadcast({type:'NOTE_UPDATE', note:d}); }, 500);
+            d._timeout = setTimeout(() => { StateManager.updateItem(d.id, { text: e.target.value }); }, 500);
         };
 
         return el;
@@ -1730,9 +1967,8 @@ window.Actions = {
         const pos = Board.getFreeSpace(cx, cy, it.w, it.h);
         it.x = pos.x; it.y = pos.y;
 
-        State.items.push(it); Render.all(); ActionHistory.push(); Board.save(true);
+        StateManager.addItem(it);
         UI.toggleDrawer(null);
-        if(State.isCoHost || Network.peer) Network.broadcast({type:'ADD_ITEM', item:it});
     },
     createExit: (mode) => {
         let cx = -State.view.x + window.innerWidth/2/State.view.z - 200;
@@ -1768,9 +2004,8 @@ window.Actions = {
         const pos = Board.getFreeSpace(cx, cy, it.w, it.h);
         it.x = pos.x; it.y = pos.y;
 
-        State.items.push(it); Render.all(); ActionHistory.push(); Board.save(true);
+        StateManager.addItem(it);
         UI.toggleDrawer(null);
-        if(State.isCoHost || Network.peer) Network.broadcast({type:'ADD_ITEM', item:it});
     },
     showContextMenu: (e, id) => {
         const menu = $('context-menu');
@@ -1848,10 +2083,8 @@ window.Actions = {
     setZoneColor: (id, color) => {
         const item = State.items.find(i => i.id === id);
         if (item && item.type === 'zone') {
-            item.color = item.color === color ? null : color;
-            Render.all();
-            Board.save(true);
-            Network.broadcast({ type: 'NOTE_UPDATE', note: item }); 
+            const newColor = item.color === color ? null : color;
+            StateManager.updateItem(id, { color: newColor });
             UI.closeAllMenus();
         }
     },
@@ -1893,11 +2126,7 @@ window.Actions = {
         if(items.length === 0) return;
         items.forEach(i => HierarchyManager.link(i.id, zoneId));
         LayoutSystem.update(zoneId);
-        Render.all(); UI.closeAllMenus(); ActionHistory.push(); Board.save(true);
-        if(State.isCoHost || Network.peer) {
-            const zone = State.items.find(z => z.id === zoneId);
-            if(zone) Network.broadcast({type:'ZONE_REORDER', zoneId:zoneId, children:zone.children});
-        }
+        UI.closeAllMenus();
     },
     posMenu: (menu, e) => {
         const rect = e.target.getBoundingClientRect();
@@ -1923,48 +2152,37 @@ window.Actions = {
             children: sel.map(i => i.id)
         };
         
-        sel.forEach(i => i.parentZone = z.id);
-        State.items.push(z);
-        
+        StateManager.addItem(z);
         sel.forEach(i => HierarchyManager.link(i.id, z.id));
         LayoutSystem.update(z.id);
         
-        Actions.sel(z.id); UI.closeAllMenus(); Render.all(); ActionHistory.push(); Board.save(true);
-        if(State.isCoHost || Network.peer) {
-            Network.broadcast({type:'ADD_ITEM', item:z});
-            Network.broadcast({type:'ZONE_REORDER', zoneId:z.id, children:z.children});
-        }
+        Actions.sel(z.id); 
+        UI.closeAllMenus();
         setTimeout(() => { sel.forEach(i => { const el = $(i.id); if(el) el.classList.add('snap-anim'); }); }, 50);
     },
     groupSelection: () => {
         if (State.selection.length < 2) return;
         const groupId = genId();
-        State.selection.forEach(id => {
-            const item = State.items.find(i => i.id === id);
-            if (item) item.groupId = groupId;
-        });
+        const updates = State.selection.map(id => ({ id, props: { groupId } }));
+        StateManager.updateItems(updates);
         UI.closeAllMenus();
         UI.toast("Items Grouped");
-        Board.save(true);
-        Render.all();
-        Network.broadcast({type:'GROUP_ITEMS', ids: State.selection, groupId: groupId});
     },
     ungroupSelection: () => {
         const item = State.items.find(i => State.selection.includes(i.id));
         if (!item || !item.groupId) return;
         const groupId = item.groupId;
+        const updates = [];
         State.items.forEach(i => {
             if (i.groupId === groupId) {
-                i.groupId = null;
+                updates.push({ id: i.id, props: { groupId: null } });
             }
         });
+        StateManager.updateItems(updates);
         UI.closeAllMenus();
         UI.toast("Items Ungrouped");
-        Board.save(true);
-        Render.all();
-        Network.broadcast({type:'UNGROUP_ITEMS', groupId: groupId});
     },
-    setType: (id, sub) => { const i = State.items.find(x=>x.id===id); if(i && i.type==='note') { i.sub = sub; const oldEl = document.getElementById(id); if(oldEl) oldEl.remove(); Render.all(); UI.closeAllMenus(); Board.save(true); Network.broadcast({type:'NOTE_UPDATE', note:i}); } },
+    setType: (id, sub) => { StateManager.updateItem(id, { sub }); UI.closeAllMenus(); },
     delete: (id) => {
         const targets = id ? [id] : State.selection;
         if (targets.length === 0) return;
@@ -1972,7 +2190,7 @@ window.Actions = {
         UI.closeAllMenus();
     },
     sel: (id) => { 
-        State.selection=[id]; 
+        StateManager.setSelection([id]);
         const i = State.items.find(x=>x.id===id);
         if(i && i.type==='zone') {
             if(State.activeSorts[i.id] || State.activity && State.activity.targetId === i.id) {
@@ -1981,14 +2199,26 @@ window.Actions = {
                  Network.updateResults(i.id);
             }
         }
-        Render.all(); 
     },
-    spin: (id) => { const i = State.items.find(x=>x.id===id); i.ang += 720 + Math.random()*360; Render.all(); },
-    rename: (id) => { const i = State.items.find(x=>x.id===id); const n = prompt("Rename Zone:", i.title); if(n) { i.title=n; Render.sync(); Board.save(true); if(State.isCoHost || Network.peer) Network.broadcast({type:'NOTE_UPDATE', note:i}); } },
+    spin: (id) => { 
+        const i = State.items.find(x=>x.id===id);
+        StateManager.updateItem(id, { ang: (i.ang || 0) + 720 + Math.random()*360 });
+    },
+    rename: (id) => { 
+        const i = State.items.find(x=>x.id===id); 
+        const n = prompt("Rename Zone:", i.title); 
+        if(n) { StateManager.updateItem(id, { title: n }); } 
+    },
     editPoll: (id) => {
         const p = State.items.find(x=>x.id===id); if(!p) return;
         const q = prompt("Poll Question:", p.q);
-        if(q) { p.q = q; const opts = prompt("Options (comma separated):", p.opts.map(o=>o.lbl).join(',')); if(opts) { p.opts = opts.split(',').map(s => ({lbl:s.trim(), v:0})); Render.all(); Board.save(true); } }
+        if(q) { 
+            const optsStr = prompt("Options (comma separated):", p.opts.map(o=>o.lbl).join(',')); 
+            if(optsStr) { 
+                const opts = optsStr.split(',').map(s => ({lbl:s.trim(), v:0}));
+                StateManager.updateItem(id, { q, opts });
+            } 
+        }
         UI.closeAllMenus();
     },
     showComments: (id) => {
@@ -2009,12 +2239,15 @@ window.Actions = {
         Actions.showComments(id); 
         Render.all(); 
     },
-    toggleLock: (id) => { const i = State.items.find(x=>x.id===id); if(i) { i.locked = !i.locked; Render.all(); UI.closeAllMenus(); Board.save(true); } },
+    toggleLock: (id) => { 
+        const i = State.items.find(x=>x.id===id); 
+        if(i) { StateManager.updateItem(id, { locked: !i.locked }); } 
+        UI.closeAllMenus(); 
+    },
     layoutZone: (zoneId) => { LayoutSystem.update(zoneId); },
     addToZone: (zoneId, noteId) => {
         HierarchyManager.link(noteId, zoneId);
         LayoutSystem.update(zoneId); 
-        Render.all();
     },
     align: (mode) => {
         const allSelected = State.selection.map(id => State.items.find(i => i.id === id)).filter(x=>x);
@@ -2026,20 +2259,17 @@ window.Actions = {
         });
         
         if(items.length < 2) return;
-
-        if(mode === 'left') { const min = Math.min(...items.map(i=>i.x)); items.forEach(i=>i.x=min); }
-        if(mode === 'center') { const avg = items.reduce((a,b)=>a+(b.x+b.w/2),0)/items.length; items.forEach(i=>i.x=avg-i.w/2); }
-        if(mode === 'right') { const max = Math.max(...items.map(i=>i.x+i.w)); items.forEach(i=>i.x=max-i.w); }
-        if(mode === 'top') { const min = Math.min(...items.map(i=>i.y)); items.forEach(i=>i.y=min); }
-        if(mode === 'middle') { const avg = items.reduce((a,b)=>a+(b.y+b.h/2),0)/items.length; items.forEach(i=>i.y=avg-i.h/2); }
-        if(mode === 'bottom') { const max = Math.max(...items.map(i=>i.y+i.h)); items.forEach(i=>i.y=max-i.h); }
         
-        items.forEach(t => {
-            if(t.type === 'zone') LayoutSystem.update(t.id);
-        });
+        const updates = [];
 
-        Render.sync(); ActionHistory.push(); Board.save(true);
-        if(State.isCoHost || Network.peer) Network.broadcast({type:'BATCH_UPDATE', items:items});
+        if(mode === 'left') { const min = Math.min(...items.map(i=>i.x)); items.forEach(i=>updates.push({id:i.id, props:{x:min}})); }
+        if(mode === 'center') { const avg = items.reduce((a,b)=>a+(b.x+b.w/2),0)/items.length; items.forEach(i=>updates.push({id:i.id, props:{x:avg-i.w/2}})); }
+        if(mode === 'right') { const max = Math.max(...items.map(i=>i.x+i.w)); items.forEach(i=>updates.push({id:i.id, props:{x:max-i.w}})); }
+        if(mode === 'top') { const min = Math.min(...items.map(i=>i.y)); items.forEach(i=>updates.push({id:i.id, props:{y:min}})); }
+        if(mode === 'middle') { const avg = items.reduce((a,b)=>a+(b.y+b.h/2),0)/items.length; items.forEach(i=>updates.push({id:i.id, props:{y:avg-i.h/2}})); }
+        if(mode === 'bottom') { const max = Math.max(...items.map(i=>i.y+i.h)); items.forEach(i=>updates.push({id:i.id, props:{y:max-i.h}})); }
+        
+        StateManager.updateItems(updates);
     },
     distribute: (axis) => {
         const allSelected = State.selection.map(id => State.items.find(i => i.id === id)).filter(x=>x);
@@ -2051,21 +2281,16 @@ window.Actions = {
         });
 
         if(items.length < 3) return;
+        const updates = [];
 
         if(axis === 'h') {
             items.sort((a,b) => a.x - b.x); const min = items[0].x; const max = items[items.length-1].x; const span = max - min; const step = span / (items.length - 1);
-            items.forEach((item, i) => { item.x = min + (step * i); });
+            items.forEach((item, i) => { updates.push({id:item.id, props:{x: min + (step * i)}}) });
         } else {
             items.sort((a,b) => a.y - b.y); const min = items[0].y; const max = items[items.length-1].y; const span = max - min; const step = span / (items.length - 1);
-            items.forEach((item, i) => { item.y = min + (step * i); });
+            items.forEach((item, i) => { updates.push({id:item.id, props:{y: min + (step * i)}}) });
         }
-
-        items.forEach(t => {
-            if(t.type === 'zone') LayoutSystem.update(t.id);
-        });
-
-        Render.sync(); ActionHistory.push(); Board.save(true);
-        if(State.isCoHost || Network.peer) Network.broadcast({type:'BATCH_UPDATE', items:items});
+        StateManager.updateItems(updates);
     },
     matchSize: () => {
         const allSelected = State.selection.map(id => State.items.find(i => i.id === id)).filter(x=>x);
@@ -2077,14 +2302,8 @@ window.Actions = {
         });
 
         const maxW = Math.max(...items.map(i=>i.w)); const maxH = Math.max(...items.map(i=>i.h));
-        items.forEach(i => { i.w = maxW; i.h = maxH; });
-        
-        items.forEach(t => {
-            if(t.type === 'zone') LayoutSystem.update(t.id);
-        });
-
-        Render.sync(); ActionHistory.push(); Board.save(true);
-        if(State.isCoHost || Network.peer) Network.broadcast({type:'BATCH_UPDATE', items:items});
+        const updates = items.map(i => ({ id: i.id, props: { w: maxW, h: maxH } }));
+        StateManager.updateItems(updates);
     },
     arrangeGrid: () => {
         let items = State.selection.length > 0 
@@ -2098,65 +2317,75 @@ window.Actions = {
         const cols = Math.ceil(Math.sqrt(items.length)); const startX = Math.min(...items.map(i=>i.x)); const startY = Math.min(...items.map(i=>i.y)); const pad = 20;
         items.sort((a,b) => (a.y - b.y) || (a.x - b.x));
         let cx = startX, cy = startY; let rowH = 0;
+        const updates = [];
         items.forEach((item, i) => {
             if(i > 0 && i % cols === 0) { cx = startX; cy += rowH + pad; rowH = 0; }
-            item.x = cx; item.y = cy; cx += item.w + pad; if(item.h > rowH) rowH = item.h;
+            updates.push({id:item.id, props:{x:cx, y:cy}});
+            cx += item.w + pad; if(item.h > rowH) rowH = item.h;
         });
-
-        items.forEach(t => {
-            if(t.type === 'zone') LayoutSystem.update(t.id);
-        });
-
-        Render.sync(); ActionHistory.push(); Board.save(true);
-        if(State.isCoHost || Network.peer) Network.broadcast({type:'BATCH_UPDATE', items:items});
+        StateManager.updateItems(updates);
     },
     collectByType: () => {
         const types = ['notice', 'wonder', 'idea', 'test', 'meta', 'sketch'];
         let startX = -State.view.x + 100; let startY = -State.view.y + 100;
+        const updates = [];
         types.forEach(t => {
             const items = State.items.filter(i => i.type === 'note' && (i.sub || 'meta') === t);
             if(items.length === 0) return;
             const cols = Math.ceil(Math.sqrt(items.length)); let cx = startX, cy = startY; let rowH = 0, maxGroupW = 0;
             items.forEach((item, i) => {
                 if(i > 0 && i % cols === 0) { cx = startX; cy += rowH + 20; rowH = 0; }
-                item.x = cx; item.y = cy; cx += item.w + 20; if(item.h > rowH) rowH = item.h; if(cx - startX > maxGroupW) maxGroupW = cx - startX;
+                updates.push({id:item.id, props:{x:cx, y:cy}});
+                cx += item.w + 20; if(item.h > rowH) rowH = item.h; if(cx - startX > maxGroupW) maxGroupW = cx - startX;
             });
             startX += maxGroupW + 100;
         });
-        Render.sync(); ActionHistory.push(); Board.save(true);
-        if(State.isCoHost || Network.peer) Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink});
+        StateManager.updateItems(updates);
     },
     collectByUser: () => {
         const users = [...new Set(State.items.filter(i=>i.author).map(i=>i.author))];
         let startX = -State.view.x + 100; let startY = -State.view.y + 100;
+        const updates = [];
         users.forEach(u => {
             const items = State.items.filter(i => i.author === u);
             if(items.length === 0) return;
             const cols = Math.ceil(Math.sqrt(items.length)); let cx = startX, cy = startY; let rowH = 0, maxGroupW = 0;
             items.forEach((item, i) => {
                 if(i > 0 && i % cols === 0) { cx = startX; cy += rowH + 20; rowH = 0; }
-                item.x = cx; item.y = cy; cx += item.w + 20; if(item.h > rowH) rowH = item.h; if(cx - startX > maxGroupW) maxGroupW = cx - startX;
+                updates.push({id:item.id, props:{x:cx, y:cy}});
+                cx += item.w + 20; if(item.h > rowH) rowH = item.h; if(cx - startX > maxGroupW) maxGroupW = cx - startX;
             });
             startX += maxGroupW + 100;
         });
-        Render.sync(); ActionHistory.push(); Board.save(true);
-        if(State.isCoHost || Network.peer) Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink});
+        StateManager.updateItems(updates);
     },
-    bringFront: () => { State.selection.forEach(id => { const i = State.items.find(x=>x.id===id); if(i) i.z = (i.z || 10) + 1; }); Render.all(); Board.save(true); },
-    sendBack: () => { State.selection.forEach(id => { const i = State.items.find(x=>x.id===id); if(i) i.z = Math.max(1, (i.z || 10) - 1); }); Render.all(); Board.save(true); },
+    bringFront: () => { 
+        const updates = State.selection.map(id => {
+            const i = State.items.find(x=>x.id===id);
+            return i ? { id, props: { z: (i.z || 10) + 1 } } : null;
+        }).filter(Boolean);
+        StateManager.updateItems(updates);
+    },
+    sendBack: () => { 
+        const updates = State.selection.map(id => {
+            const i = State.items.find(x=>x.id===id);
+            return i ? { id, props: { z: Math.max(1, (i.z || 10) - 1) } } : null;
+        }).filter(Boolean);
+        StateManager.updateItems(updates);
+    },
     duplicate: () => {
-        const newIds = [];
         const newItems = [];
         State.selection.forEach(id => {
             const original = State.items.find(x=>x.id===id);
             if(original) {
                 const copy = JSON.parse(JSON.stringify(original)); copy.id = genId();
                 const pos = Board.getFreeSpace(copy.x + 20, copy.y + 20, copy.w, copy.h);
-                copy.x = pos.x; copy.y = pos.y; State.items.push(copy); newIds.push(copy.id); newItems.push(copy);
+                copy.x = pos.x; copy.y = pos.y; 
+                newItems.push(copy);
             }
         });
-        State.selection = newIds; Render.all(); ActionHistory.push(); Board.save(true);
-        if(State.isCoHost || Network.peer) newItems.forEach(i => Network.broadcast({type:'ADD_ITEM', item:i}));
+        StateManager.addItems(newItems);
+        StateManager.setSelection(newItems.map(i => i.id));
     }
 };
 
@@ -2164,7 +2393,7 @@ window.Actions = {
 window.Modes = {
     Pan: {
         down: (e) => { State.drag = { mode:'pan', sx:e.clientX, sy:e.clientY, vx:State.view.x, vy:State.view.y }; $('viewport').classList.add('panning'); UI.closeAllMenus(); },
-        move: (e) => { State.view.x = State.drag.vx + (e.clientX - State.drag.sx)/State.view.z; State.view.y = State.drag.vy + (e.clientY - State.drag.sy)/State.view.z; },
+        move: (e) => { StateManager.updateView({ x: State.drag.vx + (e.clientX - State.drag.sx)/State.view.z, y: State.drag.vy + (e.clientY - State.drag.sy)/State.view.z }); },
         up: () => { $('viewport').classList.remove('panning'); }
     },
     Move: {
@@ -2301,15 +2530,26 @@ window.Modes = {
             });
 
             const updatedItems = d.moveTargets.map(t => State.items.find(i => i.id === t.id)).filter(Boolean);
+            const primaryItem = updatedItems.find(i => i.id === d.primaryId);
+
+            if (primaryItem && primaryItem.type !== 'zone' && !d.hoverZoneId) {
+                const cx = primaryItem.x + primaryItem.w / 2;
+                const cy = primaryItem.y + primaryItem.h / 2;
+                const finalHitZone = State.items.find(z => z.type === 'zone' && z.id !== primaryItem.id && cx > z.x && cx < z.x + z.w && cy > z.y && cy < z.y + z.h);
+                if (finalHitZone) {
+                    d.hoverZoneId = finalHitZone.id;
+                    d.targetIndex = LayoutSystem.getIndex(finalHitZone, cx, cy, primaryItem.id);
+                }
+            }
 
             if (d.hoverZoneId) {
                 const zone = State.items.find(i => i.id === d.hoverZoneId);
                 if (zone) {
                     const itemsToLink = updatedItems.filter(i => i && i.type !== 'zone');
-                    const primaryItem = itemsToLink.find(i => i.id === d.primaryId);
+                    const primaryItemToLink = itemsToLink.find(i => i.id === d.primaryId);
                     
-                    if (primaryItem) {
-                        HierarchyManager.link(primaryItem.id, d.hoverZoneId, d.targetIndex);
+                    if (primaryItemToLink) {
+                        HierarchyManager.link(primaryItemToLink.id, d.hoverZoneId, d.targetIndex);
                         itemsToLink.forEach(item => {
                             if (item.id !== d.primaryId) HierarchyManager.link(item.id, d.hoverZoneId);
                         });
@@ -2331,16 +2571,11 @@ window.Modes = {
                     }
                 });
             }
+            
+            const updates = updatedItems.map(i => ({ id: i.id, props: { x: i.x, y: i.y } }));
+            StateManager.updateItems(updates);
 
             State.drag = null;
-            ActionHistory.push();
-            Board.save(true);
-            
-            Network.broadcast({type:'BATCH_UPDATE', items: updatedItems});
-            if (d.hoverZoneId) {
-                const z = State.items.find(x => x.id === d.hoverZoneId);
-                if (z) Network.broadcast({type:'ZONE_REORDER', zoneId: z.id, children: z.children});
-            }
         }
     },
     Resize: {
@@ -2358,35 +2593,30 @@ window.Modes = {
             const d = State.drag;
             const i = State.items.find(x=>x.id===d.id);
             
-            i.w = Math.max(150, d.ow + (x - d.sx)); 
-            i.h = Math.max(150, d.oh + (y - d.sy));
+            const newW = Math.max(150, d.ow + (x - d.sx)); 
+            const newH = Math.max(150, d.oh + (y - d.sy));
             
-            if(i.type === 'zone') {
-                LayoutSystem.update(i.id);
-            } else if (i.parentZone) {
+            StateManager.updateItem(i.id, { w: newW, h: newH }, { silent: true });
+            
+            if (i.parentZone) {
                 LayoutSystem.update(i.parentZone);
             }
-            
-            const el = document.getElementById(i.id);
-            if(el) { el.style.width = i.w + 'px'; el.style.height = i.h + 'px'; }
         },
         up: (e) => { 
             const i = State.items.find(x=>x.id===State.drag.id);
+            StateManager.updateItem(i.id, { w: i.w, h: i.h });
+            
             if(i && i.parentZone) {
                 LayoutSystem.update(i.parentZone);
             }
-            
-            if(State.isCoHost || Network.peer) {
-                Network.broadcast({type:'UPDATE_POS', id:i.id, x:i.x, y:i.y, w:i.w, h:i.h});
-            }
-            State.drag = null; ActionHistory.push(); Board.save(true); 
+            State.drag = null;
         }
     },
     Marquee: {
         down: (e) => {
             const r = $('viewport').getBoundingClientRect();
             State.drag = { mode:'box', sx: e.clientX - r.left, sy: e.clientY - r.top };
-            if(!e.shiftKey) { State.selection=[]; UI.closeAllMenus(); Render.all(); }
+            if(!e.shiftKey) { StateManager.setSelection([]); UI.closeAllMenus(); }
         },
         move: (e) => {
             const r = $('viewport').getBoundingClientRect();
@@ -2405,8 +2635,7 @@ window.Modes = {
                     newlySelected.push(i.id);
                 }
             });
-            State.selection = [...new Set([...(e.shiftKey ? State.selection : []), ...newlySelected])];
-            Render.all(); 
+            StateManager.setSelection([...new Set([...(e.shiftKey ? State.selection : []), ...newlySelected])]);
         },
         up: (e) => { $('marquee').style.display='none'; State.drag = null; }
     },
@@ -2433,11 +2662,7 @@ window.Modes = {
             const y = (e.clientY - r.top)/State.view.z - State.view.y;
             const { changed, newInk } = InkManager.eraseAt(x, y, State.ink);
             if (changed) {
-                State.ink = newInk;
-                Render.ink(); 
-                ActionHistory.push(); 
-                Board.save(true); 
-                Network.broadcast({type:'FULL_SYNC', items:State.items, ink:State.ink});
+                StateManager.setInk(newInk);
             }
         },
         up: () => { State.drag = null; }
@@ -2451,7 +2676,7 @@ window.Modes = {
             dot.style.cssText = `position:absolute;left:${x}px;top:${y}px;width:10px;height:10px;background:red;border-radius:50%;pointer-events:none;z-index:9999;opacity:0.8;box-shadow:0 0 5px red`;
             $('viewport').appendChild(dot);
             setTimeout(() => dot.remove(), 500);
-            if(State.isCoHost || Network.peer) Network.broadcast({type:'LASER', x:x, y:y});
+            if(Network.peer) Network.broadcast({type:'LASER', x:x, y:y});
         },
         up: () => { State.drag = null; }
     }
@@ -2486,9 +2711,7 @@ window.InputController = {
             if(info && info.scale > 0) {
                 const wx = (mx / info.scale) + info.minX;
                 const wy = (my / info.scale) + info.minY;
-                State.view.x = -wx + (window.innerWidth/State.view.z)/2;
-                State.view.y = -wy + (window.innerHeight/State.view.z)/2;
-                Render.sync();
+                StateManager.updateView({ x: -wx + (window.innerWidth/State.view.z)/2, y: -wy + (window.innerHeight/State.view.z)/2 });
             }
             return;
         }
@@ -2504,8 +2727,11 @@ window.InputController = {
         if(State.tool === 'pan' || State.tool === 'select') {
             if(handle) { Modes.Resize.down(evt, itemEl.id); return; }
             if(itemEl) {
-                 if(!e.shiftKey) { if(!State.selection.includes(itemEl.id)) { State.selection = [itemEl.id]; Render.all(); } } 
-                 else { if(!State.selection.includes(itemEl.id)) State.selection.push(itemEl.id); else State.selection = State.selection.filter(id => id !== itemEl.id); Render.all(); }
+                 if(!e.shiftKey) { if(!State.selection.includes(itemEl.id)) { StateManager.setSelection([itemEl.id]); } } 
+                 else { 
+                     const newSel = State.selection.includes(itemEl.id) ? State.selection.filter(id => id !== itemEl.id) : [...State.selection, itemEl.id];
+                     StateManager.setSelection(newSel);
+                 }
                  if(e.target.closest('.i-body') && itemEl.classList.contains('note')) return;
                  Modes.Move.down(evt, itemEl.id); return;
             }
@@ -2551,7 +2777,7 @@ window.InputController = {
         const m = State.drag.mode;
         if(m === 'pan') {
             const dist = Math.hypot(e.clientX - State.drag.sx, e.clientY - State.drag.sy);
-            if(dist < 5) { State.selection = []; UI.closeAllMenus(); Render.all(); }
+            if(dist < 5) { StateManager.setSelection([]); UI.closeAllMenus(); }
             Modes.Pan.up();
         }
         else if(m === 'move') Modes.Move.up(e);
@@ -2566,7 +2792,7 @@ window.InputController = {
     zoom: (factor, cx, cy) => {
         const oz = State.view.z; let nz = oz * factor; nz = Math.max(0.1, Math.min(nz, 5));
         const wx = (cx / oz) - State.view.x; const wy = (cy / oz) - State.view.y;
-        State.view.x = (cx / nz) - wx; State.view.y = (cy / nz) - wy; State.view.z = nz; Render.sync();
+        StateManager.updateView({ x: (cx / nz) - wx, y: (cy / nz) - wy, z: nz });
     },
     keydown: (e) => {
         if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -2790,50 +3016,43 @@ window.Network = {
     },
 
     transitionTo: (type, targetId = null, payload = null) => {
-        State.items.forEach(i => {
-            i.isOpen = false;
-        });
+        const updates = State.items.map(i => ({ id: i.id, props: { isOpen: false } }));
+        StateManager.updateItems(updates, { silent: true });
 
         $('act-controls').style.display = 'none';
-        UI.updateOpenNotesButton(type === 'OPEN');
 
         Network.broadcast({ type: 'STOP_ACT' });
         if (type !== 'OPEN') Network.broadcast({ type: 'MODE', val: 'LOCKED' });
 
-        State.activity = { type, targetId, payload };
-        Board.save(true); 
+        StateManager.setActivity({ type, targetId, payload });
 
         if (type === 'OPEN') {
             Network.broadcast({ type: 'MODE', val: 'OPEN' });
         }
         else if (targetId) {
-            const item = State.items.find(i => i.id === targetId);
-            if(item) {
-                item.isOpen = true;
+            StateManager.updateItem(targetId, { isOpen: true });
+            
+            if (type === 'ZONE_ACT') {
+                const finalPayload = { ...payload, type: payload.subType };
+                Network.broadcast(finalPayload); 
                 
-                if (type === 'ZONE_ACT') {
-                    const finalPayload = { ...payload, type: payload.subType };
-                    Network.broadcast(finalPayload); 
-                    
-                    Tab(1); 
-                    $('act-controls').style.display='block'; 
-                    $('act-info').innerText = `Mode: ${payload.subType.replace('ACT_','')} | Items: ${payload.items.length}`;
-                    
-                    const modeLabel = payload.subType === 'ACT_DISCUSS' ? 'Discussion' : 'Results';
-                    const html = `<div style="color:#64748b">Waiting for ${modeLabel}...</div>`;
-                    const zContainer = $(`zr-${targetId}`); 
-                    if(zContainer) { 
-                        zContainer.innerHTML = `<h4 style="margin:0 0 10px 0; color:#475569">${modeLabel}</h4>` + html; 
-                        zContainer.classList.add('active'); 
-                    }
-                    $('act-results').innerHTML = html;
-                } 
-                else if (type === 'WIDGET_ACT' || type === 'EXIT_TICKET') {
-                    Network.broadcast(payload); 
+                Tab(1); 
+                $('act-controls').style.display='block'; 
+                $('act-info').innerText = `Mode: ${payload.subType.replace('ACT_','')} | Items: ${payload.items.length}`;
+                
+                const modeLabel = payload.subType === 'ACT_DISCUSS' ? 'Discussion' : 'Results';
+                const html = `<div style="color:#64748b">Waiting for ${modeLabel}...</div>`;
+                const zContainer = $(`zr-${targetId}`); 
+                if(zContainer) { 
+                    zContainer.innerHTML = `<h4 style="margin:0 0 10px 0; color:#475569">${modeLabel}</h4>` + html; 
+                    zContainer.classList.add('active'); 
                 }
+                $('act-results').innerHTML = html;
+            } 
+            else if (type === 'WIDGET_ACT' || type === 'EXIT_TICKET') {
+                Network.broadcast(payload); 
             }
         }
-        Render.all(); 
         UI.toast(`Activity: ${type}`);
     },
 
@@ -2862,7 +3081,8 @@ window.Network = {
             targets.forEach(t => { minX = Math.min(minX, t.x); minY = Math.min(minY, t.y); maxX = Math.max(maxX, t.x+t.w); maxY = Math.max(maxY, t.y+t.h); });
             zoneId = genId(); const pad = 40;
             const newZone = { id: zoneId, type: 'zone', title: 'Activity Zone', x: minX - pad, y: minY - pad - 40, w: (maxX - minX) + pad*2, h: (maxY - minY) + pad*2 + 40, children: targets.map(t => t.id) };
-            State.items.push(newZone); Actions.sel(zoneId);
+            StateManager.addItem(newZone);
+            Actions.sel(zoneId);
         } else { Actions.sel(zoneId); }
 
         State.activeSorts[zoneId] = [];
@@ -2957,7 +3177,7 @@ window.Network = {
     },
 
     handle: (pid, d, conn) => {
-        // MODULARIZATION: Refactored from if/else to switch for clarity
+        const silent = { silent: true };
         switch(d.type) {
             case 'JOIN':
                 State.students[pid] = { name:d.name, avatar:d.avatar, conn:conn }; 
@@ -2973,55 +3193,35 @@ window.Network = {
                 SafeSend(conn, {type:'FULL_SYNC', items:State.items, ink:State.ink, activity: State.activity});
                 break;
             case 'FULL_SYNC':
-                State.items = d.items; State.ink = d.ink; if (d.activity) State.activity = d.activity; 
-                Render.all(); 
-                UI.updateOpenNotesButton(State.activity.type === 'OPEN');
+                StateManager.setFullState(d, silent);
                 break;
-            case 'UPDATE_POS': {
-                const i = State.items.find(x=>x.id===d.id); 
-                if(i) { i.x=d.x; i.y=d.y; if(d.w) i.w=d.w; if(d.h) i.h=d.h; Render.sync(); } 
+            case 'NOTE_UPDATE':
+                StateManager.updateItem(d.note.id, d.note, silent);
                 break;
-            }
             case 'BATCH_UPDATE':
-                d.items.forEach(u => {
-                    const i = State.items.find(x=>x.id===u.id);
-                    if(i) { Object.assign(i, u); }
-                });
-                Render.all();
+                const updates = d.items.map(i => ({ id: i.id, props: i }));
+                StateManager.updateItems(updates, silent);
                 break;
             case 'GROUP_ITEMS':
-                d.ids.forEach(id => { const i = State.items.find(x=>x.id===id); if(i) i.groupId = d.groupId; }); 
-                Render.all();
+                StateManager.updateItems(d.ids.map(id => ({ id, props: { groupId: d.groupId } })), silent);
                 break;
             case 'UNGROUP_ITEMS':
-                State.items.forEach(i => { if(i.groupId === d.groupId) i.groupId = null; }); 
-                Render.all();
+                const itemsToUngroup = State.items.filter(i => i.groupId === d.groupId);
+                StateManager.updateItems(itemsToUngroup.map(i => ({ id: i.id, props: { groupId: null } })), silent);
                 break;
             case 'ADD_ITEM':
-                State.items.push(d.item); 
-                Render.all();
-                break;
-            case 'LINK_ITEMS':
-                d.ids.forEach(id => HierarchyManager.link(id, d.zoneId)); 
-                LayoutSystem.update(d.zoneId); 
-                Render.all();
+                StateManager.addItem(d.item, silent);
                 break;
             case 'ZONE_REORDER': {
-                const z = State.items.find(i => i.id === d.zoneId);
-                if(z) {
-                    z.children = d.children;
-                    z.children.forEach(cid => {
-                        const c = State.items.find(x => x.id === cid);
-                        if(c) c.parentZone = z.id;
-                    });
-                    LayoutSystem.update(z.id);
-                    Render.all();
-                }
+                StateManager.updateItem(d.zoneId, { children: d.children }, silent);
+                d.children.forEach(cid => {
+                    StateManager.updateItem(cid, { parentZone: d.zoneId }, silent);
+                });
+                LayoutSystem.update(d.zoneId);
                 break;
             }
             case 'INK_ADD':
-                State.ink.push(d.ink); 
-                Render.ink();
+                StateManager.addInk(d.ink, silent);
                 break;
             case 'LASER': {
                 const dot = document.createElement('div');
@@ -3046,34 +3246,42 @@ window.Network = {
                 if (d.type === 'NOTE') {
                     if(!i) {
                         i = { id:d.id, type:'note', sub:d.sub, text:d.text, author:State.students[pid]?.name, w:200, h:150, votes:0, groupId: null };
-                        State.items.push(i);
-                    } else { i.text = d.text; i.sub = d.sub; }
+                        const pos = Board.getFreeSpace(-State.view.x+100, -State.view.y+100, i.w, i.h);
+                        i.x = pos.x; i.y = pos.y;
+                        StateManager.addItem(i, silent);
+                    } else { 
+                        StateManager.updateItem(i.id, { text: d.text, sub: d.sub }, silent);
+                    }
                 } else { 
                     if (!d.src) return;
                     i = { id:d.id, type:'note', sub:'sketch', src:d.src, text:d.text, author:State.students[pid]?.name, w:200, h:200, votes:0, groupId: null };
-                    State.items.push(i);
+                    const pos = Board.getFreeSpace(-State.view.x+100, -State.view.y+100, i.w, i.h);
+                    i.x = pos.x; i.y = pos.y;
+                    StateManager.addItem(i, silent);
                 }
                 if (d.zoneId) {
                     Actions.addToZone(d.zoneId, i.id);
-                } else {
-                    const pos = Board.getFreeSpace(-State.view.x+100, -State.view.y+100, i.w, i.h);
-                    i.x = pos.x; i.y = pos.y;
                 }
-                Render.all(); Board.save(true);
-                Network.broadcast(d);
                 break;
             }
             case 'DELETE_NOTE':
-                HierarchyManager.delete(d.id);
+                StateManager.deleteItems([d.id], silent);
                 break;
             case 'POLL_VOTE': {
                 const p = State.items.find(x => x.id === d.actId); 
-                if(p && p.opts[d.idx]) { p.opts[d.idx].v++; Render.all(); confetti({particleCount: 50, spread: 60, origin: { y: 0.8 }}); } 
+                if(p && p.opts[d.idx]) { 
+                    p.opts[d.idx].v++; 
+                    StateManager.updateItem(p.id, { opts: p.opts }, silent);
+                    confetti({particleCount: 50, spread: 60, origin: { y: 0.8 }}); 
+                } 
                 break;
             }
             case 'DATA_SUBMIT': {
                 const g = State.items.find(x => x.id === d.actId); 
-                if(g) { g.data.push(d.val); Render.all(); } 
+                if(g) { 
+                    g.data.push(d.val); 
+                    StateManager.updateItem(g.id, { data: g.data }, silent);
+                } 
                 break;
             }
             case 'SUBMIT_VOTE':
@@ -3106,16 +3314,14 @@ window.Network = {
                         w: 200, h: 150, votes: 0,
                         parentZone: zone.id
                     };
-                    State.items.push(newNote);
+                    StateManager.addItem(newNote, silent);
                     if(!zone.children) zone.children = [];
                     zone.children.push(noteId);
+                    StateManager.updateItem(zone.id, { children: zone.children }, silent);
                     LayoutSystem.update(zone.id);
-                    Render.all(); Board.save(true);
-                    Network.broadcast(d);
                 }
                 break;
             }
-            // NEW: Handle incoming ink from students in consensus mode
             case 'CONSENSUS_INK':
                 if (State.consensusMode.active && State.consensusMode.participants.includes(pid)) {
                     Consensus.handleInk(d.ink);
@@ -3156,14 +3362,27 @@ window.Network = {
     },
     
     broadcast: (msg) => {
-        if(State.students['HOST']) SafeSend(State.students['HOST'].conn, msg); 
-        Object.values(State.students).forEach(s => { SafeSend(s.conn, msg); }); 
+        if(State.isCoHost && State.students['HOST']) SafeSend(State.students['HOST'].conn, msg); 
+        Object.values(State.students).forEach(s => { if(s.name !== 'Co-Host') SafeSend(s.conn, msg); }); 
     }
 };
 
-/* --- NEW: CONSENSUS MODELING MANAGER --- */
+/* --- CONSENSUS MODELING MANAGER --- */
 window.Consensus = {
+    drag: null,
     currentPath: [],
+    _animationFrame: null,
+
+    init: () => {
+        const el = $('consensus-main');
+        el.addEventListener('mousedown', Consensus.inputStart);
+        window.addEventListener('mousemove', Consensus.inputMove);
+        window.addEventListener('mouseup', Consensus.inputEnd);
+        el.addEventListener('touchstart', Consensus.inputStart, { passive: false });
+        window.addEventListener('touchmove', Consensus.inputMove, { passive: false });
+        window.addEventListener('touchend', Consensus.inputEnd);
+        el.addEventListener('wheel', Consensus.handleWheel, {passive: false});
+    },
 
     start: (zoneId) => {
         const zone = State.items.find(i => i.id === zoneId);
@@ -3171,61 +3390,100 @@ window.Consensus = {
 
         State.consensusMode.active = true;
         State.consensusMode.zoneId = zoneId;
-        State.consensusMode.ink = JSON.parse(JSON.stringify(zone.ink || [])); // Deep copy
+        State.consensusMode.ink = JSON.parse(JSON.stringify(zone.ink || []));
         State.consensusMode.participants = [];
-        
+        State.consensusMode.view = { x: 0, y: 0, z: 1 };
+        State.consensusMode.tool = 'pan';
+
+        State.consensusMode.items = (zone.children || [])
+            .map(id => State.items.find(i => i.id === id))
+            .filter(Boolean)
+            .map(item => {
+                const clone = JSON.parse(JSON.stringify(item));
+                clone.x -= zone.x;
+                clone.y -= zone.y;
+                return clone;
+            });
+
         $('consensus-zone-name').innerText = zone.title;
         $('consensus-overlay').style.display = 'flex';
-        
-        Consensus.renderParticipants();
+        Consensus.renderItems();
         Consensus.renderInk();
-
-        Network.broadcast({ type: 'CONSENSUS_START', zoneId: zoneId, ink: State.consensusMode.ink });
+        Consensus.loop();
+        Consensus.renderParticipants();
+        
+        Network.broadcast({ type: 'CONSENSUS_START', zoneId: zoneId, ink: State.consensusMode.ink, items: State.consensusMode.items });
         UI.closeAllMenus();
     },
 
     stop: () => {
+        if (!State.consensusMode.active) return;
         const zone = State.items.find(i => i.id === State.consensusMode.zoneId);
         if (zone) {
-            zone.ink = JSON.parse(JSON.stringify(State.consensusMode.ink));
-            Render.all(); // Re-render the zone item with the new ink
-            Board.save(true);
+            const updates = [];
+            State.consensusMode.items.forEach(cItem => {
+                updates.push({ id: cItem.id, props: { x: cItem.x + zone.x, y: cItem.y + zone.y } });
+            });
+            updates.push({ id: zone.id, props: { ink: JSON.parse(JSON.stringify(State.consensusMode.ink)) } });
+            
+            StateManager.updateItems(updates);
         }
 
         State.consensusMode.active = false;
-        State.consensusMode.zoneId = null;
-        State.consensusMode.ink = [];
-        
         $('consensus-overlay').style.display = 'none';
+        $('consensus-items-layer').innerHTML = '';
+        if (Consensus._animationFrame) cancelAnimationFrame(Consensus._animationFrame);
+        
         Network.broadcast({ type: 'CONSENSUS_STOP' });
     },
 
+    loop: () => {
+        if (!State.consensusMode.active) return;
+        Consensus.renderSync();
+        Consensus._animationFrame = requestAnimationFrame(Consensus.loop);
+    },
+    
+    renderSync: () => {
+        const view = State.consensusMode.view;
+        const t = `scale(${view.z}) translate(${view.x}px, ${view.y}px)`;
+        $('consensus-world').style.transform = t;
+    },
+
+    renderItems: () => {
+        const layer = $('consensus-items-layer');
+        layer.innerHTML = '';
+        State.consensusMode.items.forEach(item => {
+            const el = Render.createItem(item);
+            el.style.transform = `translate(${item.x}px, ${item.y}px)`;
+            layer.appendChild(el);
+        });
+    },
+
     renderParticipants: () => {
-        const container = $('consensus-participants');
-        container.innerHTML = Object.entries(State.students).map(([pid, student]) => {
-            if (pid === 'HOST' || student.name === 'Co-Host') return '';
-            const isChecked = State.consensusMode.participants.includes(pid);
-            return `<div class="participant-row ${isChecked ? 'active' : ''}" onclick="Consensus.toggleParticipant('${pid}')">
-                        <input type="checkbox" ${isChecked ? 'checked' : ''} style="pointer-events:none;">
-                        <span>${student.avatar}</span>
-                        <span>${sanitizeHTML(student.name)}</span>
-                    </div>`;
-        }).join('');
+        const renderList = (containerId) => {
+            const container = $(containerId);
+            if (!container) return;
+            container.innerHTML = Object.entries(State.students).map(([pid, student]) => {
+                if (pid === 'HOST' || student.name === 'Co-Host') return '';
+                const isChecked = State.consensusMode.participants.includes(pid);
+                return `<div class="participant-row ${isChecked ? 'active' : ''}" onclick="Consensus.toggleParticipant('${pid}')">
+                            <input type="checkbox" ${isChecked ? 'checked' : ''} style="pointer-events:none;">
+                            <span>${student.avatar}</span>
+                            <span>${sanitizeHTML(student.name)}</span>
+                        </div>`;
+            }).join('');
+        };
+        renderList('consensus-participants');
+        renderList('cm-mobile-participants');
     },
 
     toggleParticipant: (pid) => {
         const idx = State.consensusMode.participants.indexOf(pid);
-        if (idx > -1) {
-            State.consensusMode.participants.splice(idx, 1);
-        } else {
-            State.consensusMode.participants.push(pid);
-        }
+        if (idx > -1) State.consensusMode.participants.splice(idx, 1);
+        else State.consensusMode.participants.push(pid);
         Consensus.renderParticipants();
-        
         const student = State.students[pid];
-        if (student) {
-            SafeSend(student.conn, { type: 'CONSENSUS_PERMS', canDraw: idx === -1 });
-        }
+        if (student) SafeSend(student.conn, { type: 'CONSENSUS_PERMS', canDraw: idx === -1 });
     },
 
     renderInk: () => {
@@ -3236,13 +3494,35 @@ window.Consensus = {
     handleInk: (ink) => {
         State.consensusMode.ink.push(ink);
         Consensus.renderInk();
-        // Re-broadcast to other clients to keep everyone in sync
         Network.broadcast({ type: 'CONSENSUS_INK', ink: ink });
     },
 
-    setDrawTool: (tool, color) => {
+    setTool: (tool, color) => {
         State.consensusMode.tool = tool;
         if (color) State.consensusMode.color = color;
+        
+        const main = $('consensus-main');
+        main.className = `cm-${tool}`;
+        
+        document.querySelectorAll('#cm-desktop-view .sub-btn, #cm-desktop-view .color-btn').forEach(b => b.classList.remove('active'));
+        if (event && event.currentTarget.closest('#cm-desktop-view')) event.currentTarget.classList.add('active');
+        
+        document.querySelectorAll('#cm-mobile-toolbar .cm-dock-btn').forEach(b => b.classList.remove('active'));
+        if (tool === 'pan') $('cm-mt-pan').classList.add('active');
+        if (tool === 'select') $('cm-mt-select').classList.add('active');
+        if (tool === 'draw' || tool === 'eraser') $('cm-mt-draw').classList.add('active');
+
+        if (tool === 'pan' || tool === 'select') {
+            document.querySelectorAll('#cm-mobile-view .drawer').forEach(d => d.classList.remove('open'));
+        }
+    },
+
+    toggleMobileDrawer: (id) => {
+        document.querySelectorAll('#cm-mobile-view .drawer').forEach(d => {
+            if (d.id === `cm-drawer-${id}`) d.classList.toggle('open');
+            else d.classList.remove('open');
+        });
+        if (id === 'draw') Consensus.setTool('draw', State.consensusMode.color);
     },
 
     clearInk: () => {
@@ -3252,37 +3532,63 @@ window.Consensus = {
             Network.broadcast({ type: 'CONSENSUS_CLEAR' });
         }
     },
-
-    // Input handlers for the overlay
-    inputStart: (e) => {
+    
+    screenToWorld: (evt) => {
         const rect = $('consensus-main').getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        
-        if (State.consensusMode.tool === 'draw') {
-            Consensus.currentPath = [{x, y}];
-        }
-        State.drag = { mode: 'consensus-draw' };
+        const view = State.consensusMode.view;
+        const x = (evt.clientX - rect.left) / view.z - view.x;
+        const y = (evt.clientY - rect.top) / view.z - view.y;
+        return { x, y };
     },
-    inputMove: (e) => {
-        if (!State.drag || State.drag.mode !== 'consensus-draw') return;
-        const rect = $('consensus-main').getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
 
-        if (State.consensusMode.tool === 'draw') {
-            Consensus.currentPath.push({x, y});
-            // Render temporary path locally for responsiveness
-            const temp = document.getElementById('temp-consensus-ink'); if(temp) temp.remove();
-            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            path.setAttribute("d", InkManager.pointsToPath(Consensus.currentPath));
-            path.setAttribute("stroke", State.consensusMode.color);
-            path.setAttribute("stroke-width", State.consensusMode.width);
-            path.setAttribute("fill", "none"); path.setAttribute("stroke-linecap", "round");
-            path.id = "temp-consensus-ink";
-            $('consensus-ink-layer').appendChild(path);
-        } else if (State.consensusMode.tool === 'eraser') {
-            const { changed, newInk } = InkManager.eraseAt(x, y, State.consensusMode.ink);
+    inputStart: (e) => {
+        if (e.touches) e.preventDefault();
+        const evt = e.touches ? e.touches[0] : e;
+        if (!evt) return;
+
+        const tool = State.consensusMode.tool;
+        const coords = Consensus.screenToWorld(evt);
+        const itemEl = e.target.closest('.item');
+
+        if (tool === 'select' && itemEl) {
+            const item = State.consensusMode.items.find(i => i.id === itemEl.id);
+            if (item) {
+                Consensus.drag = { mode: 'move', item, sx: coords.x, sy: coords.y, ix: item.x, iy: item.y };
+            }
+        } else if (tool === 'draw') {
+            Consensus.drag = { mode: 'draw' };
+            Consensus.currentPath = [coords];
+        } else if (tool === 'pan' || (e.button === 1 && !e.touches)) {
+            Consensus.drag = { mode: 'pan', sx: evt.clientX, sy: evt.clientY, vx: State.consensusMode.view.x, vy: State.consensusMode.view.y };
+        } else if (tool === 'eraser') {
+            Consensus.drag = { mode: 'eraser' };
+        }
+    },
+
+    inputMove: (e) => {
+        if (!Consensus.drag) return;
+        if (e.touches) e.preventDefault();
+        const evt = e.touches ? e.touches[0] : e;
+        if (!evt) return;
+
+        const coords = Consensus.screenToWorld(evt);
+        const view = State.consensusMode.view;
+
+        if (Consensus.drag.mode === 'pan') {
+            view.x = Consensus.drag.vx + (evt.clientX - Consensus.drag.sx) / view.z;
+            view.y = Consensus.drag.vy + (evt.clientY - Consensus.drag.sy) / view.z;
+            Network.broadcast({type: 'CONSENSUS_VIEW_SYNC', view: view});
+        } else if (Consensus.drag.mode === 'move') {
+            const item = Consensus.drag.item;
+            item.x = Consensus.drag.ix + (coords.x - Consensus.drag.sx);
+            item.y = Consensus.drag.iy + (coords.y - Consensus.drag.sy);
+            const el = document.getElementById(item.id);
+            if (el) el.style.transform = `translate(${item.x}px, ${item.y}px)`;
+            Network.broadcast({type: 'CONSENSUS_ITEM_MOVE', id: item.id, x: item.x, y: item.y});
+        } else if (Consensus.drag.mode === 'draw') {
+            Consensus.currentPath.push(coords);
+        } else if (Consensus.drag.mode === 'eraser') {
+            const { changed, newInk } = InkManager.eraseAt(coords.x, coords.y, State.consensusMode.ink);
             if (changed) {
                 State.consensusMode.ink = newInk;
                 Consensus.renderInk();
@@ -3290,14 +3596,30 @@ window.Consensus = {
             }
         }
     },
+    
     inputEnd: (e) => {
-        const temp = document.getElementById('temp-consensus-ink'); if(temp) temp.remove();
-        if (State.consensusMode.tool === 'draw' && Consensus.currentPath.length > 1) {
-            const newInk = { id: genId(), points: [...Consensus.currentPath], color: State.consensusMode.color, width: State.consensusMode.width };
-            Consensus.handleInk(newInk); // Adds locally and broadcasts
+        if (!Consensus.drag) return;
+        if (Consensus.drag.mode === 'draw' && Consensus.currentPath.length > 1) {
+            const newInk = { id: genId(), points: Consensus.currentPath, color: State.consensusMode.color, width: State.consensusMode.width };
+            Consensus.handleInk(newInk);
         }
-        Consensus.currentPath = [];
-        State.drag = null;
+        Consensus.drag = null;
+    },
+    
+    handleWheel: (e) => {
+        e.preventDefault();
+        const view = State.consensusMode.view;
+        const s = Math.exp(-e.deltaY * 0.001);
+        const oz = view.z;
+        view.z = Math.max(0.1, Math.min(oz * s, 5));
+        
+        const rect = $('consensus-main').getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        
+        view.x = (mouseX / view.z) - (mouseX / oz - view.x);
+        view.y = (mouseY / view.z) - (mouseY / oz - view.y);
+        Network.broadcast({type: 'CONSENSUS_VIEW_SYNC', view: view});
     }
 };
 
@@ -3345,6 +3667,7 @@ window.Tab = function(n) {
 
 window.onload = () => {
     DB.init();
+    Consensus.init();
     const v = $('viewport');
     v.addEventListener('mousedown', InputController.start);
     v.addEventListener('wheel', InputController.wheel, {passive:false});
@@ -3383,8 +3706,6 @@ window.onload = () => {
             State.drag = null;
         }
     });
-
-    setInterval(() => Board.save(true), 30000);
 };
 </script>
 </body>

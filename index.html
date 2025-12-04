@@ -3,6 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- SEO and Social Sharing Meta Tags -->
+<meta name="description" content="A serverless digital question board for the classroom. InquiryDQB uses peer-to-peer connections for instant, private, and zero-overhead student engagement. No accounts or logins required.">
+<meta name="keywords" content="digital question board, ngss, 7i6serverless classroom tool, peer-to-peer education, no-signup whiteboard, privacy-focused classroom app, student inquiry, low overhead edtech">
+
+<!-- Canonical URL -->
+<link rel="canonical" href="https://inquirydqb.io/">
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://inquirydqb.io/">
+<meta property="og:title" content="InquiryDQB | The Serverless Digital Board for Classrooms">
+<meta property="og:description" content="Run a real-time digital question board with zero server overhead. InquiryDQB connects teachers and students directly for ultimate privacy and simplicity.">
+<meta property="og:image" content="https://inquirydqb.io/inquirydqb-share-image.png">
+
+<!-- Twitter -->
+<meta property="twitter:card" content="summary_large_image">
+<meta property="twitter:url" content="https://inquirydqb.io/">
+<meta property="twitter:title" content="InquiryDQB | The Serverless Digital Board for Classrooms">
+<meta property="twitter:description" content="Run a real-time digital question board with zero server overhead. InquiryDQB connects teachers and students directly for ultimate privacy and simplicity.">
+<meta property="twitter:image" content="https://inquirydqb.io/inquirydqb-share-image.png">
+
+<!-- Structured Data (Schema) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "InquiryDQB",
+  "applicationCategory": "EducationalApplication",
+  "operatingSystem": "Web",
+  "abstract": "A serverless, peer-to-peer digital question board for classroom inquiry. Enables real-time collaboration with no accounts, logins, or data stored on central servers, ensuring student privacy.",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Organization",
+    "name": "InquiryDQB"
+  }
+}
+</script>
     <title>InquiryDQB | Welcome</title>
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -53,7 +94,8 @@
             margin: 0;
             letter-spacing: -1px;
             animation: fadeInDown 0.5s ease-out;
-            display: none;
+
+          
         }
 
         .hero-subtitle {
@@ -116,6 +158,36 @@
             margin-bottom: 20px;
             color: #334155;
         }
+  .features-section {
+    margin-bottom: 80px;
+    animation: fadeInUp 0.5s 0.5s ease-out backwards;
+}
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 30px;
+    text-align: left;
+}
+.feature-card {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid #e0e7ff;
+    padding: 24px;
+    border-radius: 20px;
+}
+.feature-icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+}
+.feature-card h3 {
+    font-size: 1.25rem;
+    margin: 0 0 8px 0;
+    color: var(--text);
+}
+.feature-card p {
+    color: var(--text-light);
+    margin: 0;
+    line-height: 1.6;
+}
 
         .video-placeholder {
             background: #e2e8f0;
@@ -206,10 +278,9 @@
 </head>
 <body>
     <div class="container">
-        <img src="./InquiryDQB.png" alt="InquiryDQB Logo" class="hero-logo">
-        <h1 class="hero-title">InquiryDQB</h1>
-        <p class="hero-subtitle">The Digital Question Board for Dynamic Classroom Inquiry</p>
-
+       <img src="./InquiryDQB.png" alt="Logo for InquiryDQB" class="hero-logo">
+<h1 class="hero-title">A Digital Question Board That Respects Your Privacy</h1>
+<p class="hero-subtitle">Engage your classroom with a real-time inquiry board that runs entirely in your browser. No accounts, no servers, zero overhead.</p>
         <div class="role-selector">
             <a href="./Teacher/" class="role-card">
                 <div class="role-icon">👩‍🏫</div>
@@ -223,6 +294,28 @@
             </a>
         </div>
 
+
+<!-- ADD THIS NEW SECTION -->
+<div class="features-section">
+    <h2 class="section-header">Simple, Private, and Powerful</h2>
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <h3>Instant Setup</h3>
+            <p>No sign-ups, no software, no student accounts. Launch a session and connect your class in seconds.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🛡️</div>
+            <h3>Privacy First</h3>
+            <p>Built with peer-to-peer technology. No student data is ever collected or stored on a central server.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">☁️</div>
+            <h3>Zero Overhead</h3>
+            <p>Runs directly in the browser with no backend to manage. It's the simplest way to bring inquiry to your classroom.</p>
+        </div>
+    </div>
+</div>
         <h2 class="section-header">See It In Action</h2>
         <div class="video-placeholder" onclick="alert('Demo video coming soon!')">
             <div class="play-button">

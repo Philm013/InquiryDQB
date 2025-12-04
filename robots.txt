@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /Teacher/
+Disallow: /Student/
+
+Sitemap: https://inquirydqb.io/sitemap.xml

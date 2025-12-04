@@ -558,6 +558,8 @@
         </div>
         <!-- Sidebar Actions -->
         <div style="margin-top:auto; padding:15px; border-top:1px solid #374151; display:flex; flex-direction:column; gap:8px; flex-shrink: 0;">
+            <button class="sub-btn" onclick="UI.showSettingsModal()">📡 Share Board</button>
+            <button class="sub-btn" onclick="Board.export()">📤 Export JSON</button>
             <button class="sub-btn" onclick="window.UI.toggleA11y()">♿ Accessibility View</button>
             <button class="sub-btn" style="background:#7f1d1d; color:#fecaca" onclick="Board.exit()">🚪 Exit Board</button>
         </div>
@@ -655,10 +657,9 @@
          <div style="width:100%; text-align:center; color:#9ca3af; font-size:0.8rem; margin-bottom:8px; font-weight:bold">BOARD CONTROLS</div>
         <div class="tool-row">
              <button class="sub-btn" id="drawer-open-notes-btn" onclick="UI.toggleOpenNotes()">🔓 Open Board</button>
-             <button class="sub-btn" onclick="UI.showSettingsModal()">📡 Share</button>
+             <button class="sub-btn" onclick="Board.setStartView()">📍 Set Start View</button>
         </div>
         <div class="tool-row">
-             <button class="sub-btn" onclick="Board.setStartView()">📍 Set Start View</button>
              <button class="sub-btn" onclick="window.UI.toggleFullScreen()">⛶ Fullscreen</button>
         </div>
     </div>
@@ -799,7 +800,7 @@ window.TYPES = {
     sketch: { col: '#ffffff', bor: '#64748b', icon: '✏️', lbl: 'Sketch' },
     claim: { col: '#fffbeb', bor: '#d97706', icon: '🤔', lbl: 'Claim' },
     evidence: { col: '#f0f9ff', bor: '#0284c7', icon: '📊', lbl: 'Evidence' },
-    reasoning: { col: '#f0fdf4', bor: '#16a34a', icon: '🔗', lbl: 'Reasoning' }
+    reasoning: { col: '#f0fdf4', bor: '#166534', icon: '🔗', lbl: 'Reasoning' }
 };
 
 /* --- STATE & HISTORY --- */
@@ -1177,7 +1178,7 @@ window.LayoutSystem = {
         }
 
         const minH = 300; 
-        const newH = Math.max(minH, contentHeight + 40);
+        const newH = Math.max(minH, contentHeight);
         
         if (newH > zone.h) {
             StateManager.updateItem(zone.id, { h: newH });
@@ -1216,7 +1217,7 @@ window.LayoutSystem = {
 
     layoutColumns: (zone, items, colCount) => {
         const colW = (zone.w - (LayoutSystem.padding * 2)) / colCount;
-        const colY = new Array(colCount).fill(LayoutSystem.headerH + 10);
+        const colY = new Array(colCount).fill(74); // 44px for main header, 30px for CER headers
         const updates = [];
 
         items.forEach(item => {
@@ -1566,6 +1567,26 @@ window.Board = {
             Board.start(); 
         };
         r.readAsText(f);
+    },
+    export: () => {
+        const boardData = {
+            name: State.name,
+            items: State.items,
+            ink: State.ink,
+            view: State.view,
+        };
+        const jsonString = JSON.stringify(boardData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const fileName = (State.name || 'board').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        a.download = `${fileName}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        UI.toast("Board Exported");
     },
     getFreeSpace: (x, y, w, h) => {
         let attempts = 0;
@@ -2050,9 +2071,6 @@ window.Actions = {
                     <button class="ctx-btn btn-del" onclick="Actions.delete('${id}')">Delete</button>
                 </div>
                 <div class="ctx-row"><button class="ctx-btn" onclick="Actions.showZoneList(event)">Move to Zone ➡</button></div>`;
-                 if (isInGroup) {
-                    html += `<div class="ctx-row"><button class="ctx-btn" onclick="Actions.ungroupSelection()">Ungroup</button></div>`;
-                }
             } else if(item.type === 'zone') {
                 html += `<div class="ctx-row">
                     <button class="ctx-btn" onclick="Network.startActivity('vote')">🗳️ Vote</button>
@@ -2075,6 +2093,10 @@ window.Actions = {
                 html += `<div class="ctx-row"><button class="ctx-btn" onclick="Actions.editPoll('${id}')">✏️ Edit</button><button class="ctx-btn btn-del" onclick="Actions.delete('${id}')">Delete</button></div>`;
             } else {
                 html += `<div class="ctx-row"><button class="ctx-btn btn-del" onclick="Actions.delete('${id}')">Delete</button></div>`;
+            }
+
+            if (isInGroup) {
+                html += `<div class="ctx-row"><button class="ctx-btn" onclick="Actions.ungroupSelection()">Ungroup</button></div>`;
             }
         }
         
@@ -2722,7 +2744,7 @@ window.InputController = {
         const itemEl = e.target.closest('.item');
         const handle = e.target.closest('.resize-h');
 
-        if(e.button === 1) { Modes.Pan.down(evt); return; }
+        if(e.button === 1 || e.button === 2) { Modes.Pan.down(evt); return; }
 
         if(State.tool === 'pan' || State.tool === 'select') {
             if(handle) { Modes.Resize.down(evt, itemEl.id); return; }

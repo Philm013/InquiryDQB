@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <!-- REPLACE <title>Student Remote</title> WITH THIS: -->
-<title>InquiryDQB | Student</title>
-<!-- ADD THIS META TAG: -->
-<meta name="robots" content="noindex, nofollow">
+    <title>InquiryDQB | Student</title>
+    <meta name="robots" content="noindex, nofollow">
+    
     <!-- PeerJS -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <!-- QR Scanner -->
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
     <style>
         :root {
             --accent: #6366f1; --accent-dark: #4f46e5;
@@ -25,10 +25,12 @@
             --shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
         }
 
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; user-select: none; }
+        input, textarea { user-select: text; }
         body { 
             margin: 0; font-family: var(--font-ui); background: var(--bg); color: var(--text);
             height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
+            touch-action: none;
         }
 
         /* --- SCREEN MANAGEMENT --- */
@@ -36,11 +38,12 @@
             flex: 1; display: none; flex-direction: column; 
             width: 100%; max-width: 600px; margin: 0 auto;
             position: relative; overflow-y: auto; overflow-x: hidden;
+            touch-action: pan-y;
         }
         .screen.active { display: flex; animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* --- COMMON UI ELEMENTS --- */
+        /* --- UI ELEMENTS --- */
         .card { 
             background: var(--card-bg); border-radius: 20px; padding: 24px; 
             box-shadow: var(--shadow); margin: 16px; 
@@ -68,8 +71,6 @@
         /* --- SETUP SCREEN --- */
         #scr-setup { justify-content: center; background: linear-gradient(135deg, #e0e7ff 0%, #f8fafc 100%); }
         .hero-title { font-size: 2rem; color: var(--accent); margin-bottom: 8px; font-weight: 900; }
-        .hero-sub { color: var(--text-light); margin-bottom: 24px; }
-        
         .av-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 20px; width: 100%; }
         .av-item { 
             font-size: 1.6rem; padding: 10px; background: white; border-radius: 12px; 
@@ -81,29 +82,21 @@
         .lobby-header {
             padding: 16px 20px; background: white; border-bottom: 1px solid #e2e8f0;
             display: flex; justify-content: space-between; align-items: center;
-            position: sticky; top: 0; z-index: 10;
+            position: sticky; top: 0; z-index: 20;
         }
         .user-badge { 
             display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.1rem;
-            padding: 4px 8px; border-radius: 8px; transition: 0.3s; border: 2px solid transparent;
+            padding: 4px 12px; border-radius: 20px; transition: 0.3s; border: 2px solid transparent;
         }
         .status-pill {
             font-size: 0.75rem; padding: 4px 10px; border-radius: 20px; 
             background: #cbd5e1; color: #475569; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.5px; transition: 0.3s;
         }
         .status-pill.online { background: #dcfce7; color: #166534; }
         .status-pill.error { background: #fee2e2; color: #991b1b; }
 
-        /* --- ACTION ZONE (Dynamic) --- */
+        /* --- ACTION ZONE --- */
         #action-container { padding: 16px; flex-shrink: 0; }
-        
-        /* State: Locked */
-        .locked-state { text-align: center; color: var(--text-light); padding: 40px 20px; }
-        .locked-icon { font-size: 4rem; margin-bottom: 16px; opacity: 0.5; animation: float 3s ease-in-out infinite; }
-        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-
-        /* State: Active Zone */
         .active-zone-card { 
             background: #e0e7ff; border: 2px dashed var(--accent); border-radius: 16px; 
             padding: 20px; text-align: center; margin-bottom: 10px;
@@ -113,139 +106,116 @@
             font-size: 0.8rem; font-weight: 800; text-transform: uppercase; display: inline-block; margin-bottom: 8px;
         }
 
-        /* --- SPECIAL ACTIVITIES (Vote, Sort, Discuss) --- */
-        .act-container { display: none; width: 100%; }
-        .act-container.active { display: block; }
-        
-        /* Vote Items */
+        /* --- ACTIVITIES --- */
         .vote-item {
             background: white; padding: 16px; border-radius: 12px; border: 2px solid #e2e8f0;
             margin-bottom: 10px; cursor: pointer; text-align: left; transition: 0.2s;
             display: flex; align-items: center; gap: 10px;
         }
-        .vote-item:hover { border-color: var(--accent); }
         .vote-item.selected { background: #e0e7ff; border-color: var(--accent); color: var(--accent-dark); font-weight: bold; }
 
-        /* Sort Items */
-        .sort-list { display: flex; flex-direction: column; gap: 8px; }
         .sort-item {
             background: white; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;
-            display: flex; align-items: center; gap: 10px;
+            display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
         }
-        .sort-controls { display: flex; flex-direction: column; gap: 2px; }
         .sort-btn { width: 30px; height: 30px; padding: 0; display: flex; align-items: center; justify-content: center; background: #f1f5f9; border: none; border-radius: 4px; cursor: pointer; }
-        
-        /* Discuss Cards */
+
         .discuss-card {
             background: white; border: 1px solid #e2e8f0; border-radius: 12px;
             padding: 16px; margin-bottom: 12px; text-align: left;
-            cursor: pointer; transition: 0.2s;
-            border-left: 4px solid var(--accent);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            cursor: pointer; border-left: 4px solid var(--accent);
         }
-        .discuss-card:active { transform: scale(0.98); background: #f8fafc; }
-        .d-meta { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.8rem; color: #64748b; font-weight: 700; text-transform: uppercase; }
-        
-        /* Discuss Modal */
-        #modal-discuss {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000;
-            display: none; align-items: flex-end; justify-content: center;
-            backdrop-filter: blur(2px);
-        }
-        #modal-discuss.active { display: flex; animation: slideUp 0.2s ease-out; }
-        .modal-sheet {
-            background: white; width: 100%; max-width: 600px;
-            border-radius: 20px 20px 0 0; padding: 24px;
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
-            display: flex; flex-direction: column;
-        }
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
-        .tag-row { display: flex; gap: 8px; margin-bottom: 16px; justify-content: center; }
-        .tag-btn { padding: 8px 16px; border-radius: 20px; border: 1px solid #cbd5e1; background: white; font-size: 0.9rem; cursor: pointer; font-weight: 600; }
-        .tag-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
-
-        /* --- NOTE TYPES GRID --- */
+        /* --- NOTE TYPES --- */
         .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
         .type-btn { 
             padding: 16px; border-radius: 12px; font-weight: 700; cursor: pointer; 
             display: flex; flex-direction: column; align-items: center; gap: 5px;
-            border: 2px solid transparent; transition: 0.2s; background: white;
+            border: 2px solid transparent; background: white;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        .type-btn:active { transform: scale(0.95); }
-        /* Colors */
         .t-notice { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
         .t-wonder { background: #f0f9ff; border-color: #7dd3fc; color: #075985; }
         .t-idea { background: #f0fdf4; border-color: #86efac; color: #166534; }
         .t-test { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
         .t-sketch { background: #f8fafc; border-color: #cbd5e1; color: #475569; grid-column: span 2; }
 
-        /* --- HISTORY LIST --- */
-        .hist-container { 
-            flex: 1; background: #f1f5f9; border-radius: 20px 20px 0 0; 
-            padding: 20px; overflow-y: auto; 
+        /* --- CONSENSUS MODE --- */
+        #scr-consensus {
+            background: #111827;
+            overflow: hidden;
         }
-        .hist-header { display: flex; justify-content: space-between; margin-bottom: 12px; color: var(--text-light); font-size: 0.9rem; font-weight: 700; }
+        #consensus-viewport {
+            width: 100%; height: 100%;
+            position: relative; overflow: hidden;
+            touch-action: none; cursor: grab;
+        }
+        #consensus-world {
+            position: absolute; top: 0; left: 0;
+            transform-origin: 0 0; will-change: transform;
+        }
+        #consensus-items { position: absolute; inset: 0; pointer-events: none; }
+        #consensus-ink { position: absolute; inset: 0; pointer-events: none; }
+        
+        /* Consensus Items */
+        .c-item { 
+            position: absolute; background: white; padding: 10px; border-radius: 8px; 
+            font-family: var(--font-hand); font-size: 1.2rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            max-width: 200px;
+        }
+        .c-item img { width: 100%; display: block; }
+        .c-notice { background: #fef3c7; border: 2px solid #d97706; }
+        .c-wonder { background: #bae6fd; border: 2px solid #0284c7; }
+        .c-idea { background: #bbf7d0; border: 2px solid #166534; }
+        
+        #consensus-toolbar {
+            position: absolute; bottom: 0; left: 0; width: 100%;
+            background: #1f2937; padding: 10px;
+            display: flex; gap: 10px; justify-content: center;
+            border-top: 1px solid #374151; z-index: 100;
+        }
+        .c-tool {
+            width: 44px; height: 44px; border-radius: 50%; border: 2px solid #4b5563;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; color: #e5e7eb; background: #374151;
+        }
+        .c-tool.active { border-color: white; transform: scale(1.1); }
+
+        /* --- GENERAL MODALS & HISTORY --- */
+        .hist-container { flex: 1; background: #f1f5f9; border-radius: 20px 20px 0 0; padding: 20px; overflow-y: auto; }
         .note-card { 
             background: white; padding: 16px; border-radius: 12px; margin-bottom: 12px; 
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05); border-left: 5px solid #cbd5e1;
-            font-family: var(--font-hand); font-size: 1.2rem; line-height: 1.4;
-            position: relative; text-align: left;
+            border-left: 5px solid #cbd5e1; font-family: var(--font-hand); font-size: 1.2rem;
+            position: relative;
         }
         .n-notice { border-color: #d97706; background: #fffbeb; }
         .n-wonder { border-color: #0284c7; background: #f0f9ff; }
         .n-idea { border-color: #16a34a; background: #f0fdf4; }
-        .n-sketch { border-color: #64748b; background: white; }
         .n-claim { border-color: #d97706; background: #fffbeb; }
         .n-evidence { border-color: #0284c7; background: #f0f9ff; }
         .n-reasoning { border-color: #16a34a; background: #f0fdf4; }
-        
-        .note-controls { 
-            margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(0,0,0,0.05); 
-            display: flex; justify-content: flex-end; gap: 8px; 
-        }
-        .mini-btn { font-family: var(--font-ui); font-size: 0.8rem; padding: 4px 10px; border-radius: 6px; border: 1px solid #e2e8f0; background: white; cursor: pointer; }
 
-        /* --- WRITE SCREEN --- */
-        #scr-write .card { height: 100%; justify-content: flex-start; }
+        #modal-discuss {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000;
+            display: none; align-items: flex-end; justify-content: center;
+            backdrop-filter: blur(2px);
+        }
+        #modal-discuss.active { display: flex; }
+        .modal-sheet {
+            background: white; width: 100%; max-width: 600px;
+            border-radius: 20px 20px 0 0; padding: 24px;
+            animation: slideUp 0.2s ease-out;
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        /* WRITE SCREEN CHIPS */
         .cat-selector { display: flex; gap: 8px; overflow-x: auto; width: 100%; padding-bottom: 10px; margin-bottom: 10px; }
         .cat-chip { 
             padding: 8px 16px; border-radius: 20px; background: #f1f5f9; color: #64748b; 
             font-weight: 700; font-size: 0.9rem; white-space: nowrap; cursor: pointer; border: 2px solid transparent;
         }
         .cat-chip.active { background: var(--accent); color: white; border-color: var(--accent); }
-
-        /* --- SKETCH SCREEN --- */
-        #sketch-canvas { border: 2px dashed #cbd5e1; border-radius: 12px; background: transparent; touch-action: none; cursor: crosshair; width: 100%; height: 300px; }
-        .tool-bar { display: flex; gap: 12px; margin-bottom: 12px; justify-content: center; }
-        .tool-btn { 
-            width: 44px; height: 44px; border-radius: 50%; border: 2px solid #e2e8f0; 
-            display: flex; align-items: center; justify-content: center; font-size: 1.2rem; cursor: pointer; background: white;
-        }
-        .tool-btn.active { border-color: var(--accent); background: #e0e7ff; color: var(--accent); }
-
-        /* --- EXIT TICKET --- */
-        .emoji-row { display: flex; justify-content: space-between; width: 100%; margin: 20px 0; }
-        .emoji-opt { font-size: 2.5rem; opacity: 0.5; transition: 0.2s; cursor: pointer; transform: scale(1); }
-        .emoji-opt.selected { opacity: 1; transform: scale(1.3); }
-        .mc-opt { width: 100%; padding: 16px; margin-bottom: 8px; border: 2px solid #e2e8f0; border-radius: 12px; font-weight: bold; text-align: left; background: white; transition: 0.2s; }
-        .mc-opt.selected { border-color: var(--accent); background: #e0e7ff; color: var(--accent-dark); }
-        
-        /* --- NEW: CONSENSUS MODELING --- */
-        #consensus-canvas {
-            touch-action: none;
-            cursor: crosshair;
-        }
-        #consensus-toolbar .tool-btn {
-            border: 3px solid white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        #consensus-toolbar .tool-btn.active {
-            transform: scale(1.15);
-            border-color: var(--accent);
-        }
-
     </style>
 </head>
 <body>
@@ -254,7 +224,7 @@
 <div id="scr-setup" class="screen active">
     <div class="card" style="max-width: 400px; width: 90%;">
         <div class="hero-title">InquiryDQB</div>
-        <div class="hero-sub">Student Companion</div>
+        <div style="color:#64748b; margin-bottom:20px">Student Remote</div>
         
         <div style="text-align:left; width:100%; margin-bottom:8px; font-weight:700; color:#64748b; font-size:0.9rem">CHOOSE AVATAR</div>
         <div class="av-grid" id="av-grid"></div>
@@ -270,7 +240,7 @@
 <div id="scr-join" class="screen">
     <div class="card">
         <h2>Join Class</h2>
-        <div id="reader" style="border-radius:12px; overflow:hidden; margin-bottom:16px; width:100%"></div>
+        <div id="reader" style="border-radius:12px; overflow:hidden; margin-bottom:16px; width:100%; display:none"></div>
         <button class="btn" id="btn-scan" onclick="StartScan()">📸 Scan QR Code</button>
         <div style="margin: 10px 0; color: #94a3b8">- OR -</div>
         <input id="inp-id" placeholder="Enter Session ID" style="text-align:center; text-transform:uppercase; letter-spacing: 2px;">
@@ -281,7 +251,7 @@
 <!-- LOBBY SCREEN -->
 <div id="scr-lobby" class="screen">
     <div class="lobby-header">
-        <div class="user-badge">
+        <div class="user-badge" id="user-badge">
             <span id="my-av"></span>
             <span id="my-name"></span>
         </div>
@@ -291,17 +261,15 @@
         </div>
     </div>
 
-    <!-- Dynamic Action Container -->
     <div id="action-container">
-        
-        <!-- 1. LOCKED STATE -->
-        <div id="state-locked" class="locked-state">
-            <div class="locked-icon">👀</div>
+        <!-- 1. LOCKED -->
+        <div id="state-locked" style="text-align:center; padding:40px 20px; color:#64748b">
+            <div style="font-size:4rem; margin-bottom:16px">👀</div>
             <h3>Eyes on the Board</h3>
             <p>Wait for the teacher to open an activity.</p>
         </div>
 
-        <!-- 2. ACTIVE ZONE STATE (GENERIC / CER / CONSENSUS) -->
+        <!-- 2. ZONE ACTIVITY -->
         <div id="state-zone" style="display:none">
             <div class="active-zone-card">
                 <div class="zone-badge" id="zone-type-badge">ACTIVITY</div>
@@ -310,10 +278,9 @@
                 
                 <div id="zone-buttons-default">
                     <button class="btn" onclick="Draft('idea')">💡 Add Note</button>
-                    <button class="btn" style="background:white; color:var(--text); border:2px solid #e2e8f0" onclick="DraftSketch()">✏️ Add Sketch</button>
+                    <button class="btn btn-s" onclick="DraftSketch()">✏️ Add Sketch</button>
                 </div>
                 
-                <!-- CER Buttons -->
                 <div id="zone-buttons-cer" style="display:none; grid-template-columns:1fr 1fr 1fr; gap:8px">
                     <button class="btn" style="background:#d97706; padding:10px; font-size:0.9rem" onclick="Draft('claim')">🤔 Claim</button>
                     <button class="btn" style="background:#0284c7; padding:10px; font-size:0.9rem" onclick="Draft('evidence')">📊 Evidence</button>
@@ -322,7 +289,7 @@
             </div>
         </div>
 
-        <!-- 3. OPEN BOARD STATE -->
+        <!-- 3. OPEN BOARD -->
         <div id="state-open" style="display:none">
             <h3 style="margin:0 0 16px 0; text-align:center">Add to Board</h3>
             <div class="type-grid">
@@ -334,45 +301,39 @@
             </div>
         </div>
 
-        <!-- 4. VOTE ACTIVITY -->
-        <div id="act-vote" class="act-container">
+        <!-- 4. ACTIVITIES -->
+        <div id="act-vote" style="display:none">
             <div class="active-zone-card">
                 <div class="zone-badge">VOTE</div>
                 <h3>Cast Your Vote</h3>
-                <p>Select the best option below.</p>
-                <div id="vote-list"></div>
+                <div id="vote-list" style="margin-top:10px"></div>
                 <button class="btn" id="btn-submit-vote" style="margin-top:10px" disabled>Submit Vote</button>
             </div>
         </div>
 
-        <!-- 5. SORT ACTIVITY -->
-        <div id="act-sort" class="act-container">
+        <div id="act-sort" style="display:none">
             <div class="active-zone-card">
                 <div class="zone-badge">RANK</div>
                 <h3>Rank Items</h3>
-                <p>Order from top (1st) to bottom.</p>
-                <div id="sort-list" class="sort-list"></div>
+                <div id="sort-list" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
                 <button class="btn" onclick="SubmitSort()" style="margin-top:15px">Submit Order</button>
             </div>
         </div>
 
-        <!-- 6. DISCUSS ACTIVITY -->
-        <div id="act-discuss" class="act-container">
+        <div id="act-discuss" style="display:none">
             <div class="active-zone-card">
                 <div class="zone-badge">DISCUSS</div>
                 <h3>Discussion</h3>
-                <p style="color:#64748b; font-size:0.9rem; margin-bottom:16px">Select an item to comment.</p>
-                <div id="discuss-items" style="max-height:300px; overflow-y:auto; margin-bottom:10px"></div>
+                <div id="discuss-items" style="max-height:300px; overflow-y:auto; margin-top:10px"></div>
             </div>
         </div>
-
     </div>
 
-    <!-- History -->
+    <!-- HISTORY -->
     <div class="hist-container">
-        <div class="hist-header">
+        <div style="display:flex; justify-content:space-between; margin-bottom:12px; color:#64748b; font-size:0.9rem; font-weight:700">
             <span>YOUR CONTRIBUTIONS</span>
-            <span onclick="location.reload()">↻ Refresh</span>
+            <span onclick="RenderHist()">↻ Refresh</span>
         </div>
         <div id="hist-list"></div>
     </div>
@@ -380,9 +341,8 @@
 
 <!-- WRITE SCREEN -->
 <div id="scr-write" class="screen">
-    <div class="card">
+    <div class="card" style="height:100%; justify-content:flex-start">
         <h2 id="w-head" style="margin-top:0">New Note</h2>
-        
         <div class="cat-selector" id="cat-scroll">
             <div class="cat-chip" id="c-notice" onclick="SetDraftType('notice')">👁️ Notice</div>
             <div class="cat-chip" id="c-wonder" onclick="SetDraftType('wonder')">❓ Wonder</div>
@@ -392,10 +352,8 @@
             <div class="cat-chip" id="c-evidence" onclick="SetDraftType('evidence')">📊 Evidence</div>
             <div class="cat-chip" id="c-reasoning" onclick="SetDraftType('reasoning')">🔗 Reasoning</div>
         </div>
-
         <textarea id="w-txt" rows="6" placeholder="Type your thoughts here..."></textarea>
-        
-        <div style="display:flex; gap:10px; width:100%">
+        <div style="display:flex; gap:10px; width:100%; margin-top:auto">
             <button class="btn btn-s" onclick="Show('scr-lobby')">Cancel</button>
             <button class="btn" onclick="SendNote()">Send</button>
         </div>
@@ -406,14 +364,12 @@
 <div id="scr-sketch" class="screen">
     <div class="card">
         <h2 style="margin-top:0">Draw</h2>
-        <div class="tool-bar">
-            <div class="tool-btn active" id="tb-pen" onclick="SetTool('pen')">✏️</div>
-            <div class="tool-btn" id="tb-era" onclick="SetTool('eraser')">🧼</div>
-            <div class="tool-btn" style="color:#ef4444" onclick="ClearSketch()">🗑️</div>
+        <div style="display:flex; gap:12px; margin-bottom:12px">
+            <div class="c-tool active" id="tb-pen" onclick="SetSketchTool('pen')">✏️</div>
+            <div class="c-tool" id="tb-era" style="background:white; color:#333" onclick="SetSketchTool('eraser')">🧼</div>
         </div>
-        <canvas id="sketch-canvas" width="300" height="300"></canvas>
+        <canvas id="sketch-canvas" style="border:2px dashed #cbd5e1; border-radius:12px; width:100%; height:300px; touch-action:none"></canvas>
         <input id="sketch-caption" placeholder="Optional caption..." style="margin-top:16px">
-        
         <div style="display:flex; gap:10px; width:100%; margin-top:16px">
             <button class="btn btn-s" onclick="Show('scr-lobby')">Cancel</button>
             <button class="btn" onclick="SendSketch()">Send</button>
@@ -421,7 +377,7 @@
     </div>
 </div>
 
-<!-- WIDGET SCREEN -->
+<!-- WIDGET SCREEN (Poll/Graph) -->
 <div id="scr-widget" class="screen">
     <div class="card">
         <h2 id="wid-title">Activity</h2>
@@ -429,7 +385,7 @@
         <div id="wid-input-area" style="display:none; width:100%">
             <input type="number" id="graph-val" placeholder="0.0" style="font-size:2rem; text-align:center">
         </div>
-        <button class="btn" id="wid-submit">Submit</button>
+        <button class="btn" id="wid-submit" style="margin-top:10px">Submit</button>
     </div>
 </div>
 
@@ -443,43 +399,50 @@
     </div>
 </div>
 
+<!-- CONSENSUS SCREEN (Robust) -->
+<div id="scr-consensus" class="screen">
+    <div class="lobby-header" style="background:#1f2937; color:white; border-bottom:1px solid #374151">
+        <div>
+            <div style="font-weight:bold">Modeling Mode</div>
+            <div id="cm-perm-text" style="font-size:0.75rem; color:#9ca3af">View Only</div>
+        </div>
+        <div style="display:flex; gap:8px">
+            <div id="cm-pan-toggle" class="c-tool active" style="width:36px; height:36px; font-size:1rem" onclick="Consensus.toggleMode()">✋</div>
+            <button class="btn-icon" style="color:white" onclick="Consensus.exit()">✕</button>
+        </div>
+    </div>
+    
+    <div id="consensus-viewport">
+        <div id="consensus-world">
+            <div id="consensus-items"></div>
+            <svg id="consensus-ink" style="overflow:visible"></svg>
+        </div>
+    </div>
+
+    <div id="consensus-toolbar">
+        <div class="c-tool" onclick="Consensus.setTool('draw', '#ef4444')" style="background:#ef4444; border-color:#ef4444"></div>
+        <div class="c-tool" onclick="Consensus.setTool('draw', '#3b82f6')" style="background:#3b82f6; border-color:#3b82f6"></div>
+        <div class="c-tool" onclick="Consensus.setTool('draw', '#10b981')" style="background:#10b981; border-color:#10b981"></div>
+        <div class="c-tool" onclick="Consensus.setTool('draw', '#ffffff')" style="background:#ffffff; border-color:#9ca3af"></div>
+        <div class="c-tool" onclick="Consensus.setTool('eraser')" style="background:#f3f4f6; color:#1f2937">🧼</div>
+    </div>
+</div>
+
 <!-- DISCUSSION MODAL -->
 <div id="modal-discuss">
     <div class="modal-sheet">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px">
             <h3 style="margin:0">Add Comment</h3>
-            <button class="btn-icon" onclick="CloseDiscussModal()">✕</button>
+            <button class="btn-icon" onclick="$('modal-discuss').classList.remove('active')">✕</button>
         </div>
         <div id="md-text" style="background:#f1f5f9; padding:12px; border-radius:8px; margin-bottom:16px; font-style:italic; color:#475569"></div>
-        
-        <div class="tag-row">
-            <div class="tag-btn active" onclick="SetDiscussTag(this, 'feedback')">Feedback</div>
-            <div class="tag-btn" onclick="SetDiscussTag(this, 'question')">Question</div>
-            <div class="tag-btn" onclick="SetDiscussTag(this, 'connection')">Connection</div>
+        <div style="display:flex; gap:8px; margin-bottom:16px; justify-content:center">
+            <button class="status-pill online" onclick="SetDiscussTag(this, 'feedback')">Feedback</button>
+            <button class="status-pill" onclick="SetDiscussTag(this, 'question')">Question</button>
+            <button class="status-pill" onclick="SetDiscussTag(this, 'connection')">Connection</button>
         </div>
-        
         <textarea id="md-input" rows="3" placeholder="Type your comment..."></textarea>
         <button class="btn" onclick="SubmitDiscussComment()">Post Comment</button>
-    </div>
-</div>
-
-<!-- CONSENSUS MODELING SCREEN -->
-<div id="scr-consensus" class="screen" style="padding:0; max-width:none;">
-    <div class="lobby-header" style="background:var(--accent); color:white;">
-        <div style="font-weight:bold;">Modeling Mode</div>
-        <div id="consensus-perms" style="font-size:0.8rem; background:rgba(255,255,255,0.2); padding: 4px 8px; border-radius:12px;">View Only</div>
-    </div>
-    <div id="consensus-canvas-container" style="flex:1; position:relative; background:#f1f5f9;">
-        <canvas id="consensus-canvas" style="position:absolute; top:0; left:0;"></canvas>
-    </div>
-    <div id="consensus-toolbar" style="padding:10px; background:white; display:none; flex-direction:column; gap:8px; border-top:1px solid #e2e8f0;">
-        <div style="display:flex; justify-content:center; gap:8px;">
-             <div class="tool-btn active" onclick="Consensus.setTool('draw', '#ef4444')" style="background:#ef4444; border-color:#ef4444"></div>
-             <div class="tool-btn" onclick="Consensus.setTool('draw', '#3b82f6')" style="background:#3b82f6; border-color:#3b82f6"></div>
-             <div class="tool-btn" onclick="Consensus.setTool('draw', '#10b981')" style="background:#10b981; border-color:#10b981"></div>
-             <div class="tool-btn" onclick="Consensus.setTool('draw', '#000000')" style="background:#000000; border-color:#000000"></div>
-             <div class="tool-btn" onclick="Consensus.setTool('eraser')">🧼</div>
-        </div>
     </div>
 </div>
 
@@ -497,20 +460,14 @@ const sanitizeHTML = (str) => {
 const State = {
     me: { name: '', av: '😀', color: null },
     notes: [],
-    activity: { 
-        type: 'LOCKED', id: null, title: null,
-        subType: null, items: []
-    },
+    activity: { type: 'LOCKED', id: null, title: null, subType: null, items: [] },
     draft: { id: null, sub: 'notice', text: '' },
     hostId: null, boardId: null, lastHeartbeat: 0,
     selectedVote: null, sortOrder: [], discussTag: 'feedback',
-    consensus: {
-        active: false, canDraw: false, ink: [],
-        tool: 'draw', color: '#ef4444', width: 4
-    }
+    consensus: { active: false, canDraw: false, ink: [], tool: 'pan', color: '#ef4444', view: {x:0, y:0, z:1} }
 };
 
-/* --- DATABASE (IndexedDB) --- */
+/* --- DATABASE --- */
 const DB = {
     db: null,
     init: () => new Promise(res => {
@@ -545,21 +502,19 @@ const DB = {
     saveProfile: () => DB.db.transaction('profile', 'readwrite').objectStore('profile').put({key:'me', val:State.me})
 };
 
-/* --- SETUP & NAVIGATION --- */
+/* --- SETUP & CONNECTION --- */
 const EMOJIS = ['😀','😎','🦊','🐱','🚀','🎨','⚽','🦄','🍔','🧩'];
-const g = $('av-grid');
 EMOJIS.forEach(e => {
     let d = document.createElement('div'); d.className='av-item'; d.innerText=e;
     d.onclick = () => { document.querySelectorAll('.av-item').forEach(x=>x.classList.remove('sel')); d.classList.add('sel'); State.me.av=e; };
-    g.appendChild(d);
+    $('av-grid').appendChild(d);
 });
-setTimeout(() => { if(g.children[0]) g.children[0].click(); }, 100);
+if($('av-grid').children[0]) $('av-grid').children[0].click();
 
 function Setup() {
     State.me.name = $('inp-name').value.trim() || "Student";
     $('my-name').innerText = State.me.name; $('my-av').innerText = State.me.av;
     DB.saveProfile();
-    
     const lastHost = localStorage.getItem('dqb_host_id');
     if(lastHost) Connect(lastHost); else Show('scr-join');
 }
@@ -570,10 +525,9 @@ function Show(id) {
     window.scrollTo(0,0);
 }
 
-/* --- NETWORK --- */
 let peer, conn, hbInt;
-
 function StartScan() {
+    $('reader').style.display = 'block';
     const s = new Html5Qrcode("reader");
     s.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, t => { s.stop(); Connect(t); });
     $('btn-scan').style.display = 'none';
@@ -581,45 +535,30 @@ function StartScan() {
 
 function Connect(id) {
     if(!id) return;
-    id = id.trim();
-    State.hostId = id;
-    localStorage.setItem('dqb_host_id', id);
-    UpdateStatus("Connecting...", "warn");
+    id = id.trim(); State.hostId = id; localStorage.setItem('dqb_host_id', id);
+    UpdateStatus("Connecting...", "status-pill");
     if(peer) peer.destroy();
     peer = new Peer();
     peer.on('open', () => { conn = peer.connect(id); SetupConn(conn); });
-    peer.on('error', err => {
-        console.error(err);
-        UpdateStatus("Error", "error");
-        if(err.type === 'peer-unavailable') {
-            localStorage.removeItem('dqb_host_id');
-            setTimeout(() => Show('scr-join'), 2000);
-        } else { setTimeout(() => Connect(State.hostId), 3000); }
-    });
-    State.lastHeartbeat = Date.now();
+    peer.on('error', () => { UpdateStatus("Error", "status-pill error"); setTimeout(() => Connect(State.hostId), 3000); });
+    
     if(hbInt) clearInterval(hbInt);
-    hbInt = setInterval(() => { if(Date.now() - State.lastHeartbeat > 8000) { UpdateStatus("Reconnecting...", "warn"); Connect(State.hostId); } }, 2000);
+    hbInt = setInterval(() => { if(Date.now() - State.lastHeartbeat > 8000) Connect(State.hostId); }, 2000);
 }
 
 function SetupConn(c) {
     c.on('open', () => {
         SafeSend({ type:'JOIN', name:State.me.name, avatar:State.me.av });
         State.lastHeartbeat = Date.now();
-        UpdateStatus("Online", "online");
+        UpdateStatus("Online", "status-pill online");
         Show('scr-lobby');
     });
     c.on('data', d => Handle(JSON.parse(d)));
-    c.on('close', () => UpdateStatus("Offline", "error"));
+    c.on('close', () => UpdateStatus("Offline", "status-pill error"));
 }
 
 function SafeSend(data) { if(conn && conn.open) conn.send(JSON.stringify(data)); }
-
-function UpdateStatus(msg, type) {
-    const b = $('status-badge');
-    b.innerText = msg;
-    b.className = `status-pill ${type}`;
-}
-
+function UpdateStatus(msg, cls) { $('status-badge').innerText = msg; $('status-badge').className = cls; }
 function ManualDisconnect() { if(confirm("Leave session?")) { if(conn) conn.close(); localStorage.removeItem('dqb_host_id'); location.reload(); } }
 
 /* --- LOGIC HANDLER --- */
@@ -629,201 +568,260 @@ function Handle(d) {
         case 'HEARTBEAT': break;
         case 'WELCOME':
             State.boardId = d.boardId;
-            SyncNotes(d.sync);
+            if(d.sync) d.sync.forEach(n => { const l=State.notes.find(x=>x.id===n.id); if(l){l.text=n.text; l.sub=n.sub; DB.saveNote(l);} });
             RenderHist();
             if(d.payload) Handle(d.payload); else if(d.mode) Handle({ type: 'MODE', val: d.mode });
             break;
-        case 'MODE': SetActivityState(d.val === 'OPEN' ? 'OPEN' : 'LOCKED'); break;
+        case 'MODE': SetActivity('LOCKED'); if(d.val==='OPEN') SetActivity('OPEN'); break;
         case 'ZONE_ACT': case 'OPEN_ZONE': case 'ACT_VOTE': case 'ACT_SORT': case 'ACT_DISCUSS':
-            SetActivityState('ZONE_ACT', d.actId, d.title, d.type, d.items);
+            SetActivity('ZONE_ACT', d.actId, d.title, d.type || d.subType, d.items);
             break;
-        case 'ACT_POLL': SetActivityState('WIDGET', d.actId, d.q); RenderPoll(d); break;
-        case 'ACT_GRAPH': SetActivityState('WIDGET', d.actId, d.title); RenderGraphInput(d); break;
-        case 'EXIT_TICKET': SetActivityState('EXIT', d.actId, "Exit Ticket"); RenderExit(d); break;
-        case 'STOP_ACT': case 'STOP_EXIT': SetActivityState('LOCKED'); Show('scr-lobby'); break;
-        case 'NOTE_UPDATE':
-            const noteToUpdate = State.notes.find(n => n.id === d.note.id);
-            if (noteToUpdate) { noteToUpdate.text = d.note.text; noteToUpdate.sub = d.note.sub; DB.saveNote(noteToUpdate); }
+        case 'ACT_POLL': SetActivity('WIDGET', d.actId, d.q); RenderPoll(d); break;
+        case 'ACT_GRAPH': SetActivity('WIDGET', d.actId, d.title); RenderGraphInput(d); break;
+        case 'EXIT_TICKET': SetActivity('EXIT', d.actId, "Exit Ticket"); RenderExit(d); break;
+        case 'STOP_ACT': SetActivity('LOCKED'); Show('scr-lobby'); break;
+        case 'SET_COLOR': 
+            State.me.color = d.color; 
+            $('user-badge').style.backgroundColor = d.color ? d.color+'20' : 'white';
+            $('user-badge').style.borderColor = d.color || 'transparent';
             break;
-        case 'DELETE_NOTE': if (State.notes.some(n => n.id === d.id)) DB.delNote(d.id); break;
-        case 'SET_COLOR':
-            State.me.color = d.color;
-            const badge = $('.user-badge');
-            if (badge) { badge.style.borderColor = d.color || 'transparent'; badge.style.backgroundColor = d.color ? `${d.color}20` : 'transparent'; }
-            break;
-        // Consensus Model Cases
-        case 'CONSENSUS_START': Consensus.startSession(d.ink); break;
-        case 'CONSENSUS_STOP': Consensus.stopSession(); break;
+        
+        // Consensus
+        case 'CONSENSUS_START': Consensus.start(d.items, d.ink); break;
+        case 'CONSENSUS_STOP': Consensus.exit(); break;
         case 'CONSENSUS_PERMS': Consensus.setPerms(d.canDraw); break;
-        case 'CONSENSUS_INK': State.consensus.ink.push(d.ink); Consensus.render(); break;
-        case 'CONSENSUS_CLEAR': State.consensus.ink = []; Consensus.render(); break;
+        case 'CONSENSUS_INK': Consensus.addInk(d.ink); break;
+        case 'CONSENSUS_CLEAR': Consensus.clear(); break;
         case 'CONSENSUS_SET_INK': State.consensus.ink = d.ink; Consensus.render(); break;
+        case 'CONSENSUS_ITEM_MOVE': Consensus.moveItem(d.id, d.x, d.y); break;
     }
 }
 
-function SetActivityState(type, id=null, title=null, subType=null, items=[]) {
+function SetActivity(type, id=null, title=null, subType=null, items=[]) {
     State.activity = { type, id, title, subType, items };
-    $('state-locked').style.display = 'none'; $('state-open').style.display = 'none';
-    $('state-zone').style.display = 'none'; $('act-vote').style.display = 'none';
-    $('act-sort').style.display = 'none'; $('act-discuss').style.display = 'none';
+    ['state-locked','state-open','state-zone','act-vote','act-sort','act-discuss'].forEach(x => $(x).style.display='none');
     
-    if(type === 'LOCKED') { $('state-locked').style.display = 'block'; } 
-    else if (type === 'OPEN') { $('state-open').style.display = 'block'; }
-    else if (type === 'ZONE_ACT') {
-        if (subType === 'ACT_VOTE') { $('act-vote').style.display = 'block'; RenderVoteUI(items); }
-        else if (subType === 'ACT_SORT') { $('act-sort').style.display = 'block'; RenderSortUI(items); }
-        else if (subType === 'ACT_DISCUSS') { $('act-discuss').style.display = 'block'; RenderDiscussUI(items); }
+    if(type === 'LOCKED') $('state-locked').style.display='block';
+    else if(type === 'OPEN') $('state-open').style.display='block';
+    else if(type === 'ZONE_ACT') {
+        if(subType === 'ACT_VOTE') { $('act-vote').style.display='block'; RenderVote(items); }
+        else if(subType === 'ACT_SORT') { $('act-sort').style.display='block'; RenderSort(items); }
+        else if(subType === 'ACT_DISCUSS') { $('act-discuss').style.display='block'; RenderDiscuss(items); }
         else {
-            $('state-zone').style.display = 'block';
-            $('zone-title').innerHTML = sanitizeHTML(title) || 'Activity';
-            $('zone-type-badge').innerHTML = sanitizeHTML(subType === 'consensus' ? 'Consensus Model' : (subType === 'cer' ? 'CER Builder' : 'Zone Activity'));
-            $('zone-desc').innerText = subType === 'consensus' ? "Contribute to the class model." : (subType === 'cer' ? "Build the argument." : "Contribute notes or sketches.");
-            const isCER = subType === 'cer';
-            $('zone-buttons-default').style.display = isCER ? 'none' : 'block';
-            $('zone-buttons-cer').style.display = isCER ? 'grid' : 'none';
+            $('state-zone').style.display='block';
+            $('zone-title').innerText = title || "Activity";
+            $('zone-type-badge').innerText = subType === 'cer' ? "CER Builder" : "Zone Activity";
+            $('zone-desc').innerText = subType === 'cer' ? "Build an argument." : "Contribute notes.";
+            $('zone-buttons-default').style.display = subType === 'cer' ? 'none' : 'block';
+            $('zone-buttons-cer').style.display = subType === 'cer' ? 'grid' : 'none';
         }
     }
-    else if (type === 'WIDGET') { Show('scr-widget'); }
-    else if (type === 'EXIT') { Show('scr-exit'); }
+    else if(type === 'WIDGET') Show('scr-widget');
+    else if(type === 'EXIT') Show('scr-exit');
 }
 
-/* --- CONSENSUS MODELING --- */
+/* --- CONSENSUS MODE --- */
 const Consensus = {
-    ctx: null, isDrawing: false, currentPath: [],
-    init: () => {
-        const c = $('consensus-canvas'), cont = $('consensus-canvas-container');
-        c.width = cont.clientWidth; c.height = cont.clientHeight;
-        Consensus.ctx = c.getContext('2d');
-        Consensus.ctx.lineCap = 'round'; Consensus.ctx.lineJoin = 'round';
-        c.onmousedown = (e) => Consensus.startDraw(e); c.onmousemove = (e) => Consensus.moveDraw(e);
-        c.onmouseup = () => Consensus.endDraw(); c.onmouseleave = () => Consensus.endDraw();
-        c.ontouchstart = (e) => { e.preventDefault(); Consensus.startDraw(e.touches[0]); };
-        c.ontouchmove = (e) => { e.preventDefault(); Consensus.moveDraw(e.touches[0]); };
-        c.ontouchend = () => Consensus.endDraw();
-        new ResizeObserver(() => { c.width = cont.clientWidth; c.height = cont.clientHeight; Consensus.render(); }).observe(cont);
-    },
-    startSession: (initialInk) => {
-        State.consensus.active = true; State.consensus.ink = initialInk || [];
+    touch: { x:0, y:0, d:0 },
+    init: false,
+    
+    start: (items, ink) => {
+        State.consensus.active = true;
+        State.consensus.ink = ink || [];
+        State.consensus.view = {x:0, y:0, z:1};
+        $('consensus-items').innerHTML = items.map(i => {
+            let inner = i.type === 'note' ? (i.src ? `<img src="${i.src}">` : i.text) : '';
+            return `<div id="ci-${i.id}" class="c-item c-${i.sub||'notice'}" style="transform:translate(${i.x}px,${i.y}px); width:${i.w}px; height:${i.h}px">${inner}</div>`;
+        }).join('');
         Show('scr-consensus');
-        if (!Consensus.ctx) Consensus.init();
         Consensus.render();
     },
-    stopSession: () => { State.consensus.active = false; State.consensus.canDraw = false; Show('scr-lobby'); },
+    
+    exit: () => { State.consensus.active = false; Show('scr-lobby'); },
+    
     setPerms: (canDraw) => {
         State.consensus.canDraw = canDraw;
-        $('consensus-perms').innerText = canDraw ? "You can draw!" : "View Only";
+        $('cm-perm-text').innerText = canDraw ? "You can draw" : "View Only";
         $('consensus-toolbar').style.display = canDraw ? 'flex' : 'none';
+        if(canDraw) Consensus.setTool('draw'); else Consensus.setTool('pan');
     },
-    setTool: (tool, color) => {
-        State.consensus.tool = tool; if (color) State.consensus.color = color;
-        document.querySelectorAll('#consensus-toolbar .tool-btn').forEach(b => b.classList.remove('active'));
-        if(event) event.currentTarget.classList.add('active');
+
+    toggleMode: () => {
+        if(!State.consensus.canDraw) return;
+        if(State.consensus.tool === 'pan') Consensus.setTool('draw'); else Consensus.setTool('pan');
     },
+
+    setTool: (t, c) => {
+        State.consensus.tool = t;
+        if(c) State.consensus.color = c;
+        $('cm-pan-toggle').classList.toggle('active', t==='pan');
+        $('consensus-viewport').style.cursor = t==='pan' ? 'grab' : 'crosshair';
+        document.querySelectorAll('#consensus-toolbar .c-tool').forEach(b => b.classList.remove('active'));
+        if(event && t!=='pan') event.currentTarget.classList.add('active');
+    },
+
     render: () => {
-        if (!Consensus.ctx) return;
-        const c = $('consensus-canvas');
-        Consensus.ctx.clearRect(0, 0, c.width, c.height);
-        State.consensus.ink.forEach(stroke => {
-            Consensus.ctx.beginPath();
-            if (!stroke.points || stroke.points.length === 0) return;
-            Consensus.ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-            for (let i = 1; i < stroke.points.length; i++) Consensus.ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
-            Consensus.ctx.strokeStyle = stroke.color; Consensus.ctx.lineWidth = stroke.width;
-            Consensus.ctx.globalCompositeOperation = 'source-over'; Consensus.ctx.stroke();
-        });
+        const svg = $('consensus-ink');
+        svg.innerHTML = State.consensus.ink.map(s => `<path d="${s.points.map((p,i)=>`${i===0?'M':'L'} ${p.x} ${p.y}`).join(' ')}" stroke="${s.color}" stroke-width="${s.width}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
+        Consensus.syncView();
     },
-    startDraw: (e) => {
-        if (!State.consensus.canDraw) return;
-        Consensus.isDrawing = true;
-        const { x, y } = Consensus.getCoords(e);
-        Consensus.currentPath = [{ x, y }];
-        Consensus.ctx.beginPath(); Consensus.ctx.moveTo(x, y);
-        Consensus.ctx.lineWidth = State.consensus.tool === 'eraser' ? 20 : State.consensus.width;
-        Consensus.ctx.strokeStyle = State.consensus.color;
-        Consensus.ctx.globalCompositeOperation = State.consensus.tool === 'eraser' ? 'destination-out' : 'source-over';
+
+    addInk: (ink) => { State.consensus.ink.push(ink); Consensus.render(); },
+    clear: () => { State.consensus.ink = []; Consensus.render(); },
+    moveItem: (id, x, y) => { const el=$(`ci-${id}`); if(el) el.style.transform = `translate(${x}px, ${y}px)`; },
+    
+    syncView: () => {
+        const v = State.consensus.view;
+        $('consensus-world').style.transform = `scale(${v.z}) translate(${v.x}px, ${v.y}px)`;
     },
-    moveDraw: (e) => {
-        if (!Consensus.isDrawing || !State.consensus.canDraw) return;
-        const { x, y } = Consensus.getCoords(e);
-        Consensus.currentPath.push({ x, y });
-        Consensus.ctx.lineTo(x, y); Consensus.ctx.stroke();
-        Consensus.ctx.beginPath(); Consensus.ctx.moveTo(x, y);
-    },
-    endDraw: () => {
-        if (!Consensus.isDrawing || !State.consensus.canDraw) return;
-        Consensus.isDrawing = false; Consensus.ctx.beginPath();
-        if (State.consensus.tool === 'draw' && Consensus.currentPath.length > 1) {
-            SafeSend({ type: 'CONSENSUS_INK', ink: { id: genId(), points: Consensus.currentPath, color: State.consensus.color, width: State.consensus.width } });
+
+    // Input Handling
+    path: [],
+    inputStart: (e) => {
+        if(!State.consensus.active) return;
+        const evt = e.touches ? e.touches[0] : e;
+        const rect = $('consensus-viewport').getBoundingClientRect();
+        Consensus.touch = { sx: evt.clientX, sy: evt.clientY, vx: State.consensus.view.x, vy: State.consensus.view.y };
+        
+        if(State.consensus.tool !== 'pan') {
+            const wx = (evt.clientX - rect.left)/State.consensus.view.z - State.consensus.view.x;
+            const wy = (evt.clientY - rect.top)/State.consensus.view.z - State.consensus.view.y;
+            Consensus.path = [{x:wx, y:wy}];
         }
-        Consensus.currentPath = [];
     },
-    getCoords: (e) => { const rect = $('consensus-canvas').getBoundingClientRect(); return { x: e.clientX - rect.left, y: e.clientY - rect.top }; }
+    inputMove: (e) => {
+        if(!State.consensus.active || !Consensus.touch.sx) return;
+        e.preventDefault();
+        const evt = e.touches ? e.touches[0] : e;
+        const rect = $('consensus-viewport').getBoundingClientRect();
+        
+        if(State.consensus.tool === 'pan') {
+            State.consensus.view.x = Consensus.touch.vx + (evt.clientX - Consensus.touch.sx)/State.consensus.view.z;
+            State.consensus.view.y = Consensus.touch.vy + (evt.clientY - Consensus.touch.sy)/State.consensus.view.z;
+            Consensus.syncView();
+        } else {
+            const wx = (evt.clientX - rect.left)/State.consensus.view.z - State.consensus.view.x;
+            const wy = (evt.clientY - rect.top)/State.consensus.view.z - State.consensus.view.y;
+            Consensus.path.push({x:wx, y:wy});
+            // Simplified render for preview could go here
+            Consensus.render(); // Re-render with new temp path logic if needed, simplifed here to just wait for end or add local temp line
+        }
+    },
+    inputEnd: () => {
+        if(State.consensus.tool !== 'pan' && Consensus.path.length > 1) {
+            const ink = { id: genId(), points: Consensus.path, color: State.consensus.color, width: 4 };
+            Consensus.addInk(ink);
+            SafeSend({ type: 'CONSENSUS_INK', ink: ink });
+        }
+        Consensus.touch = { sx:null }; Consensus.path = [];
+    }
 };
 
+// Bind Consensus Events
+const cv = $('consensus-viewport');
+cv.addEventListener('mousedown', Consensus.inputStart);
+cv.addEventListener('mousemove', Consensus.inputMove);
+cv.addEventListener('mouseup', Consensus.inputEnd);
+cv.addEventListener('touchstart', Consensus.inputStart, {passive:false});
+cv.addEventListener('touchmove', Consensus.inputMove, {passive:false});
+cv.addEventListener('touchend', Consensus.inputEnd);
 
-/* --- SPECIAL ACTIVITY RENDERERS --- */
-function RenderVoteUI(items) {
-    $('vote-list').innerHTML = items.map(i => `<div class="vote-item" onclick="SelectVote('${i.id}', this)"><div>${i.sub ? (i.sub==='idea'?'💡':(i.sub==='wonder'?'❓':'👁️')) : '📝'}</div><div>${sanitizeHTML(i.text.substring(0,60))}...</div></div>`).join('');
-    State.selectedVote = null; $('btn-submit-vote').disabled = true; $('btn-submit-vote').innerText = "Submit Vote";
-    $('btn-submit-vote').onclick = () => { if(State.selectedVote) { SafeSend({ type: 'SUBMIT_VOTE', actId: State.activity.id, choiceId: State.selectedVote }); alert("Vote Submitted!"); $('btn-submit-vote').disabled = true; $('btn-submit-vote').innerText = "Submitted"; } };
+
+/* --- ACTIVITY RENDERERS --- */
+function RenderVote(items) {
+    $('vote-list').innerHTML = items.map(i => `<div class="vote-item" onclick="SelectVote('${i.id}', this)"><div>${i.text.substring(0,60)}...</div></div>`).join('');
+    $('btn-submit-vote').disabled = true; $('btn-submit-vote').innerText = "Submit Vote";
 }
-function SelectVote(id, el) { document.querySelectorAll('.vote-item').forEach(e => e.classList.remove('selected')); el.classList.add('selected'); State.selectedVote = id; $('btn-submit-vote').disabled = false; }
-function RenderSortUI(items) {
-    State.sortOrder = [...items]; const list = $('sort-list');
-    const render = () => list.innerHTML = State.sortOrder.map((i, idx) => `<div class="sort-item"><div>#${idx+1}</div><div style="flex:1">${sanitizeHTML(i.text.substring(0,50))}</div><div class="sort-controls"><button class="sort-btn" onclick="MoveItem(${idx},-1)">▲</button><button class="sort-btn" onclick="MoveItem(${idx},1)">▼</button></div></div>`).join('');
+function SelectVote(id, el) { 
+    document.querySelectorAll('.vote-item').forEach(e => e.classList.remove('selected')); 
+    el.classList.add('selected'); State.selectedVote = id; $('btn-submit-vote').disabled = false; 
+}
+$('btn-submit-vote').onclick = () => { if(State.selectedVote) { SafeSend({ type: 'SUBMIT_VOTE', actId: State.activity.id, choiceId: State.selectedVote }); alert("Vote Sent!"); } };
+
+function RenderSort(items) {
+    State.sortOrder = [...items];
+    const render = () => $('sort-list').innerHTML = State.sortOrder.map((i, idx) => `<div class="sort-item"><div>#${idx+1}</div><div style="flex:1">${i.text.substring(0,40)}</div><div class="sort-controls"><button class="sort-btn" onclick="MoveItem(${idx},-1)">▲</button><button class="sort-btn" onclick="MoveItem(${idx},1)">▼</button></div></div>`).join('');
     render();
-    window.MoveItem = (idx, dir) => { if(idx+dir<0||idx+dir>=State.sortOrder.length) return; const temp=State.sortOrder[idx]; State.sortOrder[idx]=State.sortOrder[idx+dir]; State.sortOrder[idx+dir]=temp; render(); };
+    window.MoveItem = (idx, dir) => { if(idx+dir<0||idx+dir>=State.sortOrder.length)return; [State.sortOrder[idx],State.sortOrder[idx+dir]]=[State.sortOrder[idx+dir],State.sortOrder[idx]]; render(); };
 }
-function SubmitSort() { SafeSend({ type: 'SUBMIT_SORT', actId: State.activity.id, order: State.sortOrder.map(i=>i.id) }); alert("Ranking Submitted!"); }
-function RenderDiscussUI(items) { $('discuss-items').innerHTML = items.map(i => `<div class="discuss-card" onclick="OpenDiscussModal('${i.id}', '${i.text.replace(/'/g, "\\'")}', '${i.sub}')"><div class="d-meta"><span>${i.sub?(i.sub==='idea'?'💡 IDEA':(i.sub==='wonder'?'❓ WONDER':'👁️ NOTICE')):'📝 NOTE'}</span><span>Tap to comment</span></div><div>${sanitizeHTML(i.text.substring(0,100))}${i.text.length>100?'...':''}</div></div>`).join(''); }
-let currentDiscussTarget = null;
-function OpenDiscussModal(id, text, sub) { currentDiscussTarget = id; $('md-text').innerHTML = sanitizeHTML(text.substring(0,60)) + "..."; $('md-input').value = ''; $('modal-discuss').classList.add('active'); $('md-input').focus(); }
-function CloseDiscussModal() { $('modal-discuss').classList.remove('active'); currentDiscussTarget = null; }
-function SetDiscussTag(el, tag) { document.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active')); el.classList.add('active'); State.discussTag = tag; }
-function SubmitDiscussComment() { const txt = $('md-input').value.trim(); if(!txt || !currentDiscussTarget) return; SafeSend({ type:'COMMENT', targetId:currentDiscussTarget, text:txt, author:State.me.name, tag:State.discussTag }); CloseDiscussModal(); alert("Comment Posted!"); }
-function SyncNotes(serverNotes) { if(!serverNotes) return; serverNotes.forEach(sn => { const local = State.notes.find(n => n.id === sn.id); if(local) { local.text = sn.text; local.sub = sn.sub; DB.saveNote(local); } }); }
+function SubmitSort() { SafeSend({ type: 'SUBMIT_SORT', actId: State.activity.id, order: State.sortOrder.map(i=>i.id) }); alert("Ranking Sent!"); }
 
-/* --- DRAFTING & SENDING --- */
-function Draft(sub) {
-    State.draft = { id: genId(), sub: sub, text: '' };
-    SetDraftType(sub); Show('scr-write');
-    setTimeout(() => $('w-txt').focus(), 300);
+function RenderDiscuss(items) { $('discuss-items').innerHTML = items.map(i => `<div class="discuss-card" onclick="OpenDiscuss('${i.id}', '${i.text.replace(/'/g,"\\'")}')"><div style="font-size:0.8rem;color:#64748b;font-weight:700">NOTE</div><div>${i.text.substring(0,100)}...</div></div>`).join(''); }
+let discussTarget = null;
+function OpenDiscuss(id, txt) { discussTarget = id; $('md-text').innerText = txt; $('md-input').value=''; $('modal-discuss').classList.add('active'); }
+function SetDiscussTag(el, tag) { document.querySelectorAll('.status-pill').forEach(b => b.classList.remove('online')); el.classList.add('online'); State.discussTag = tag; }
+function SubmitDiscussComment() { 
+    const txt = $('md-input').value.trim(); 
+    if(!txt) return; 
+    SafeSend({ type:'COMMENT', targetId:discussTarget, text:txt, author:State.me.name, tag:State.discussTag }); 
+    $('modal-discuss').classList.remove('active'); 
 }
-function SetDraftType(sub) {
-    State.draft.sub = sub; $('w-head').innerText = sub.charAt(0).toUpperCase() + sub.slice(1);
+
+/* --- DRAFTING --- */
+function Draft(sub) { State.draft = { id: genId(), sub, text: '' }; SetDraftType(sub); Show('scr-write'); setTimeout(()=>$('w-txt').focus(), 200); }
+function SetDraftType(sub) { 
+    State.draft.sub = sub; 
+    $('w-head').innerText = sub.charAt(0).toUpperCase() + sub.slice(1);
     document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
-    const chip = $(`c-${sub}`);
-    if(chip) { chip.classList.add('active'); chip.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); }
+    const chip = $(`c-${sub}`); if(chip) { chip.classList.add('active'); chip.scrollIntoView({ behavior:'smooth', inline:'center' }); }
 }
-function SendNote() { const txt = $('w-txt').value.trim(); if(!txt) return; const n = { id: State.draft.id, sub: State.draft.sub, text: txt, ts: Date.now(), boardId: State.boardId }; DB.saveNote(n); SafeSend({ type:'NOTE', id:n.id, sub:n.sub, text:n.text, zoneId: (State.activity.type === 'ZONE_ACT') ? State.activity.id : null }); Show('scr-lobby'); }
+function SendNote() {
+    const txt = $('w-txt').value.trim(); if(!txt) return;
+    const n = { id: State.draft.id, sub: State.draft.sub, text: txt, ts: Date.now(), boardId: State.boardId };
+    DB.saveNote(n);
+    SafeSend({ type:'NOTE', id:n.id, sub:n.sub, text:n.text, zoneId: State.activity.type === 'ZONE_ACT' ? State.activity.id : null });
+    Show('scr-lobby');
+}
 
 /* --- SKETCHING --- */
-let ctx, isDrawing=false;
-function DraftSketch() { State.draft = { id: genId(), sub: 'sketch' }; $('sketch-caption').value = ''; Show('scr-sketch'); InitCanvas(); }
-function InitCanvas() {
-    const c = $('sketch-canvas'), p = c.parentElement; c.width = p.clientWidth - 40; c.height = 300;
-    ctx = c.getContext('2d'); ctx.lineCap='round'; ctx.lineJoin='round'; SetTool('pen');
-    const start = (e) => { isDrawing=true; Draw(e); }; const move = (e) => { if(isDrawing) Draw(e); }; const end = () => isDrawing=false;
-    c.onmousedown = start; c.onmousemove = move; c.onmouseup = end;
-    c.ontouchstart = (e) => { e.preventDefault(); start(e.touches[0]); }; c.ontouchmove = (e) => { e.preventDefault(); move(e.touches[0]); }; c.ontouchend = end;
+let ctx, isSketching=false;
+function DraftSketch() { 
+    State.draft = { id: genId(), sub: 'sketch' }; $('sketch-caption').value=''; 
+    Show('scr-sketch'); 
+    const c=$('sketch-canvas'); c.width=c.parentElement.clientWidth-48; c.height=300;
+    ctx = c.getContext('2d'); ctx.lineCap='round'; ctx.lineJoin='round'; SetSketchTool('pen');
+    
+    const start = (e) => { isSketching=true; draw(e); };
+    const move = (e) => { if(isSketching) draw(e); };
+    const end = () => isSketching=false;
+    const draw = (e) => { 
+        const r=c.getBoundingClientRect(); 
+        const x=(e.clientX||e.touches[0].clientX)-r.left, y=(e.clientY||e.touches[0].clientY)-r.top;
+        ctx.lineTo(x,y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x,y);
+    }
+    
+    c.onmousedown=start; c.onmousemove=move; c.onmouseup=end;
+    c.ontouchstart=e=>{e.preventDefault();start(e);}; c.ontouchmove=e=>{e.preventDefault();move(e);}; c.ontouchend=end;
 }
-function Draw(e) { const r = $('sketch-canvas').getBoundingClientRect(), x = e.clientX-r.left, y = e.clientY-r.top; ctx.lineTo(x,y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x,y); }
-function SetTool(t) { ctx.beginPath(); if(t==='pen') { ctx.globalCompositeOperation='source-over'; ctx.lineWidth=3; ctx.strokeStyle='#000'; } else { ctx.globalCompositeOperation='destination-out'; ctx.lineWidth=20; } document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active')); if(t==='pen') $('tb-pen').classList.add('active'); else $('tb-era').classList.add('active'); }
-function ClearSketch() { ctx.clearRect(0,0,1000,1000); ctx.beginPath(); }
-function SendSketch() { const data=$('sketch-canvas').toDataURL('image/png'), cap=$('sketch-caption').value.trim()||'Sketch'; const n={id:State.draft.id,sub:'sketch',text:cap,src:data,ts:Date.now(),boardId:State.boardId}; DB.saveNote(n); SafeSend({type:'IMG_NOTE',id:n.id,src:data,text:cap,zoneId:(State.activity.type==='ZONE_ACT')?State.activity.id:null}); Show('scr-lobby'); }
+function SetSketchTool(t) { ctx.beginPath(); if(t==='pen') { ctx.globalCompositeOperation='source-over'; ctx.lineWidth=3; ctx.strokeStyle='#000'; } else { ctx.globalCompositeOperation='destination-out'; ctx.lineWidth=20; } document.querySelectorAll('#scr-sketch .c-tool').forEach(b=>b.classList.remove('active')); $(`tb-${t==='pen'?'pen':'era'}`).classList.add('active'); }
+function SendSketch() {
+    const data=$('sketch-canvas').toDataURL(), cap=$('sketch-caption').value.trim()||'Sketch';
+    const n={id:State.draft.id,sub:'sketch',text:cap,src:data,ts:Date.now(),boardId:State.boardId};
+    DB.saveNote(n);
+    SafeSend({type:'IMG_NOTE',id:n.id,src:data,text:cap,zoneId:State.activity.type==='ZONE_ACT'?State.activity.id:null});
+    Show('scr-lobby');
+}
 
-/* --- WIDGETS & EXIT --- */
-function RenderPoll(d) { $('wid-title').innerHTML=sanitizeHTML(d.q); $('wid-content').innerHTML = d.opts.map((o,i) => `<button class="btn btn-s mc-opt" onclick="SubmitPoll(${i}, this)">${sanitizeHTML(o.lbl)}</button>`).join(''); $('wid-input-area').style.display='none'; $('wid-submit').style.display='none'; }
-function SubmitPoll(idx, btn) { document.querySelectorAll('.mc-opt').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); SafeSend({ type:'POLL_VOTE', actId: State.activity.id, idx: idx }); Show('scr-lobby'); }
-function RenderGraphInput(d) { $('wid-title').innerHTML=sanitizeHTML(d.title); $('wid-content').innerHTML=''; $('wid-input-area').style.display='block'; $('wid-submit').style.display='block'; $('graph-val').value=''; $('wid-submit').onclick = () => { const v = parseFloat($('graph-val').value); if(isNaN(v)) return alert("Enter a number"); SafeSend({ type:'DATA_SUBMIT', actId: State.activity.id, val: v }); Show('scr-lobby'); }; }
-function RenderExit(d) { $('exit-prompt').innerHTML = sanitizeHTML(d.prompt); const area=$('exit-area'); area.innerHTML=''; let val=null, multi=[]; if(d.mode==='short'){area.innerHTML=`<textarea id="exit-txt" rows="5" placeholder="Answer here..."></textarea>`;$('exit-submit').onclick=()=>SubmitExit($('exit-txt').value);}else if(d.mode==='smiley'){const r=document.createElement('div');r.className='emoji-row';['😡','🙁','😐','🙂','😀'].forEach(e=>{const b=document.createElement('div');b.className='emoji-opt';b.innerText=e;b.onclick=()=>{document.querySelectorAll('.emoji-opt').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');val=e;};r.appendChild(b);});area.appendChild(r);$('exit-submit').onclick=()=>SubmitExit(val);}else if(d.mode==='mc'||d.mode==='multi'){d.opts.forEach(o=>{const b=document.createElement('div');b.className='mc-opt';b.innerHTML=sanitizeHTML(o);b.onclick=()=>{if(d.mode==='mc'){document.querySelectorAll('.mc-opt').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');val=o;}else{b.classList.toggle('selected');if(b.classList.contains('selected'))multi.push(o);else multi=multi.filter(x=>x!==o);}};area.appendChild(b);});$('exit-submit').onclick=()=>SubmitExit(d.mode==='mc'?val:multi);}else if(d.mode==='lw'){area.innerHTML=`<label>I Learned:</label><input id="exit-l"><label>I Wonder:</label><input id="exit-w">`;$('exit-submit').onclick=()=>{const l=$('exit-l').value,w=$('exit-w').value;if(l&&w)SubmitExit({l,w});else alert("Fill both");};}}
-function SubmitExit(val) { if(!val || (Array.isArray(val) && val.length===0)) return alert("Please answer."); SafeSend({ type:'EXIT_SUBMIT', actId: State.activity.id, val: val }); Show('scr-lobby'); alert("Response Submitted!"); }
+/* --- WIDGETS --- */
+function RenderPoll(d) { $('wid-title').innerText=d.q; $('wid-content').innerHTML=d.opts.map((o,i)=>`<button class="btn btn-s" style="margin-bottom:8px; text-align:left" onclick="SafeSend({type:'POLL_VOTE',actId:'${d.actId}',idx:${i}});Show('scr-lobby')">${sanitizeHTML(o.lbl)}</button>`).join(''); $('wid-input-area').style.display='none'; $('wid-submit').style.display='none'; }
+function RenderGraphInput(d) { $('wid-title').innerText=d.title; $('wid-content').innerHTML=''; $('wid-input-area').style.display='block'; $('wid-submit').style.display='block'; $('wid-submit').onclick=()=>{ SafeSend({type:'DATA_SUBMIT',actId:d.actId,val:parseFloat($('graph-val').value)||0}); Show('scr-lobby'); }; }
+function RenderExit(d) {
+    $('exit-prompt').innerHTML=sanitizeHTML(d.prompt); const a=$('exit-area'); a.innerHTML=''; let val=null;
+    if(d.mode==='short') { a.innerHTML=`<textarea id="ex-txt" rows="5"></textarea>`; $('exit-submit').onclick=()=>SubmitExit($('ex-txt').value); }
+    else if(d.mode==='smiley') { ['😡','🙁','😐','🙂','😀'].forEach(e=>{const b=document.createElement('span');b.innerText=e;b.style.fontSize='2.5rem';b.style.margin='0 10px';b.onclick=()=>{val=e;a.querySelectorAll('span').forEach(x=>x.style.opacity=0.3);b.style.opacity=1;};a.appendChild(b);}); $('exit-submit').onclick=()=>SubmitExit(val); }
+    else if(d.mode==='mc') { d.opts.forEach(o=>{const b=document.createElement('div');b.className='sort-item';b.innerText=o;b.onclick=()=>{a.querySelectorAll('div').forEach(x=>x.style.borderColor='#cbd5e1');b.style.borderColor=getComputedStyle(document.body).getPropertyValue('--accent');val=o;};a.appendChild(b);}); $('exit-submit').onclick=()=>SubmitExit(val); }
+    else if(d.mode==='lw') { a.innerHTML=`<input id="ex-l" placeholder="I Learned..."><input id="ex-w" placeholder="I Wonder...">`; $('exit-submit').onclick=()=>SubmitExit({l:$('ex-l').value, w:$('ex-w').value}); }
+}
+function SubmitExit(val) { if(!val) return; SafeSend({ type:'EXIT_SUBMIT', actId:State.activity.id, val }); Show('scr-lobby'); }
 
-/* --- HISTORY & UTILS --- */
-function RenderHist() { const list=$('hist-list'), myNotes=State.notes.filter(n=>n.boardId===State.boardId).sort((a,b)=>b.ts-a.ts); if(myNotes.length===0){list.innerHTML=`<div style="text-align:center; color:#cbd5e1; padding:20px">No contributions yet.</div>`;return;} list.innerHTML=myNotes.map(n=>`<div class="note-card n-${n.sub}">${n.sub==='sketch'?`<img src="${n.src}" style="width:100%; border-radius:8px; background:#f1f5f9;">`:`<div>${sanitizeHTML(n.text)}</div>`}<div class="note-controls"><button class="mini-btn" onclick="DeleteNote('${n.id}')">Delete</button></div></div>`).join(''); }
-function DeleteNote(id) { if(confirm("Delete this note?")) { DB.delNote(id); SafeSend({ type:'DELETE_NOTE', id: id }); } }
+/* --- HISTORY --- */
+function RenderHist() {
+    const list=$('hist-list'), notes=State.notes.filter(n=>n.boardId===State.boardId).sort((a,b)=>b.ts-a.ts);
+    if(!notes.length) return list.innerHTML=`<div style="text-align:center;color:#cbd5e1;padding:20px">No notes yet</div>`;
+    list.innerHTML=notes.map(n=>`<div class="note-card n-${n.sub}"><div>${n.sub==='sketch'?`<img src="${n.src}" style="width:100%">`:`${sanitizeHTML(n.text)}`}</div><div style="text-align:right;margin-top:5px"><span onclick="DeleteNote('${n.id}')" style="font-size:0.8rem;color:#ef4444;cursor:pointer">Delete</span></div></div>`).join('');
+}
+function DeleteNote(id) { if(confirm("Delete?")) { DB.delNote(id); SafeSend({ type:'DELETE_NOTE', id }); } }
 
-// Init
 window.onload = () => DB.init().then(() => { if(State.me.name) Setup(); });
 </script>
 </body>

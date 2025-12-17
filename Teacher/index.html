@@ -937,18 +937,43 @@ window.addEventListener('statechange', (e) => {
 
     // Handle networking
     if (!State.isCoHost && Network.peer) {
+        
+        // Helper to determine target color for an item based on its parent zone
+        const getTargetColor = (item) => {
+            if(!item.parentZone) return null;
+            const z = State.items.find(x => x.id === item.parentZone);
+            return z ? z.color : null;
+        };
+
         switch(action) {
             case 'items:add':
-                payload.items.forEach(item => Network.broadcast({ type: 'ADD_ITEM', item }));
+                // Send individually to respect color permissions
+                payload.items.forEach(item => {
+                    const targetColor = getTargetColor(item);
+                    Network.broadcastToTargets({ type: 'ADD_ITEM', item }, targetColor);
+                });
                 break;
             case 'items:update':
-                 if (payload.items.length === 1) {
-                     const item = State.items.find(i => i.id === payload.items[0].id);
-                     if(item) Network.broadcast({ type: 'NOTE_UPDATE', note: item });
-                 } else {
-                     const fullItems = payload.items.map(p => State.items.find(i => i.id === p.id)).filter(Boolean);
-                     if(fullItems.length > 0) Network.broadcast({ type: 'BATCH_UPDATE', items: fullItems });
-                 }
+                // Group updates by their zone color
+                const updatesByColor = {}; // Key: color (or 'null'), Value: [items]
+                
+                payload.items.forEach(p => {
+                     const fullItem = State.items.find(i => i.id === p.id);
+                     if(fullItem) {
+                         const c = getTargetColor(fullItem) || 'all';
+                         if(!updatesByColor[c]) updatesByColor[c] = [];
+                         updatesByColor[c].push(fullItem);
+                     }
+                });
+
+                Object.entries(updatesByColor).forEach(([color, items]) => {
+                     const targetColor = color === 'all' ? null : color;
+                     if (items.length === 1) {
+                         Network.broadcastToTargets({ type: 'NOTE_UPDATE', note: items[0] }, targetColor);
+                     } else {
+                         Network.broadcastToTargets({ type: 'BATCH_UPDATE', items: items }, targetColor);
+                     }
+                });
                 break;
             case 'items:delete':
                 payload.ids.forEach(id => Network.broadcast({ type: 'DELETE_NOTE', id }));
@@ -1738,6 +1763,26 @@ window.Render = {
                         else if(i.zoneType === 'exit') { wrapper.style.border = '2px solid #6366f1'; }
                         if (label) label.style.color = 'var(--accent)';
                     }
+                }
+                
+                // FIX: Update note type styling when it changes
+                if(i.type === 'note' && !i.src && !el.classList.contains('consensus-child')) {
+                     const head = TYPES[i.sub] || TYPES.meta;
+                     const w = el.querySelector('.jiggle-wrapper');
+                     const h = el.querySelector('.i-head');
+                     const icon = el.querySelector('.icon-span');
+                     const auth = el.querySelector('.auth-span');
+
+                     if(w && head) {
+                         w.style.background = head.col;
+                         w.style.borderColor = head.bor;
+                     }
+                     if(h && head) {
+                         h.style.background = head.bor + '33'; 
+                         h.style.color = head.bor;
+                     }
+                     if(icon && head) icon.innerText = head.icon;
+                     if(auth && head) auth.innerText = i.author || head.lbl;
                 }
             }
             
@@ -3386,6 +3431,18 @@ window.Network = {
     broadcast: (msg) => {
         if(State.isCoHost && State.students['HOST']) SafeSend(State.students['HOST'].conn, msg); 
         Object.values(State.students).forEach(s => { if(s.name !== 'Co-Host') SafeSend(s.conn, msg); }); 
+    },
+
+    broadcastToTargets: (msg, color) => {
+        if(State.isCoHost && State.students['HOST']) SafeSend(State.students['HOST'].conn, msg);
+        Object.values(State.students).forEach(s => {
+            if(s.name === 'Co-Host') return;
+            // If color is null, send to everyone.
+            // If color is set, only send if student.color matches.
+            if (!color || s.color === color) {
+                SafeSend(s.conn, msg);
+            }
+        });
     }
 };
 

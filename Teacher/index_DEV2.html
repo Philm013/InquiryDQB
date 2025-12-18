@@ -439,7 +439,7 @@ function AutoLayoutEngine({ editor }) {
         );
     }
 
-    function AppCore({ role, boardId, snap, peerId }) {
+function AppCore({ role, boardId, snap, peerId }) {
         const [store] = useState(() => {
             const s = createTLStore({ shapeUtils: defaultShapeUtils });
             if(snap) loadSnapshot(s, snap);
@@ -449,66 +449,169 @@ function AutoLayoutEngine({ editor }) {
         const [timer, setTimer] = useState(0);
         const [magnetZone, setMagnetZone] = useState(null);
         const [isCoHost, setIsCoHost] = useState(role === 'teacher');
+        
+        // Refs to manage connection state without triggering re-renders
+        const connectionsRef = useRef(new Map());
+        const heartbeatIntervalRef = useRef(null);
+        const peerRef = useRef(null);
+        const retryTimeoutRef = useRef(null);
 
         useEffect(() => {
-            const peer = new Peer(peerId);
-            let conns = new Map();
-            App.connections = conns;
+            // 1. Initialize Peer
+            const peer = new Peer(peerId, { debug: 1 });
+            peerRef.current = peer;
 
+            // --- SHARED UTILS ---
+            const handleData = (c, d) => {
+                try {
+                    const m = JSON.parse(d);
+                    
+                    // Heartbeat handling
+                    if (m.type === 'ping') { c.send(JSON.stringify({ type: 'pong' })); return; }
+                    if (m.type === 'pong') { c.lastPong = Date.now(); return; }
+
+                    // App logic
+                    if(m.type==='init') { loadSnapshot(store, m.snap); setTimer(m.timer || 0); }
+                    if(m.type==='update') {
+                        if(role === 'teacher' && magnetZone && m.changes.added) {
+                            for(let key in m.changes.added) {
+                                if(m.changes.added[key].type === 'note') m.changes.added[key].parentId = magnetZone;
+                            }
+                        }
+                        store.mergeRemoteChanges(() => {
+                            const {added,updated,removed} = m.changes;
+                            for(let k in added) store.put([added[k]]);
+                            for(let k in updated) store.put([updated[k][1]]);
+                            for(let k in removed) store.remove([removed[k].id]);
+                        });
+                    }
+                    if(m.type==='timer') setTimer(m.end);
+                    if(m.type==='spotlight' && isCoHost && editor) editor.setCamera(m.cam);
+                    if(m.type==='promote') {
+                        setIsCoHost(m.promote);
+                        if(editor) editor.updateInstanceState({ meta: { ...editor.getInstanceState().meta, isCoHost: m.promote }});
+                        App.ui.toast(m.promote ? "You are now a Co-Host!" : "You are a Student again.");
+                    }
+                } catch(e){ console.error("Data parse error", e); }
+            };
+
+            const setupConnection = (c) => {
+                c.lastPong = Date.now(); // Initialize heartbeat timestamp
+                connectionsRef.current.set(c.peer, c);
+                
+                c.on('open', () => {
+                    console.log(`Connection opened: ${c.peer}`);
+                    if(role==='teacher') {
+                        c.send(JSON.stringify({type:'init', snap:getSnapshot(store), timer}));
+                    } else {
+                        App.ui.toast("Connected to Class");
+                        // Clear any retry timeouts if we successfully connected
+                        if(retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+                    }
+                });
+
+                c.on('data', (d) => handleData(c, d));
+
+                c.on('close', () => {
+                    console.log(`Connection closed: ${c.peer}`);
+                    connectionsRef.current.delete(c.peer);
+                    
+                    // STUDENT RECONNECT LOGIC
+                    if (role === 'student') {
+                        App.ui.toast("Disconnected. Reconnecting...");
+                        retryTimeoutRef.current = setTimeout(() => connectToHost(), 2000);
+                    }
+                });
+                
+                c.on('error', (err) => {
+                    console.error('Connection error:', err);
+                    c.close();
+                });
+            };
+
+            // --- ROLE SPECIFIC SETUP ---
+            
+            // STUDENT: Connect to Host
+            const connectToHost = () => {
+                if (role !== 'student') return;
+                // Close existing if any to prevent duplicates
+                const existing = connectionsRef.current.get(boardId);
+                if (existing && existing.open) return;
+
+                console.log("Attempting to connect to host:", boardId);
+                const conn = peer.connect(boardId, { reliable: true });
+                setupConnection(conn);
+            };
+
+            // TEACHER: Heartbeat Loop
+            const startHeartbeat = () => {
+                if (role !== 'teacher') return;
+                heartbeatIntervalRef.current = setInterval(() => {
+                    const now = Date.now();
+                    connectionsRef.current.forEach((conn, id) => {
+                        // Prune dead connections (no pong in 10s)
+                        if (conn.lastPong && (now - conn.lastPong > 10000)) {
+                            console.log(`Pruning dead connection: ${id}`);
+                            conn.close();
+                            connectionsRef.current.delete(id);
+                            return;
+                        }
+                        // Send Ping
+                        if (conn.open) conn.send(JSON.stringify({ type: 'ping' }));
+                    });
+                    // Autosave logic moved here to reduce intervals
+                    DB.save(boardId, getSnapshot(store));
+                }, 3000); // Ping every 3s
+            };
+
+            // --- PEER EVENTS ---
+
+            peer.on('open', (id) => {
+                console.log('My Peer ID:', id);
+                if(role === 'teacher') {
+                    startHeartbeat();
+                } else {
+                    connectToHost();
+                }
+            });
+
+            peer.on('connection', (c) => {
+                // Incoming connection (Teacher receives student, or Student receives P2P update)
+                setupConnection(c);
+            });
+
+            peer.on('disconnected', () => {
+                console.log('Peer disconnected from signaling server. Reconnecting...');
+                peer.reconnect();
+            });
+
+            peer.on('error', (err) => {
+                console.error('Peer Error:', err.type);
+                if (role === 'student' && (err.type === 'peer-unavailable' || err.type === 'network')) {
+                    // Host not ready yet or network blip, retry
+                    if(!retryTimeoutRef.current) {
+                        retryTimeoutRef.current = setTimeout(() => connectToHost(), 2000);
+                    }
+                }
+            });
+
+            // --- EXPOSE GLOBALS FOR UI ---
             if(role === 'teacher') {
-                App.broadcast = (msg) => conns.forEach(c => c.open && c.send(JSON.stringify(msg)));
+                App.broadcast = (msg) => connectionsRef.current.forEach(c => c.open && c.send(JSON.stringify(msg)));
                 App.sendTo = (pId, msg) => {
-                    const conn = conns.get(pId);
+                    const conn = connectionsRef.current.get(pId);
+                    if (conn && conn.open) conn.send(JSON.stringify(msg));
+                };
+            } else {
+                // For student, "broadcast" sends to teacher
+                App.broadcast = (msg) => {
+                    const conn = connectionsRef.current.get(boardId);
                     if (conn && conn.open) conn.send(JSON.stringify(msg));
                 };
             }
 
-            peer.on('open', (id) => {
-                if(role === 'teacher') {
-                    setInterval(() => DB.save(boardId, getSnapshot(store)), 5000);
-                } else {
-                    const c = peer.connect(boardId);
-                    setup(c);
-                }
-            });
-
-            peer.on('connection', setup);
-
-            function setup(c) {
-                conns.set(c.peer, c);
-                c.on('open', () => {
-                    if(role==='teacher') c.send(JSON.stringify({type:'init', snap:getSnapshot(store), timer}));
-                });
-                c.on('data', d => {
-                    try {
-                        const m = JSON.parse(d);
-                        if(m.type==='init') { loadSnapshot(store, m.snap); setTimer(m.timer || 0); }
-                        if(m.type==='update') {
-                            if(role === 'teacher' && magnetZone && m.changes.added) {
-                                for(let key in m.changes.added) {
-                                    if(m.changes.added[key].type === 'note') m.changes.added[key].parentId = magnetZone;
-                                }
-                            }
-                            store.mergeRemoteChanges(() => {
-                                const {added,updated,removed} = m.changes;
-                                for(let k in added) store.put([added[k]]);
-                                for(let k in updated) store.put([updated[k][1]]);
-                                for(let k in removed) store.remove([removed[k].id]);
-                            });
-                        }
-                        if(m.type==='timer') setTimer(m.end);
-                        if(m.type==='spotlight' && isCoHost && editor) editor.setCamera(m.cam);
-                        if(m.type==='promote') {
-                            setIsCoHost(m.promote);
-                            editor.updateInstanceState({ meta: { ...editor.getInstanceState().meta, isCoHost: m.promote }});
-                            App.ui.toast(m.promote ? "You are now a Co-Host!" : "You are a Student again.");
-                        }
-                    } catch(e){}
-                });
-                c.on('close', () => conns.delete(c.peer));
-            }
-
-            const clean = store.listen(e => {
+            // Store listener for local changes
+            const cleanStore = store.listen(e => {
                 if(e.source !== 'user') return;
                 const changes = {added:{}, updated:{}, removed:{}};
                 let has = false;
@@ -530,8 +633,14 @@ function AutoLayoutEngine({ editor }) {
                 if(has) App.broadcast({type:'update', changes});
             });
 
-            return () => { clean(); peer.destroy(); };
-        }, [editor, magnetZone]);
+            return () => {
+                cleanStore();
+                if(heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+                if(retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+                peer.destroy();
+                connectionsRef.current.clear();
+            };
+        }, [editor, magnetZone]); // Dependencies
 
         const handleSetTimer = (end) => {
             setTimer(end);

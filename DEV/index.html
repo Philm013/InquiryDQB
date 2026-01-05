@@ -137,7 +137,7 @@
         .kick-btn { background: #fee2e2; color: #ef4444; border: none; font-weight: 600; cursor: pointer; font-size: 0.7rem; padding: 4px 8px; border-radius: 6px; margin-left: 5px; }
 
         /* CONTEXT TOOLBAR STYLES */
-        .ctx-toolbar-wrapper { display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; pointer-events: auto; }
+        .ctx-toolbar-wrapper { display: flex; justify-content: center; align-items: center; width: 100%; pointer-events: auto; }
         .ctx-toolbar { display: flex; gap: 5px; background: white; padding: 4px; border-radius: 8px; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); border: 1px solid var(--border); }
         .ctx-btn { background: transparent; border: none; color: var(--text-main); padding: 4px 10px; border-radius: 6px; font-weight: 500; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; white-space: nowrap; transition: background 0.1s; height: 24px; }
         .ctx-btn:hover { background: #f1f5f9; }
@@ -537,6 +537,8 @@
     }
 
     function AutoLayoutEngine({ editor }) {
+        const isLayingOut = useRef(false);
+
         useEffect(() => {
             if (!editor) return;
 
@@ -546,23 +548,25 @@
 
                 const PADDING = 20;
                 const GAP = 15;
-                const MIN_COL_WIDTH = 200; // Approx note width
-                const containerW = frame.props.w;
+                const MIN_COL_WIDTH = 180; 
+                
+                // Prevent division by zero or negative widths if zone is squeezed
+                const effectiveW = Math.max(frame.props.w, 100); 
+                let numCols = Math.floor((effectiveW - PADDING * 2 + GAP) / (MIN_COL_WIDTH + GAP));
+                if (numCols < 1) numCols = 1;
 
+                const colWidth = (effectiveW - PADDING * 2 - (numCols - 1) * GAP) / numCols;
+                const colBottoms = Array(numCols).fill(PADDING + 60); 
+                const updates = [];
+
+                // Use simple stable sort: y then x. 
+                // Do NOT use bucket sorting as it causes oscillation loops during layout updates.
                 const childIds = editor.getSortedChildIdsForParent(frameId);
                 const children = childIds.map(id => editor.getShape(id)).filter(Boolean);
 
-                const numCols = Math.max(1, Math.floor((containerW - PADDING * 2 + GAP) / (MIN_COL_WIDTH + GAP)));
-                const colWidth = (containerW - PADDING * 2 - (numCols - 1) * GAP) / numCols;
-                const colBottoms = Array(numCols).fill(PADDING + 60); // 60px for title area
-                const updates = [];
-
-                // Sort children by Y primarily (row flow), then by X.
-                // This ensures that items stay roughly where the user visually placed them order-wise.
                 children.sort((a, b) => {
-                    const rowA = Math.floor(a.y / 50); 
-                    const rowB = Math.floor(b.y / 50);
-                    if (rowA !== rowB) return rowA - rowB;
+                    const dy = a.y - b.y;
+                    if (Math.abs(dy) > 10) return dy; // Tolerance for sort stability
                     return a.x - b.x;
                 });
 
@@ -571,51 +575,48 @@
                     const shapeH = geo.bounds.h;
                     const shapeW = geo.bounds.w;
 
-                    // Calculate how many columns this item spans
-                    // We accept a tolerance (-10px) so a standard fit doesn't accidentally jump to 2 columns
                     let span = Math.ceil((shapeW - 10) / (colWidth + GAP));
                     if (span < 1) span = 1;
                     if (span > numCols) span = numCols;
 
-                    // Find the best start column
-                    // We look for a contiguous set of 'span' columns where the current height is minimal (highest up)
                     let bestCol = 0;
-                    let minMaxH = Infinity;
+                    let bestY = Infinity;
 
-                    // Iterate through valid start columns
                     for (let i = 0; i <= numCols - span; i++) {
-                        // Find the "ceiling" (max current height) in this candidate span
-                        let currentSpanMaxH = 0;
+                        let maxYInSpan = 0;
                         for (let k = 0; k < span; k++) {
-                            if (colBottoms[i + k] > currentSpanMaxH) currentSpanMaxH = colBottoms[i + k];
+                            if (colBottoms[i + k] > maxYInSpan) maxYInSpan = colBottoms[i + k];
                         }
-
-                        // Select this spot if it's higher up than our current best found spot
-                        if (currentSpanMaxH < minMaxH) {
-                            minMaxH = currentSpanMaxH;
+                        if (maxYInSpan < bestY) {
+                            bestY = maxYInSpan;
                             bestCol = i;
                         }
                     }
 
                     const newX = PADDING + bestCol * (colWidth + GAP);
-                    const newY = minMaxH;
+                    const newY = bestY;
                     
-                    // Only update if difference is > 1px to prevent jitter loops
                     if (Math.abs(shape.x - newX) > 1 || Math.abs(shape.y - newY) > 1) {
                          updates.push({ id: shape.id, type: shape.type, x: newX, y: newY });
                     }
                     
-                    // Update the bottom position for ALL columns this shape occupies
                     for (let k = 0; k < span; k++) {
                         colBottoms[bestCol + k] = newY + shapeH + GAP;
                     }
                 });
 
-                if (updates.length > 0) editor.updateShapes(updates);
+                if (updates.length > 0) {
+                    isLayingOut.current = true;
+                    editor.updateShapes(updates);
+                    setTimeout(() => isLayingOut.current = false, 50);
+                }
 
                 const totalH = Math.max(...colBottoms) + PADDING;
-                if (Math.abs(totalH - frame.props.h) > 20) {
-                    editor.updateShapes([{ id: frameId, type: 'frame', props: { h: Math.max(300, totalH) } }]);
+                // Only resize if content overflows the current frame height
+                if (totalH > frame.props.h) {
+                    isLayingOut.current = true;
+                    editor.updateShapes([{ id: frameId, type: 'frame', props: { h: totalH } }]);
+                    setTimeout(() => isLayingOut.current = false, 50);
                 }
             };
 
@@ -654,22 +655,30 @@
                             editor.reparentShapes([id], pageId);
                         }
                     });
+                    
+                    // Immediately trigger layout after interaction
                     setTimeout(() => framesToUpdate.forEach(fid => runLayout(fid)), 50);
                 }
             }, 50);
 
-            // Re-enabled robust store listener to catch ALL moves, preventing "stuck" items
             const handleStore = throttle((e) => {
-                const framesToUpdate = new Set();
+                // Prevent infinite loop by ignoring updates caused by layout engine
+                if (isLayingOut.current) return;
                 
-                // Track geometry/position changes of items inside frames
+                const framesToUpdate = new Set();
                 for (const rec of Object.values(e.changes.updated)) {
                     const [prev, next] = rec;
-                    if (next.parentId && next.parentId !== 'page') {
-                        // Check if parent is a frame
+
+                    // Check if a frame was resized
+                    if (next.type === 'frame') {
+                        // Check if dimensions changed
+                        if (prev.props.w !== next.props.w || prev.props.h !== next.props.h) {
+                            framesToUpdate.add(next.id);
+                        }
+                    } else if (next.parentId && next.parentId !== 'page') {
+                        // Check if item moved inside a frame
                         const parent = editor.getShape(next.parentId);
                         if (parent && parent.type === 'frame') {
-                            // Only trigger if position changed significantly to avoid loops
                             if (Math.abs(prev.x - next.x) > 1 || Math.abs(prev.y - next.y) > 1) {
                                 framesToUpdate.add(next.parentId);
                             }
@@ -678,7 +687,6 @@
                 }
                 
                 if (framesToUpdate.size > 0) {
-                    // Defer layout to allow current transaction to finish
                     requestAnimationFrame(() => framesToUpdate.forEach(fid => runLayout(fid)));
                 }
             }, 100);
@@ -928,12 +936,20 @@
             if (ids.length === 0) return App.ui.toast("Board is empty");
 
             try {
-                const blob = await editor.getSvg(ids, { scale: 1, background: true, bounds });
-                if(blob) { 
-                    const a = document.createElement('a'); 
-                    a.href = URL.createObjectURL(blob); 
-                    a.download = `DQB_Snapshot_${type}.svg`; 
-                    a.click(); 
+                const svgElement = await editor.getSvg(ids, { scale: 1, background: true, bounds });
+                if(svgElement) { 
+                    const svgString = new XMLSerializer().serializeToString(svgElement);
+                    const blob = new Blob([svgString], { type: 'image/svg+xml' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `DQB_Snapshot_${type}.svg`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
                     setSnapshotModalOpen(false);
                 }
             } catch(e) { console.error(e); App.ui.toast("Snapshot failed"); }

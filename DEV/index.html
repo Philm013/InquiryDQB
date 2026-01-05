@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>InquiryDQB</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#f8fafc">
     <meta name="apple-mobile-web-app-capable" content="yes">
     
     <!-- Tldraw CSS -->
@@ -28,14 +28,18 @@
 
     <style>
         :root {
+            /* Light Theme Variables */
             --primary: #6366f1; --primary-hover: #4f46e5;
-            --bg-dark: #0f172a; --bg-card: #1e293b; --text-main: #f8fafc; --text-muted: #94a3b8;
-            --c-notice: #a2d2ff; --c-wonder: #ffafcc; --c-idea: #cdb4db; --c-test: #b9fbc0;
+            --bg-body: #f8fafc; --bg-card: #ffffff; 
+            --text-main: #0f172a; --text-muted: #64748b;
+            --c-notice: #bae6fd; --c-wonder: #fbcfe8; --c-idea: #e9d5ff; --c-test: #bbf7d0;
             --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --border: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
 
         * { box-sizing: border-box; touch-action: none; -webkit-tap-highlight-color: transparent; }
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: var(--font); background: var(--bg-dark); color: var(--text-main); overflow: hidden; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: var(--font); background: var(--bg-body); color: var(--text-main); overflow: hidden; }
 
         .hidden { display: none !important; }
         .layer { position: absolute; inset: 0; pointer-events: none; }
@@ -43,7 +47,7 @@
         
         /* --- LANDING PAGE STYLES --- */
         #dashboard { 
-            z-index: 100; background: var(--bg-dark); position: absolute; inset: 0; 
+            z-index: 100; background: var(--bg-body); position: absolute; inset: 0; 
             overflow-y: auto; pointer-events: auto; display: flex; flex-direction: column; align-items: center;
         }
         
@@ -51,13 +55,12 @@
             text-align: center; padding: 60px 20px 40px; max-width: 800px; width: 100%;
         }
         .app-logo {
-            width: 80px; height: 80px; background: linear-gradient(135deg, #a2d2ff, #ffafcc);
+            width: 80px; height: 80px; background: linear-gradient(135deg, #bae6fd, #fbcfe8);
             border-radius: 20px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;
-            font-size: 40px; box-shadow: 0 0 30px rgba(99, 102, 241, 0.3);
+            font-size: 40px; box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
         }
         .hero-title {
-            font-size: 2.5rem; font-weight: 800; margin-bottom: 15px;
-            background: linear-gradient(to right, #818cf8, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            font-size: 2.5rem; font-weight: 800; margin-bottom: 15px; color: var(--text-main);
         }
         .hero-sub { color: var(--text-muted); font-size: 1.1rem; line-height: 1.6; margin-bottom: 40px; }
 
@@ -65,34 +68,35 @@
         .role-card {
             background: var(--bg-card); flex: 1; min-width: 280px; max-width: 350px;
             padding: 30px; border-radius: 24px; text-align: center; cursor: pointer;
-            border: 1px solid rgba(255,255,255,0.05); transition: transform 0.2s, border-color 0.2s;
+            border: 1px solid var(--border); transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+            box-shadow: var(--shadow);
         }
-        .role-card:hover { transform: translateY(-5px); border-color: var(--primary); }
+        .role-card:hover { transform: translateY(-5px); border-color: var(--primary); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
         .role-icon { font-size: 3rem; margin-bottom: 15px; }
-        .role-name { font-size: 1.5rem; font-weight: 700; margin-bottom: 10px; color: white; }
+        .role-name { font-size: 1.5rem; font-weight: 700; margin-bottom: 10px; color: var(--text-main); }
         .role-desc { color: var(--text-muted); font-size: 0.9rem; }
 
         .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; width: 100%; max-width: 900px; padding: 0 20px; margin-bottom: 60px; }
-        .feature-item { background: rgba(255,255,255,0.03); padding: 25px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05); }
+        .feature-item { background: var(--bg-card); padding: 25px; border-radius: 16px; border: 1px solid var(--border); }
         .feat-icon { font-size: 1.5rem; margin-bottom: 10px; color: #fbbf24; }
-        .feat-title { font-weight: 600; margin-bottom: 5px; color: white; }
+        .feat-title { font-weight: 600; margin-bottom: 5px; color: var(--text-main); }
         .feat-text { color: var(--text-muted); font-size: 0.85rem; line-height: 1.5; }
 
         /* Setup Forms (Inside Dashboard) */
         .setup-container { 
             background: var(--bg-card); padding: 30px; border-radius: 24px; width: 90%; max-width: 400px; 
-            text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.3); margin-top: 20px;
+            text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.1); margin-top: 20px; border: 1px solid var(--border);
         }
         .input-group { margin-bottom: 20px; text-align: left; }
         .input-label { display: block; color: var(--text-muted); font-size: 0.8rem; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
         .styled-input { 
-            width: 100%; padding: 14px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); 
-            border-radius: 12px; color: white; font-size: 1rem; outline: none; transition: border-color 0.2s;
+            width: 100%; padding: 14px; background: #f1f5f9; border: 1px solid var(--border); 
+            border-radius: 12px; color: var(--text-main); font-size: 1rem; outline: none; transition: border-color 0.2s;
         }
-        .styled-input:focus { border-color: var(--primary); }
+        .styled-input:focus { border-color: var(--primary); background: white; }
         
         .avatar-selector {
-            width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,0.1);
+            width: 80px; height: 80px; border-radius: 50%; background: #f1f5f9;
             margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;
             font-size: 2.5rem; cursor: pointer; border: 2px solid var(--primary);
             position: relative; transition: transform 0.2s;
@@ -105,100 +109,92 @@
 
         .btn { padding: 14px 20px; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; transition: transform 0.1s; font-size: 1rem; width: 100%; }
         .btn:active { transform: scale(0.96); }
-        .btn-primary { background: var(--primary); color: white; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4); }
-        .btn-secondary { background: rgba(255,255,255,0.1); color: white; margin-top: 10px; }
+        .btn-primary { background: var(--primary); color: white; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3); }
+        .btn-secondary { background: #f1f5f9; color: var(--text-main); margin-top: 10px; border: 1px solid var(--border); }
         .btn-danger { background: #ef4444; color: white; }
 
         /* --- APP UI --- */
-        .teacher-bar { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); padding: 8px; border-radius: 16px; box-shadow: 0 4px 25px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 8px; pointer-events: auto; z-index: 500; }
+        .teacher-bar { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); background: white; padding: 8px; border-radius: 16px; box-shadow: 0 4px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 8px; pointer-events: auto; z-index: 500; border: 1px solid var(--border); }
         .tool-btn { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; cursor: pointer; transition: background 0.1s; position: relative; color: #333; }
-        .tool-btn:hover { background: #f2f2f7; }
+        .tool-btn:hover { background: #f1f5f9; }
         .tool-btn::after { content: attr(title); position: absolute; left: 55px; background: #333; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; opacity: 0; pointer-events: none; white-space: nowrap; transition: 0.2s; z-index: 99; }
         .tool-btn:hover::after { opacity: 1; }
-        .sep { width: 100%; height: 1px; background: #e5e5ea; margin: 2px 0; }
+        .sep { width: 100%; height: 1px; background: #e2e8f0; margin: 2px 0; }
         
-        .template-popover { position: absolute; left: 58px; top: -100px; background: white; border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); padding: 8px; display: flex; flex-direction: column; gap: 6px; animation: fadeIn 0.1s; max-height: 300px; overflow-y: auto; width: 180px; }
+        .template-popover { position: absolute; left: 58px; top: -100px; background: white; border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); padding: 8px; display: flex; flex-direction: column; gap: 6px; animation: fadeIn 0.1s; max-height: 300px; overflow-y: auto; width: 180px; border: 1px solid var(--border); }
         .template-btn { background: none; border: none; padding: 8px 12px; font-size: 0.9rem; text-align: left; border-radius: 8px; cursor: pointer; color: #333; }
-        .template-btn:hover { background: #f2f2f7; }
-
-        .roster-container { position: absolute; top: 12px; right: 60px; pointer-events: auto; z-index: 500; }
-        .roster-btn { padding: 8px 16px; background: white; border-radius: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; color: #333; }
-        .roster-popover { position: absolute; top: 45px; right: 0; width: 240px; background: white; border-radius: 16px; box-shadow: 0 5px 25px rgba(0,0,0,0.15); padding: 10px; display: flex; flex-direction: column; gap: 6px; z-index: 2000; animation: fadeIn 0.1s; max-height: 400px; overflow-y: auto; color: #333; }
+        .template-btn:hover { background: #f1f5f9; }
+        
+        /* Roster Menu */
+        .roster-container { position: relative; pointer-events: auto; }
+        .roster-btn { padding: 6px 12px; background: white; border: 1px solid var(--border); color: var(--text-main); border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; height: 32px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .roster-btn:hover { background: #f8fafc; }
+        .roster-popover { position: absolute; top: 40px; right: 0; width: 240px; background: white; border-radius: 16px; box-shadow: 0 5px 25px rgba(0,0,0,0.1); padding: 10px; display: flex; flex-direction: column; gap: 6px; z-index: 2000; animation: fadeIn 0.1s; max-height: 400px; overflow-y: auto; color: #333; border: 1px solid var(--border); }
         .user-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; padding: 8px; border-radius: 8px; }
-        .user-row:hover { background: #f2f2f7; }
-        .promote-btn { background: #eee; border: none; color: #333; font-weight: 600; cursor: pointer; font-size: 0.7rem; padding: 4px 8px; border-radius: 6px; }
+        .user-row:hover { background: #f1f5f9; }
+        .promote-btn { background: #e2e8f0; border: none; color: #333; font-weight: 600; cursor: pointer; font-size: 0.7rem; padding: 4px 8px; border-radius: 6px; }
         .promote-btn.active { background: var(--primary); color: white; }
         .kick-btn { background: #fee2e2; color: #ef4444; border: none; font-weight: 600; cursor: pointer; font-size: 0.7rem; padding: 4px 8px; border-radius: 6px; margin-left: 5px; }
 
         /* CONTEXT TOOLBAR STYLES */
-        /* Z-index 9000 to sit above almost everything, but below toast */
-        .ctx-toolbar-wrapper { position: absolute; pointer-events: auto; z-index: 9000; animation: fadeIn 0.15s; }
-        .ctx-toolbar { display: flex; gap: 5px; background: #1e293b; padding: 6px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); align-items: center; }
-        
-        /* Mobile Dock Style */
-        @media (max-width: 640px) {
-            .ctx-toolbar-wrapper { top: 0 !important; left: 0 !important; right: 0 !important; transform: none !important; width: 100%; }
-            .ctx-toolbar { width: 100%; border-radius: 0; justify-content: center; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); overflow-x: auto; }
-        }
-
-        .ctx-btn { background: transparent; border: none; color: white; padding: 8px 14px; border-radius: 8px; font-weight: 500; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 6px; white-space: nowrap; transition: background 0.1s; }
-        .ctx-btn:hover { background: rgba(255,255,255,0.15); }
+        .ctx-toolbar-wrapper { display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; pointer-events: auto; }
+        .ctx-toolbar { display: flex; gap: 5px; background: white; padding: 4px; border-radius: 8px; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); border: 1px solid var(--border); }
+        .ctx-btn { background: transparent; border: none; color: var(--text-main); padding: 4px 10px; border-radius: 6px; font-weight: 500; cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; white-space: nowrap; transition: background 0.1s; height: 24px; }
+        .ctx-btn:hover { background: #f1f5f9; }
         .ctx-btn.active { background: var(--primary); color: white; }
-        .ctx-btn.stop { background: #ef4444; }
+        .ctx-btn.stop { background: #ef4444; color: white; }
 
-        /* Z-index higher than toolbar wrapper */
-        .zone-picker-popover { position: absolute; top: 110%; left: 0; background: white; border-radius: 12px; padding: 6px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.3); min-width: 200px; max-height: 250px; overflow-y: auto; z-index: 9100; }
+        .zone-picker-popover { position: absolute; top: 110%; left: 0; background: white; border-radius: 12px; padding: 6px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.1); min-width: 200px; max-height: 250px; overflow-y: auto; z-index: 9100; border: 1px solid var(--border); }
         .zone-picker-item { padding: 10px; border-radius: 8px; cursor: pointer; color: #333; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
-        .zone-picker-item:hover { background: #f2f2f7; }
+        .zone-picker-item:hover { background: #f1f5f9; }
         .zone-picker-new { border-top: 1px solid #eee; margin-top: 4px; font-weight: 600; color: var(--primary); }
 
         /* Timer UI */
-        .timer-display { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 8px 16px; border-radius: 20px; font-weight: 700; font-family: monospace; font-size: 1.2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 600; display: flex; gap: 10px; align-items: center; cursor: pointer; pointer-events: auto; }
-        .timer-display.urgent { background: #ef4444; animation: pulse 1s infinite; }
-        .timer-controls { position: absolute; top: 45px; left: 50%; transform: translateX(-50%); background: white; padding: 10px; border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); display: flex; gap: 5px; animation: fadeIn 0.1s; z-index: 601; pointer-events: auto; }
-        .timer-btn { background: #e5e5ea; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; color: #333; }
-        .timer-close { background: transparent; color: white; border: none; font-size: 0.8rem; cursor: pointer; margin-left: 5px; padding: 0 5px; }
-        @keyframes pulse { 0% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.05); } 100% { transform: translateX(-50%) scale(1); } }
+        .timer-display { position: relative; background: white; color: var(--text-main); padding: 0 16px; border-radius: 8px; font-weight: 700; font-family: monospace; font-size: 1.2rem; display: flex; gap: 10px; align-items: center; cursor: pointer; pointer-events: auto; height: 32px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid var(--border); }
+        .timer-display.urgent { animation: pulse-bg 1s infinite; background: #fee2e2; color: #ef4444; }
+        .timer-controls { position: absolute; top: 45px; left: 50%; transform: translateX(-50%); background: white; padding: 10px; border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); display: flex; gap: 5px; animation: fadeIn 0.1s; z-index: 601; pointer-events: auto; border: 1px solid var(--border); }
+        .timer-btn { background: #f1f5f9; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; color: #333; }
+        .timer-close { background: transparent; color: #999; border: none; font-size: 0.8rem; cursor: pointer; margin-left: 5px; padding: 0 5px; }
+        @keyframes pulse-bg { 0% { background-color: #fee2e2; } 50% { background-color: #fecaca; } 100% { background-color: #fee2e2; } }
 
         /* Student View */
-        #student-view { position: fixed; inset: 0; background: #f2f2f7; color: #1d1d1f; z-index: 200; display: flex; flex-direction: column; align-items: center; padding: 20px; overflow-y: auto; }
+        #student-view { position: fixed; inset: 0; background: #f8fafc; color: #1e293b; z-index: 200; display: flex; flex-direction: column; align-items: center; padding: 20px; overflow-y: auto; }
         .student-header { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-        .conn-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 6px; background: #e5e5ea; color: #666; }
+        .conn-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 6px; background: #e2e8f0; color: #64748b; }
         .conn-badge.connected { background: #dcfce7; color: #166534; }
         .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
         
         .student-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; width: 100%; max-width: 400px; }
-        .note-card { background: white; padding: 25px 10px; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.1s; border: 2px solid transparent; }
+        .note-card { background: white; padding: 25px 10px; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.1s; border: 1px solid var(--border); }
         .note-card:active { transform: scale(0.95); }
         
-        .activity-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); width: 100%; max-width: 500px; text-align: left; display: flex; align-items: center; gap: 10px; color: #333; }
+        .activity-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); width: 100%; max-width: 500px; text-align: left; display: flex; align-items: center; gap: 10px; color: #333; border: 1px solid var(--border); }
         .activity-card.selected { border: 2px solid var(--primary); background: #eef2ff; }
         .rank-badge { width: 30px; height: 30px; background: #eee; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
         .board-locked-msg { text-align: center; padding: 40px 20px; }
         .board-locked-msg .icon { font-size: 3rem; margin-bottom: 15px; }
 
         /* Modals */
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 3000; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
-        .modal-box { background: white; width: 90%; max-width: 400px; padding: 25px; border-radius: 24px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.2); color: #333; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(2px); z-index: 3000; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
+        .modal-box { background: white; width: 90%; max-width: 400px; padding: 25px; border-radius: 24px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.1); color: #333; border: 1px solid var(--border); }
         .avatar-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 15px; }
         .avatar-opt { font-size: 2rem; cursor: pointer; padding: 5px; border-radius: 8px; transition: transform 0.1s; }
-        .avatar-opt:hover { background: #f2f2f7; transform: scale(1.1); }
+        .avatar-opt:hover { background: #f1f5f9; transform: scale(1.1); }
         
-        textarea { width: 100%; height: 120px; border: 1px solid #ddd; border-radius: 12px; padding: 15px; font-family: inherit; font-size: 1rem; resize: none; margin: 15px 0; background: #f9f9f9; }
+        textarea { width: 100%; height: 120px; border: 1px solid #cbd5e1; border-radius: 12px; padding: 15px; font-family: inherit; font-size: 1rem; resize: none; margin: 15px 0; background: #f8fafc; color: #333; }
         textarea:focus { outline: 2px solid var(--primary); background: white; }
 
-        /* Topmost Toast z-index set to 9999 */
-        #toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-200%); background: #333; color: white; padding: 12px 24px; border-radius: 30px; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 9999; font-weight: 500; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+        /* Toast */
+        #toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-200%); background: #1e293b; color: white; padding: 12px 24px; border-radius: 30px; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 9999; font-weight: 500; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
         #toast.visible { transform: translateX(-50%) translateY(0); }
 
         .recent-list { margin-top: 15px; text-align: left; max-height: 150px; overflow-y: auto; }
-        .recent-item { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); cursor: pointer; color: var(--text-muted); font-size: 0.9rem; display: flex; justify-content: space-between; }
-        .recent-item:hover { background: rgba(255,255,255,0.05); color: white; }
+        .recent-item { padding: 10px; border-bottom: 1px solid var(--border); cursor: pointer; color: var(--text-muted); font-size: 0.9rem; display: flex; justify-content: space-between; }
+        .recent-item:hover { background: #f1f5f9; color: var(--primary); }
 
         @keyframes slideUp { from{transform:translateY(10px);opacity:0} to{transform:translateY(0);opacity:1} }
         @keyframes fadeIn { from{opacity:0} to{opacity:1} }
         
-        /* Responsive Landing Page */
         @media (max-width: 640px) {
             .hero-title { font-size: 2rem; }
             .hero-sub { font-size: 1rem; }
@@ -209,10 +205,7 @@
 </head>
 <body>
 
-<!-- Landing / Dashboard -->
 <div id="dashboard" class="layer">
-    
-    <!-- Hero Section -->
     <div id="landing-hero" class="hero-section">
         <div class="app-logo">❓</div>
         <h1 class="hero-title">InquiryDQB</h1>
@@ -252,17 +245,13 @@
         <div style="color: #64748b; font-size: 0.8rem; margin-top: 40px;">© 2025 InquiryDQB. All rights reserved.</div>
     </div>
 
-    <!-- Setup Form (Hidden initially) -->
     <div id="setup-panel" class="setup-container hidden">
-        <h2 style="margin: 0 0 20px; color: white;">Setup Profile</h2>
-        
+        <h2 style="margin: 0 0 20px; color: var(--text-main);">Setup Profile</h2>
         <div class="avatar-selector" id="current-avatar" onclick="App.ui.openAvatarModal()">🐶</div>
-        
         <div class="input-group">
             <label class="input-label">Display Name</label>
             <input type="text" id="username" class="styled-input" placeholder="Your Name">
         </div>
-
         <div id="student-ops" class="hidden">
             <div class="input-group">
                 <label class="input-label">Class ID</label>
@@ -271,12 +260,10 @@
             <button class="btn btn-primary" onclick="App.start()">Join Class</button>
             <button class="btn btn-secondary" onclick="App.scanQR()">📷 Scan QR</button>
         </div>
-
         <div id="teacher-ops" class="hidden">
             <button class="btn btn-primary" onclick="App.start()">Start New Class</button>
             <div class="recent-list" id="recent-list"></div>
         </div>
-
         <button class="btn" style="background: transparent; color: #94a3b8; margin-top: 15px;" onclick="App.reset()">Back</button>
     </div>
 </div>
@@ -320,10 +307,10 @@
     // --- CONFIG ---
     const AVATARS = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔','🦄','🐝','🐞','🐢'];
     const NOTES = {
-        NOTICE: { color: 'light-blue', hex: '#a2d2ff' }, WONDER: { color: 'light-red', hex: '#ffafcc' },
-        IDEA:   { color: 'light-violet', hex: '#cdb4db' }, TEST:   { color: 'light-green', hex: '#b9fbc0' }
+        NOTICE: { color: 'light-blue', hex: '#bae6fd' }, WONDER: { color: 'light-red', hex: '#fbcfe8' },
+        IDEA:   { color: 'light-violet', hex: '#e9d5ff' }, TEST:   { color: 'light-green', hex: '#bbf7d0' }
     };
-    const HEARTBEAT_INTERVAL = 2000;
+    const HEARTBEAT_INTERVAL = 4000;
     const RECONNECT_TIMEOUT = 5000;
 
     const DB = {
@@ -358,23 +345,13 @@
                     return;
                 }
                 
-                let target = state.endTime;
-                if (state.pausedAt) {
-                    target = state.pausedAt; 
-                } else {
-                    target = Date.now();
-                }
-
                 let diff = state.endTime - (state.pausedAt ? state.pausedAt : Date.now());
                 if (state.pausedAt) diff = state.endTime - state.pausedAt;
-
                 if (diff < 0) diff = 0;
                 
                 const m = Math.floor(diff / 60000);
                 const s = Math.floor((diff % 60000) / 1000);
                 setDisplay(`${m}:${s.toString().padStart(2, '0')}`);
-                
-                // Urgent if < 10s or if 00:00 (keeps it red)
                 setIsUrgent((diff > 0 && diff < 10000) || diff === 0); 
             };
             
@@ -384,7 +361,7 @@
         }, [state]);
 
         if (!state.endTime && !isTeacher) return null;
-        if (!state.endTime && isTeacher) return null; // Hide if stopped
+        if (!state.endTime && isTeacher) return null;
 
         return React.createElement('div', { style: {position:'relative'} },
             React.createElement('div', { 
@@ -407,37 +384,11 @@
         const selectedIds = editor.getSelectedShapeIds();
         if (selectedIds.length === 0) return null;
 
-        const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
         const [showMoveMenu, setShowMoveMenu] = useState(false);
-        const [screenPos, setScreenPos] = useState({ x: 0, y: 0 });
 
         const selShapes = selectedIds.map(id => editor.getShape(id)).filter(Boolean);
         const onlyZone = selShapes.length === 1 && selShapes[0].type === 'frame' ? selShapes[0] : null;
         const onlyItems = selShapes.every(s => s.type !== 'frame') ? selShapes : null;
-
-        useEffect(() => {
-            const updateLayout = () => {
-                const mobile = window.innerWidth < 640;
-                setIsMobile(mobile);
-                
-                if (!mobile && selectedIds.length > 0) {
-                    const bounds = editor.getSelectionPageBounds();
-                    if (bounds) {
-                        const point = editor.pageToViewport({ x: bounds.x, y: bounds.y });
-                        setScreenPos({ x: point.x, y: Math.max(10, point.y - 60) });
-                    }
-                }
-            };
-
-            updateLayout();
-            const unsub = editor.on('event', () => requestAnimationFrame(updateLayout));
-            const resize = () => updateLayout();
-            window.addEventListener('resize', resize);
-            return () => { 
-                if(typeof unsub === 'function') unsub(); 
-                window.removeEventListener('resize', resize); 
-            };
-        }, [editor, selectedIds]);
 
         if (!onlyZone && !onlyItems) return null;
 
@@ -473,25 +424,20 @@
                 .map(s => ({ id: s.id, name: s.props.name }));
         };
 
-        const wrapperStyle = isMobile ? {} : { left: screenPos.x, top: screenPos.y };
-
-        return React.createElement('div', { className: 'ctx-toolbar-wrapper', style: wrapperStyle },
+        return React.createElement('div', { className: 'ctx-toolbar-wrapper' },
             React.createElement('div', { className: 'ctx-toolbar' },
-                
                 onlyZone && isActive && React.createElement('button', { className: 'ctx-btn stop', onClick: stopActivity }, '⏹ Stop Activity'),
-                
                 onlyZone && !isActive && React.createElement(React.Fragment, null,
                     React.createElement('span', {style:{color:'#94a3b8',fontSize:'0.7rem',marginRight:5}}, onlyZone.props.name),
-                    React.createElement('div', {className:'sep',style:{height:20,width:1,background:'rgba(255,255,255,0.2)'}}),
+                    React.createElement('div', {className:'sep',style:{height:20,width:1,background:'#e2e8f0'}}),
                     React.createElement('button', { className: `ctx-btn ${isMagnet?'active':''}`, onClick:()=>setMagnetId(isMagnet?null:onlyZone.id) }, '🧲'),
                     React.createElement('button', { className: 'ctx-btn', onClick: ()=>trigger('VOTE') }, '🗳️ Vote'),
                     React.createElement('button', { className: 'ctx-btn', onClick: ()=>trigger('DISCUSS') }, '💬 Discuss'),
                     React.createElement('button', { className: 'ctx-btn', onClick: ()=>trigger('RANK') }, '📊 Rank')
                 ),
-
                 onlyItems && React.createElement(React.Fragment, null,
                     React.createElement('span', {style:{color:'#94a3b8',fontSize:'0.7rem',marginRight:5}}, `${onlyItems.length} Selected`),
-                    React.createElement('div', {className:'sep',style:{height:20,width:1,background:'rgba(255,255,255,0.2)'}}),
+                    React.createElement('div', {className:'sep',style:{height:20,width:1,background:'#e2e8f0'}}),
                     React.createElement('div', { style:{position:'relative'} },
                         React.createElement('button', { className: 'ctx-btn', onClick:()=>setShowMoveMenu(!showMoveMenu) }, '➡ Move to Zone'),
                         showMoveMenu && React.createElement('div', { className: 'zone-picker-popover' },
@@ -511,6 +457,9 @@
     function StudentInputView({ onSend, activity, onActivityResponse, isConnected, isBoardLocked, timerState, onRaiseHand, isHandRaised }) {
         const [modal, setModal] = useState(null);
         const [text, setText] = useState('');
+        const [votes, setVotes] = useState(new Set());
+
+        useEffect(() => { setVotes(new Set()); }, [activity?.id]);
 
         const Header = () => React.createElement('div', { className: 'student-header' },
             React.createElement('div', { style: {display:'flex', gap:10, alignItems:'center'} }, 
@@ -529,7 +478,6 @@
 
         if (activity) {
             if (activity.type === 'VOTE') {
-                const [votes, setVotes] = useState(new Set());
                 const toggle = (id) => {
                     const next = new Set(votes);
                     if(next.has(id)) next.delete(id); else next.add(id);
@@ -592,185 +540,154 @@
         useEffect(() => {
             if (!editor) return;
 
-            const runLayout = (frameId, draggingShapes = []) => {
+            const runLayout = (frameId) => {
                 const frame = editor.getShape(frameId);
                 if (!frame) return;
 
                 const PADDING = 20;
                 const GAP = 15;
-                const MIN_COL_WIDTH = 180;
-                const ROW_HEIGHT_THRESHOLD = 60; 
+                const MIN_COL_WIDTH = 200; // Approx note width
                 const containerW = frame.props.w;
 
                 const childIds = editor.getSortedChildIdsForParent(frameId);
-                let children = childIds.map(id => editor.getShape(id)).filter(Boolean);
+                const children = childIds.map(id => editor.getShape(id)).filter(Boolean);
 
-                const draggingIds = new Set(draggingShapes.map(s => s.id));
+                const numCols = Math.max(1, Math.floor((containerW - PADDING * 2 + GAP) / (MIN_COL_WIDTH + GAP)));
+                const colWidth = (containerW - PADDING * 2 - (numCols - 1) * GAP) / numCols;
+                const colBottoms = Array(numCols).fill(PADDING + 60); // 60px for title area
+                const updates = [];
 
-                if (draggingShapes.length > 0) {
-                    const staticChildren = children.filter(c => !draggingIds.has(c.id));
-                    children = [...staticChildren, ...draggingShapes];
-                }
-
+                // Sort children by Y primarily (row flow), then by X.
+                // This ensures that items stay roughly where the user visually placed them order-wise.
                 children.sort((a, b) => {
-                    const rowA = Math.floor(a.y / ROW_HEIGHT_THRESHOLD);
-                    const rowB = Math.floor(b.y / ROW_HEIGHT_THRESHOLD);
+                    const rowA = Math.floor(a.y / 50); 
+                    const rowB = Math.floor(b.y / 50);
                     if (rowA !== rowB) return rowA - rowB;
                     return a.x - b.x;
                 });
 
-                const numCols = Math.max(1, Math.floor((containerW - PADDING * 2 + GAP) / (MIN_COL_WIDTH + GAP)));
-                const colWidth = (containerW - PADDING * 2 - (numCols - 1) * GAP) / numCols;
-                const colBottoms = Array(numCols).fill(60 + PADDING);
-                const updates = [];
-
                 children.forEach(shape => {
                     const geo = editor.getShapeGeometry(shape);
                     const shapeH = geo.bounds.h;
+                    const shapeW = geo.bounds.w;
 
-                    // NEW LAYOUT LOGIC: Left-Greedy Masonry
-                    let colIndex = 0;
-                    const minH = Math.min(...colBottoms);
-                    // Find the FIRST column (from left) that is within a small tolerance (40px) of the minimum height
-                    // This forces items to fill left-to-right unless a column is significantly deeper than the others
-                    let found = false;
-                    for(let i=0; i<numCols; i++) {
-                        if (colBottoms[i] <= minH + 40) {
-                            colIndex = i;
-                            found = true;
-                            break;
+                    // Calculate how many columns this item spans
+                    // We accept a tolerance (-10px) so a standard fit doesn't accidentally jump to 2 columns
+                    let span = Math.ceil((shapeW - 10) / (colWidth + GAP));
+                    if (span < 1) span = 1;
+                    if (span > numCols) span = numCols;
+
+                    // Find the best start column
+                    // We look for a contiguous set of 'span' columns where the current height is minimal (highest up)
+                    let bestCol = 0;
+                    let minMaxH = Infinity;
+
+                    // Iterate through valid start columns
+                    for (let i = 0; i <= numCols - span; i++) {
+                        // Find the "ceiling" (max current height) in this candidate span
+                        let currentSpanMaxH = 0;
+                        for (let k = 0; k < span; k++) {
+                            if (colBottoms[i + k] > currentSpanMaxH) currentSpanMaxH = colBottoms[i + k];
+                        }
+
+                        // Select this spot if it's higher up than our current best found spot
+                        if (currentSpanMaxH < minMaxH) {
+                            minMaxH = currentSpanMaxH;
+                            bestCol = i;
                         }
                     }
-                    if (!found) {
-                        colIndex = colBottoms.indexOf(minH);
-                    }
 
-                    const newX = PADDING + colIndex * (colWidth + GAP);
-                    const newY = colBottoms[colIndex];
+                    const newX = PADDING + bestCol * (colWidth + GAP);
+                    const newY = minMaxH;
                     
-                    if (!draggingIds.has(shape.id)) {
-                        if (Math.abs(shape.x - newX) > 1 || Math.abs(shape.y - newY) > 1) {
-                            updates.push({ id: shape.id, type: shape.type, x: newX, y: newY });
-                        }
+                    // Only update if difference is > 1px to prevent jitter loops
+                    if (Math.abs(shape.x - newX) > 1 || Math.abs(shape.y - newY) > 1) {
+                         updates.push({ id: shape.id, type: shape.type, x: newX, y: newY });
                     }
                     
-                    colBottoms[colIndex] = newY + shapeH + GAP;
+                    // Update the bottom position for ALL columns this shape occupies
+                    for (let k = 0; k < span; k++) {
+                        colBottoms[bestCol + k] = newY + shapeH + GAP;
+                    }
                 });
 
                 if (updates.length > 0) editor.updateShapes(updates);
 
-                const totalH = Math.max(...colBottoms) + PADDING - GAP;
-                if (Math.abs(totalH - frame.props.h) > 1) {
-                    editor.updateShapes([{ id: frameId, type: 'frame', props: { h: totalH }}]);
+                const totalH = Math.max(...colBottoms) + PADDING;
+                if (Math.abs(totalH - frame.props.h) > 20) {
+                    editor.updateShapes([{ id: frameId, type: 'frame', props: { h: Math.max(300, totalH) } }]);
                 }
             };
 
             const handleEvent = throttle((event) => {
-                if (editor.getCurrentToolId() !== 'select') return;
-
-                if (event.name === 'pointer_move' && editor.inputs.isDragging) {
-                    const draggingIds = editor.getSelectedShapeIds();
-                    if (draggingIds.length === 0) return;
-
-                    const draggingShapes = draggingIds.map(id => editor.getShape(id)).filter(Boolean);
-                    if (draggingShapes.length === 0) return;
-
-                    const bounds = editor.getSelectionPageBounds();
-                    if (!bounds) return;
-
-                    const center = { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 };
-                    
-                    const pageId = editor.getCurrentPageId();
-                    const pageChildIds = editor.getSortedChildIdsForParent(pageId);
-                    const pageShapes = pageChildIds.map(id => editor.getShape(id)).filter(Boolean);
-                    
-                    const frames = pageShapes.filter(s => s.type === 'frame');
-                    const targetFrame = frames.find(f => {
-                        const b = editor.getShapePageBounds(f.id);
-                        return b && center.x > b.x && center.x < b.maxX && center.y > b.y && center.y < b.maxY;
-                    });
-
-                    if (targetFrame && !draggingIds.includes(targetFrame.id)) {
-                        runLayout(targetFrame.id, draggingShapes);
-                    }
-                }
-
                 if (event.name === 'pointer_up') {
                     const selIds = editor.getSelectedShapeIds();
                     if (selIds.length === 0) return;
-                    
-                    const framesToUpdate = new Set();
-                    const selShapes = selIds.map(id => editor.getShape(id)).filter(Boolean);
-
-                    const drawShapes = selShapes.filter(s => s.type === 'draw');
-                    let groupedShapes = selShapes;
-                    
-                    if (drawShapes.length > 1) {
-                        const groupId = createShapeId();
-                        editor.createShape({ id: groupId, type: 'group' });
-                        editor.reparentShapes(drawShapes.map(s=>s.id), groupId);
-                        groupedShapes = [editor.getShape(groupId)];
-                    }
 
                     const pageId = editor.getCurrentPageId();
-                    const pageChildIds = editor.getSortedChildIdsForParent(pageId);
-                    const pageShapes = pageChildIds.map(id => editor.getShape(id)).filter(Boolean);
-                    const frames = pageShapes.filter(s => s.type === 'frame');
+                    const frames = Array.from(editor.getCurrentPageShapeIds())
+                        .map(id => editor.getShape(id))
+                        .filter(s => s.type === 'frame');
 
-                    groupedShapes.forEach(sel => {
-                        if (sel.parentId && sel.parentId !== 'page') {
-                            const parent = editor.getShape(sel.parentId);
-                            if (parent && parent.type === 'frame') framesToUpdate.add(sel.parentId);
-                        }
-                        
-                        const bounds = editor.getShapePageBounds(sel.id);
+                    const framesToUpdate = new Set();
+
+                    selIds.forEach(id => {
+                        const shape = editor.getShape(id);
+                        if (!shape || shape.type === 'frame') return;
+
+                        const bounds = editor.getShapePageBounds(id);
                         if (!bounds) return;
-                        
                         const center = {x: bounds.x + bounds.w/2, y: bounds.y + bounds.h/2};
+
                         const targetFrame = frames.find(f => {
-                            if (f.id === sel.id) return false; 
+                            if (f.id === id) return false;
                             const b = editor.getShapePageBounds(f.id);
                             return b && center.x > b.x && center.x < b.maxX && center.y > b.y && center.y < b.maxY;
                         });
 
-                        if (sel.type === 'frame' && targetFrame) {
-                            editor.reparentShapes([sel.id], editor.getCurrentPageId());
-                            App.ui.toast("Zones cannot be nested");
-                        } else if (targetFrame && sel.parentId !== targetFrame.id) {
-                            editor.reparentShapes([sel.id], targetFrame.id);
+                        if (targetFrame) {
+                            if(shape.parentId !== targetFrame.id) {
+                                editor.reparentShapes([id], targetFrame.id);
+                            }
                             framesToUpdate.add(targetFrame.id);
+                        } else if (shape.parentId !== pageId) {
+                            editor.reparentShapes([id], pageId);
                         }
-                        
-                        if (targetFrame) framesToUpdate.add(targetFrame.id);
                     });
-                    
-                    setTimeout(() => framesToUpdate.forEach(id => runLayout(id)), 50);
+                    setTimeout(() => framesToUpdate.forEach(fid => runLayout(fid)), 50);
                 }
             }, 50);
 
-            const handleStore = (e) => {
-                const targets = new Set();
-                for (const rec of Object.values(e.changes.added)) {
-                    if(rec.parentId && rec.parentId !== 'page') targets.add(rec.parentId);
+            // Re-enabled robust store listener to catch ALL moves, preventing "stuck" items
+            const handleStore = throttle((e) => {
+                const framesToUpdate = new Set();
+                
+                // Track geometry/position changes of items inside frames
+                for (const rec of Object.values(e.changes.updated)) {
+                    const [prev, next] = rec;
+                    if (next.parentId && next.parentId !== 'page') {
+                        // Check if parent is a frame
+                        const parent = editor.getShape(next.parentId);
+                        if (parent && parent.type === 'frame') {
+                            // Only trigger if position changed significantly to avoid loops
+                            if (Math.abs(prev.x - next.x) > 1 || Math.abs(prev.y - next.y) > 1) {
+                                framesToUpdate.add(next.parentId);
+                            }
+                        }
+                    }
                 }
-                for (const rec of Object.values(e.changes.removed)) {
-                    if(rec.parentId && rec.parentId !== 'page') targets.add(rec.parentId);
+                
+                if (framesToUpdate.size > 0) {
+                    // Defer layout to allow current transaction to finish
+                    requestAnimationFrame(() => framesToUpdate.forEach(fid => runLayout(fid)));
                 }
-                for (const [from, to] of Object.values(e.changes.updated)) {
-                    if (to.type === 'frame' && from.props.w !== to.props.w) targets.add(to.id);
-                }
-                targets.forEach(fid => {
-                    const frame = editor.getShape(fid);
-                    if (frame && frame.type === 'frame') runLayout(fid);
-                });
-            };
+            }, 100);
             
             const unsubEvent = editor.on('event', handleEvent);
             const unsubStore = editor.store.listen(handleStore);
-
-            return () => {
-                if (typeof unsubEvent === 'function') unsubEvent();
-                if (typeof unsubStore === 'function') unsubStore();
+            return () => { 
+                if (typeof unsubEvent === 'function') unsubEvent(); 
+                if (typeof unsubStore === 'function') unsubStore(); 
             };
         }, [editor]);
 
@@ -795,7 +712,6 @@
             editor.createShape({ type: 'frame', x, y, props: { name: 'New Zone', w: 400, h: 400 } });
         };
         
-        // --- TEMPLATES ---
         const addCER = () => {
             const { x, y } = findOpenSpace(920, 500);
             ['Claim','Evidence','Reasoning'].forEach((t, i) => {
@@ -882,7 +798,7 @@
         }, [connections]);
 
         return React.createElement('div', { className: 'roster-container' },
-            React.createElement('div', { className: 'roster-btn', onClick: ()=>setOpen(!open) }, '👥', React.createElement('span', null, users.length)),
+            React.createElement('button', { className: 'roster-btn', onClick: ()=>setOpen(!open) }, '👥', React.createElement('span', null, users.length)),
             open && React.createElement('div', { className: 'roster-popover' },
                 users.length===0 ? 'No connections' : users.map(u => React.createElement('div', { key: u.id, className: `user-row ${u.isCoHost?'co-host':''}` },
                     React.createElement('div', {style:{display:'flex',flexDirection:'column'}}, 
@@ -921,6 +837,7 @@
         const connectionsRef = useRef(new Map());
         const peerRef = useRef(null);
         const lastHeartbeatRef = useRef(Date.now());
+        const destroyedRef = useRef(false);
 
         const overrides = useMemo(() => ({
             contextMenu: (menu, { editor }) => {
@@ -950,28 +867,15 @@
                             ...zones.map(z => ({
                                 id: `zone-${z.id}`,
                                 type: 'item',
-                                action: () => { editor.reparentShapes(selected, z.id) },
+                                action: () => { 
+                                    editor.reparentShapes(selected, z.id); 
+                                },
                                 label: `Move to ${z.props.name}`
                             }))
                         ],
                         label: 'Send to Zone'
                     };
-                    
-                    const saveTemplate = {
-                        id: 'save-template',
-                        type: 'item',
-                        action: () => { 
-                            const json = JSON.stringify(editor.getSnapshot(selected));
-                            localStorage.setItem('dqb_custom_template', json);
-                            App.ui.toast("Selection saved as template");
-                        },
-                        label: 'Save Selection as Template'
-                    };
-                    
-                    if(Array.isArray(menu)) {
-                        menu.unshift(zoneGroup);
-                        menu.push({ id: 'template-grp', type: 'group', children: [saveTemplate] });
-                    }
+                    if(Array.isArray(menu)) { menu.unshift(zoneGroup); }
                 }
                 return menu;
             }
@@ -987,17 +891,12 @@
 
         const handleTimerOp = (op, val) => {
             let newState = { ...timerState };
-            if (op === 'SET') {
-                setTimerModalOpen(true);
-                return;
-            }
+            if (op === 'SET') { setTimerModalOpen(true); return; }
             if (op === 'START') {
                 const ms = parseInt(val) * 60 * 1000;
                 newState = { endTime: Date.now() + ms, pausedAt: null, duration: ms };
             }
-            if (op === 'PAUSE') {
-                newState.pausedAt = Date.now();
-            }
+            if (op === 'PAUSE') newState.pausedAt = Date.now();
             if (op === 'RESUME') {
                 if (newState.pausedAt) {
                     const pausedDuration = Date.now() - newState.pausedAt;
@@ -1005,9 +904,7 @@
                     newState.pausedAt = null;
                 }
             }
-            if (op === 'STOP') {
-                newState = { endTime: null, pausedAt: null, duration: 0 };
-            }
+            if (op === 'STOP') newState = { endTime: null, pausedAt: null, duration: 0 };
 
             setTimerState(newState);
             const msg = JSON.stringify({ type: 'TIMER_UPDATE', state: newState });
@@ -1017,11 +914,8 @@
         const handleSnapshot = async (type) => {
             let ids = [];
             let bounds = undefined;
-
-            if (type === 'selection') {
-                ids = editor.getSelectedShapeIds();
-                if (ids.length === 0) return App.ui.toast("Nothing selected");
-            } else if (type === 'visible') {
+            if (type === 'selection') ids = editor.getSelectedShapeIds();
+            else if (type === 'visible') {
                 const viewport = editor.getViewportPageBounds();
                 const allShapes = editor.getCurrentPageShapeIds();
                 ids = Array.from(allShapes).filter(id => {
@@ -1029,9 +923,7 @@
                     return b && b.collides(viewport);
                 });
                 bounds = viewport; 
-            } else {
-                ids = Array.from(editor.getCurrentPageShapeIds());
-            }
+            } else ids = Array.from(editor.getCurrentPageShapeIds());
 
             if (ids.length === 0) return App.ui.toast("Board is empty");
 
@@ -1044,10 +936,7 @@
                     a.click(); 
                     setSnapshotModalOpen(false);
                 }
-            } catch(e) {
-                console.error(e);
-                App.ui.toast("Snapshot failed");
-            }
+            } catch(e) { console.error(e); App.ui.toast("Snapshot failed"); }
         };
 
         const handleRaiseHand = () => {
@@ -1079,12 +968,9 @@
         const stopActivity = () => {
             if (!activity || !editor) return;
             const { type, zoneId, responses } = activity;
-
             if (type === 'VOTE') {
                 const counts = {};
-                responses.forEach((data) => {
-                    data.votes.forEach(noteId => counts[noteId] = (counts[noteId]||0) + 1);
-                });
+                responses.forEach((data) => { data.votes.forEach(noteId => counts[noteId] = (counts[noteId]||0) + 1); });
                 const stickers = [];
                 Object.entries(counts).forEach(([noteId, count]) => {
                     const note = editor.getShape(noteId);
@@ -1098,7 +984,6 @@
                 editor.createShapes(stickers);
                 App.ui.toast("Votes Tallied!");
             }
-            
             setActivity(null);
             const msg = JSON.stringify({ type: 'STOP_ACTIVITY' });
             connectionsRef.current.forEach(c => { if(c.open) c.send(msg); });
@@ -1111,120 +996,145 @@
             setActivity({ ...activity, responses: newMap });
         };
 
+        // --- Robust Connection Logic ---
         useEffect(() => {
-            const peer = new Peer(peerId, {
-                debug: 1,
-                config: {
-                    'iceServers': [
-                        { url: 'stun:stun1.l.google.com:19302' },
-                        { url: 'stun:stun2.l.google.com:19302' }
-                    ]
-                }
-            });
-            peerRef.current = peer;
+            let peerInstance = null;
 
-            peer.on('error', (err) => {
-                console.error("PeerJS Error:", err);
-                if (err.type === 'peer-unavailable') {
-                    App.ui.toast("Class ID not found. Please check.");
-                    if(role === 'student') setTimeout(()=>location.reload(), 2000);
-                }
-                if (err.type === 'disconnected') {
-                    App.ui.toast("Connection Lost. Reconnecting...");
-                    peer.reconnect();
-                }
-            });
+            const initPeer = () => {
+                if (destroyedRef.current) return;
+                
+                // Destroy old instance if exists to be safe
+                if (peerInstance) peerInstance.destroy();
 
-            const handleMsg = (conn, data) => {
-                try {
-                    const msg = (typeof data === 'string') ? JSON.parse(data) : data;
-                    lastHeartbeatRef.current = Date.now();
-                    if(msg.type === 'HEARTBEAT') return;
+                const peer = new Peer(peerId, { debug: 1 });
+                peerInstance = peer;
+                peerRef.current = peer;
 
-                    if(role === 'teacher') {
-                        if(msg.type === 'post-note' && !isBoardLocked) {
-                            if(!editor) return;
-                            const pid = magnetId && editor.getShape(magnetId) ? magnetId : editor.getCurrentPageId();
-                            editor.createShape({ id: createShapeId(), type: 'note', parentId: pid, x: 20, y: 60, props: { text: msg.text, color: NOTES[msg.variant].color } });
-                            App.ui.toast(`Note received`);
+                peer.on('error', (err) => {
+                    console.error("PeerJS Error:", err);
+                    if (err.type === 'peer-unavailable') {
+                        App.ui.toast("Class ID not found. Please check.");
+                        if(role === 'student') setTimeout(()=>location.reload(), 3000);
+                    } else if (err.type === 'disconnected' || err.type === 'network' || err.type === 'server-error') {
+                        // Critical error, recreate peer
+                        console.log("Critical Peer Error, respawning...");
+                        setTimeout(initPeer, 2000); 
+                    }
+                });
+
+                peer.on('disconnected', () => {
+                    if(!destroyedRef.current) {
+                        console.log("Peer disconnected, attempting reconnect...");
+                        peer.reconnect();
+                    }
+                });
+
+                const handleMsg = (conn, data) => {
+                    try {
+                        const msg = (typeof data === 'string') ? JSON.parse(data) : data;
+                        lastHeartbeatRef.current = Date.now();
+                        if(msg.type === 'HEARTBEAT') return;
+
+                        if(role === 'teacher') {
+                            if(msg.type === 'post-note' && !isBoardLocked) {
+                                if(!editor) return;
+                                const pid = magnetId && editor.getShape(magnetId) ? magnetId : editor.getCurrentPageId();
+                                editor.createShape({ id: createShapeId(), type: 'note', parentId: pid, x: 20, y: 60, props: { text: msg.text, color: NOTES[msg.variant].color } });
+                                App.ui.toast(`Note received`);
+                            }
+                            if(msg.type === 'ACTIVITY_RESPONSE') handleStudentResponse(conn.peer, msg.payload);
+                            if(msg.type === 'RAISE_HAND') {
+                                setRaisedHands(prev => {
+                                    const next = new Set(prev);
+                                    if(msg.value) next.add(conn.peer); else next.delete(conn.peer);
+                                    return next;
+                                });
+                            }
+                            if(msg.type === 'sync-update') {
+                                store.mergeRemoteChanges(() => {
+                                    const {added,updated,removed} = msg.changes;
+                                    for(let k in added) store.put([added[k]]);
+                                    for(let k in updated) store.put([updated[k][1]]);
+                                    for(let k in removed) store.remove([removed[k].id]);
+                                });
+                            }
                         }
-                        if(msg.type === 'ACTIVITY_RESPONSE') handleStudentResponse(conn.peer, msg.payload);
-                        if(msg.type === 'RAISE_HAND') {
+
+                        if(role === 'student') {
+                            if(msg.type === 'START_ACTIVITY') setActivity(msg.activity);
+                            if(msg.type === 'STOP_ACTIVITY') { setActivity(null); App.ui.toast("Activity Ended"); }
+                            if(msg.type === 'promote') { setIsCoHost(msg.value); App.ui.toast(msg.value?"Co-Host Mode":"Student Mode"); }
+                            if(msg.type === 'init-sync') loadSnapshot(store, msg.snap);
+                            if(msg.type === 'sync-update') {
+                                store.mergeRemoteChanges(() => {
+                                    const {added,updated,removed} = msg.changes;
+                                    for(let k in added) store.put([added[k]]);
+                                    for(let k in updated) store.put([updated[k][1]]);
+                                    for(let k in removed) store.remove([removed[k].id]);
+                                });
+                            }
+                            if(msg.type === 'BOARD_LOCK_TOGGLE') setIsBoardLocked(msg.locked);
+                            if(msg.type === 'TIMER_UPDATE') setTimerState(msg.state);
+                            if(msg.type === 'KICKED') {
+                                destroyedRef.current = true;
+                                document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;flex-direction:column"><h1>Removed</h1><p>You have been removed from the class.</p><button onclick="location.reload()" style="padding:10px 20px">Return Home</button></div>';
+                            }
+                        }
+                    } catch(e){ console.error(e); }
+                };
+
+                const setupConnection = (conn) => {
+                    conn.on('open', () => {
+                        connectionsRef.current.set(conn.peer, conn);
+                        setIsConnected(true);
+                        if(role === 'teacher') {
+                            conn.send(JSON.stringify({ type: 'init-sync', snap: getSnapshot(store) }));
+                            conn.send(JSON.stringify({ type: 'BOARD_LOCK_TOGGLE', locked: isBoardLocked }));
+                            if(timerState.endTime) conn.send(JSON.stringify({ type: 'TIMER_UPDATE', state: timerState }));
+                        }
+                    });
+                    conn.on('data', d => handleMsg(conn, d));
+                    conn.on('close', () => {
+                        connectionsRef.current.delete(conn.peer);
+                        if(role==='student') setIsConnected(false);
+                        if(role==='teacher') {
                             setRaisedHands(prev => {
                                 const next = new Set(prev);
-                                if(msg.value) next.add(conn.peer); else next.delete(conn.peer);
+                                next.delete(conn.peer);
                                 return next;
                             });
                         }
-                        if(msg.type === 'sync-update') {
-                            store.mergeRemoteChanges(() => {
-                                const {added,updated,removed} = msg.changes;
-                                for(let k in added) store.put([added[k]]);
-                                for(let k in updated) store.put([updated[k][1]]);
-                                for(let k in removed) store.remove([removed[k].id]);
-                            });
-                        }
-                    }
+                    });
+                };
 
-                    if(role === 'student') {
-                        if(msg.type === 'START_ACTIVITY') setActivity(msg.activity);
-                        if(msg.type === 'STOP_ACTIVITY') { setActivity(null); App.ui.toast("Activity Ended"); }
-                        if(msg.type === 'promote') { setIsCoHost(msg.value); App.ui.toast(msg.value?"Co-Host Mode":"Student Mode"); }
-                        if(msg.type === 'init-sync') loadSnapshot(store, msg.snap);
-                        if(msg.type === 'sync-update') {
-                            store.mergeRemoteChanges(() => {
-                                const {added,updated,removed} = msg.changes;
-                                for(let k in added) store.put([added[k]]);
-                                for(let k in updated) store.put([updated[k][1]]);
-                                for(let k in removed) store.remove([removed[k].id]);
-                            });
-                        }
-                        if(msg.type === 'BOARD_LOCK_TOGGLE') setIsBoardLocked(msg.locked);
-                        if(msg.type === 'TIMER_UPDATE') setTimerState(msg.state);
-                        if(msg.type === 'KICKED') {
-                            document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;flex-direction:column"><h1>Removed</h1><p>You have been removed from the class.</p><button onclick="location.reload()" style="padding:10px 20px">Return Home</button></div>';
-                        }
-                    }
-                } catch(e){}
-            };
-
-            const setup = (conn) => {
-                conn.on('open', () => {
-                    connectionsRef.current.set(conn.peer, conn);
-                    setIsConnected(true);
-                    if(role === 'teacher') {
-                        conn.send(JSON.stringify({ type: 'init-sync', snap: getSnapshot(store) }));
-                        conn.send(JSON.stringify({ type: 'BOARD_LOCK_TOGGLE', locked: isBoardLocked }));
-                        if(timerState.endTime) conn.send(JSON.stringify({ type: 'TIMER_UPDATE', state: timerState }));
+                peer.on('open', id => { 
+                    if(role==='student') {
+                         const conn = peer.connect(boardId, { metadata: { name: myName, isCoHost: false }, serialization: 'json' });
+                         setupConnection(conn);
                     }
                 });
-                conn.on('data', d => handleMsg(conn, d));
-                conn.on('close', () => {
-                    connectionsRef.current.delete(conn.peer);
-                    if(role==='student') setIsConnected(false);
-                    if(role==='teacher') {
-                        setRaisedHands(prev => {
-                            const next = new Set(prev);
-                            next.delete(conn.peer);
-                            return next;
-                        });
-                    }
-                });
+                
+                peer.on('connection', c => { if(role==='teacher') setupConnection(c); });
             };
 
-            peer.on('open', id => { if(role==='student') setup(peer.connect(boardId, { metadata: { name: myName, isCoHost: false }, serialization: 'json' })); });
-            peer.on('connection', c => { if(role==='teacher') setup(c); });
+            initPeer();
 
             const hb = setInterval(() => {
+                if (destroyedRef.current) return;
+
                 if(role === 'teacher') {
                     const m = JSON.stringify({ type: 'HEARTBEAT' });
                     connectionsRef.current.forEach(c => c.open && c.send(m));
                 } else {
                     if(Date.now() - lastHeartbeatRef.current > RECONNECT_TIMEOUT) {
                         setIsConnected(false);
-                        if(peerRef.current && !peerRef.current.destroyed) {
-                            console.log("Reconnecting...");
-                            setup(peerRef.current.connect(boardId, { metadata: { name: myName, isCoHost: isCoHost }, serialization: 'json' }));
+                        // Force a peer respawn if connection is truly dead
+                        if(peerRef.current && !peerRef.current.destroyed && !peerRef.current.disconnected) {
+                             // Try simple reconnect first
+                             peerRef.current.reconnect();
+                        } else {
+                             // Peer dead, respawn
+                             initPeer();
                         }
                     }
                 }
@@ -1253,13 +1163,14 @@
             });
 
             return () => {
-                peer.destroy();
+                destroyedRef.current = true;
+                if(peerInstance) peerInstance.destroy();
                 if (typeof cleanStore === 'function') cleanStore();
                 clearInterval(hb);
             };
         }, [isCoHost, magnetId, editor, activity, isBoardLocked, timerState]);
 
-        const promote = (pid, val) => {
+       const promote = (pid, val) => {
             const c = connectionsRef.current.get(pid);
             if(c) {
                 c.metadata.isCoHost = val;
@@ -1273,6 +1184,20 @@
             if(c) c.send(JSON.stringify({ type: 'ACTIVITY_RESPONSE', payload }));
         };
 
+        const CustomTopPanel = track(() => {
+            if (!editor) return null;
+            const selectedIds = editor.getSelectedShapeIds();
+            if (role === 'teacher' && selectedIds.length > 0) {
+                return React.createElement(ContextToolbar, { editor, magnetId, setMagnetId, activeActivity: activity, startActivity, stopActivity });
+            }
+            return React.createElement(TimerDisplay, { state: timerState, onUpdate: handleTimerOp, isTeacher: true });
+        });
+
+        const CustomSharePanel = () => {
+            if (role !== 'teacher') return null;
+            return React.createElement(RosterMenu, { connections: connectionsRef.current, onPromote: promote, onKick: kickUser, raisedHands });
+        };
+
         if(role === 'student' && !isCoHost) return React.createElement(StudentInputView, { 
             onSend: msg => { const c = connectionsRef.current.get(boardId); if(c) c.send(JSON.stringify(msg)); }, 
             isConnected,
@@ -1284,16 +1209,15 @@
             onActivityResponse: sendStudentActivityResponse
         });
 
-        // Ensure ContextToolbar is a sibling to Tldraw to avoid clipping
         return React.createElement('div', { className: 'layer pointer-events-auto' },
             React.createElement(Tldraw, {
                 store,
                 overrides,
                 onMount: e => { setEditor(e); e.user.updateUserPreferences({ name: myName }); },
                 components: {
-                    SharePanel: () => role==='teacher' ? React.createElement(RosterMenu, { connections: connectionsRef.current, onPromote: promote, onKick: kickUser, raisedHands }) : null,
+                    TopPanel: CustomTopPanel,
+                    SharePanel: CustomSharePanel,
                     InFrontOfTheCanvas: () => React.createElement('div', { className: 'layer pointer-events-none' },
-                        React.createElement(TimerDisplay, { state: timerState, onUpdate: handleTimerOp, isTeacher: true }),
                         role==='teacher' && editor && React.createElement(TeacherToolbar, { 
                             editor, boardId, isBoardLocked, toggleBoardLock, 
                             openTimerModal: ()=>setTimerModalOpen(true),
@@ -1303,9 +1227,6 @@
                     )
                 }
             }),
-            // Context Toolbar rendered outside Tldraw to ensure it's on top of everything
-            role==='teacher' && editor && React.createElement(ContextToolbar, { editor, magnetId, setMagnetId, activeActivity: activity, startActivity, stopActivity }),
-            
             React.createElement(Modal, { isOpen: timerModalOpen, title: "Set Timer", onClose: ()=>setTimerModalOpen(false) },
                 React.createElement('div', { style:{display:'flex', flexDirection:'column', gap:10} },
                     React.createElement('label', null, 'Minutes:'),

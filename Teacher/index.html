@@ -29,7 +29,7 @@
             --font-ui: 'Inter', -apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif; --font-hand: 'Patrick Hand', cursive;
         }
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
-        *:focus { outline: none; }
+        *:focus:not(:focus-visible) { outline: none; }
         *:focus-visible { outline: 2px solid #097fe8; outline-offset: 2px; border-radius: 4px; }
         input, textarea { user-select: text; }
         body { margin: 0; overflow: hidden; background: var(--bg); font-family: var(--font-ui); color: var(--text); height: 100vh; touch-action: none; }
@@ -593,8 +593,8 @@
         </div>
         <div id="marquee"></div>
         <div id="minimap-container" role="region" aria-label="Board minimap">
-            <div id="minimap-drag-handle" role="button" aria-label="Move minimap" tabindex="0"></div>
-            <div id="minimap-resize-handle" role="button" aria-label="Resize minimap" tabindex="0"></div>
+            <div id="minimap-drag-handle" role="button" aria-label="Move minimap" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();}"></div>
+            <div id="minimap-resize-handle" role="button" aria-label="Resize minimap" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();}"></div>
             <canvas id="minimap" aria-hidden="true"></canvas>
         </div>
     </div>
@@ -633,10 +633,10 @@
     <!-- SHARED DRAWERS -->
     <div id="drawer-draw" class="drawer" role="toolbar" aria-label="Drawing tools">
         <div class="tool-row">
-            <div class="color-btn" role="button" tabindex="0" aria-label="Red" style="background:#ef4444" onclick="InkManager.setColor('#ef4444')"></div>
-            <div class="color-btn" role="button" tabindex="0" aria-label="Blue" style="background:#3b82f6" onclick="InkManager.setColor('#3b82f6')"></div>
-            <div class="color-btn" role="button" tabindex="0" aria-label="Green" style="background:#10b981" onclick="InkManager.setColor('#10b981')"></div>
-            <div class="color-btn" role="button" tabindex="0" aria-label="Black" style="background:#000000; border-color:#6b7280" onclick="InkManager.setColor('#000000')"></div>
+            <div class="color-btn" role="button" tabindex="0" aria-label="Red" style="background:#ef4444" onclick="InkManager.setColor('#ef4444')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();InkManager.setColor('#ef4444')}"></div>
+            <div class="color-btn" role="button" tabindex="0" aria-label="Blue" style="background:#3b82f6" onclick="InkManager.setColor('#3b82f6')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();InkManager.setColor('#3b82f6')}"></div>
+            <div class="color-btn" role="button" tabindex="0" aria-label="Green" style="background:#10b981" onclick="InkManager.setColor('#10b981')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();InkManager.setColor('#10b981')}"></div>
+            <div class="color-btn" role="button" tabindex="0" aria-label="Black" style="background:#000000; border-color:#6b7280" onclick="InkManager.setColor('#000000')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();InkManager.setColor('#000000')}"></div>
         </div>
         <div class="tool-row">
             <input type="range" min="2" max="10" value="4" onchange="InkManager.setWidth(this.value)" style="flex:1">

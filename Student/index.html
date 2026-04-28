@@ -29,7 +29,7 @@
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
-        *:focus { outline: none; }
+        *:focus:not(:focus-visible) { outline: none; }
         *:focus-visible { outline: 2px solid #097fe8; outline-offset: 2px; border-radius: 4px; }
         input, textarea { user-select: text; }
         body { 
@@ -616,12 +616,21 @@ const DB = {
 
 /* --- SETUP & CONNECTION --- */
 const EMOJIS = ['😀','😎','🦊','🐱','🚀','🎨','⚽','🦄','🍔','🧩'];
-EMOJIS.forEach(e => {
+EMOJIS.forEach((e, idx) => {
     let d = document.createElement('div'); d.className='av-item'; d.innerText=e;
-    d.setAttribute('role', 'radio'); d.setAttribute('aria-checked', 'false'); d.setAttribute('aria-label', `Avatar: ${e}`); d.setAttribute('tabindex', '0');
-    const selectFn = () => { document.querySelectorAll('.av-item').forEach(x=>{ x.classList.remove('sel'); x.setAttribute('aria-checked','false'); }); d.classList.add('sel'); d.setAttribute('aria-checked','true'); State.me.av=e; };
+    d.setAttribute('role', 'radio'); d.setAttribute('aria-checked', 'false'); d.setAttribute('aria-label', `Avatar: ${e}`); d.setAttribute('tabindex', idx === 0 ? '0' : '-1');
+    const selectFn = () => {
+        document.querySelectorAll('.av-item').forEach(x=>{ x.classList.remove('sel'); x.setAttribute('aria-checked','false'); x.setAttribute('tabindex','-1'); });
+        d.classList.add('sel'); d.setAttribute('aria-checked','true'); d.setAttribute('tabindex','0'); State.me.av=e;
+    };
     d.onclick = selectFn;
-    d.onkeydown = (ev) => { if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); selectFn(); } };
+    d.onkeydown = (ev) => {
+        const items = Array.from($('av-grid').querySelectorAll('.av-item'));
+        const i = items.indexOf(d);
+        if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); selectFn(); }
+        else if(ev.key==='ArrowRight'||ev.key==='ArrowDown'){ ev.preventDefault(); items[(i+1)%items.length].focus(); }
+        else if(ev.key==='ArrowLeft'||ev.key==='ArrowUp'){ ev.preventDefault(); items[(i-1+items.length)%items.length].focus(); }
+    };
     $('av-grid').appendChild(d);
 });
 if($('av-grid').children[0]) { $('av-grid').children[0].click(); $('av-grid').setAttribute('role', 'radiogroup'); $('av-grid').setAttribute('aria-label', 'Choose avatar'); }
@@ -949,9 +958,9 @@ function RenderExit(d) {
         a.innerHTML = `
             <div style="padding: 0 20px;">
                 <div class="exit-mode-badge">⭐ Rating Scale</div>
-                <div class="smiley-grid" role="radiogroup" aria-label="Rating">
+                <div class="smiley-grid" role="group" aria-label="Rating">
                     ${ratings.map(r => `
-                        <button class="smiley-btn" role="radio" aria-checked="false" data-val="${r.e}" aria-label="${r.lbl}" onclick="SelectSmiley(this,'${r.e}')">
+                        <button type="button" class="smiley-btn" aria-pressed="false" data-val="${r.e}" aria-label="${r.lbl}" onclick="SelectSmiley(this,'${r.e}')">
                             <span class="smiley-emoji">${r.e}</span>
                             <span class="smiley-lbl">${r.lbl}</span>
                         </button>
@@ -959,8 +968,8 @@ function RenderExit(d) {
                 </div>
             </div>`;
         window.SelectSmiley = (el, v) => {
-            document.querySelectorAll('.smiley-btn').forEach(b => { b.classList.remove('selected'); b.setAttribute('aria-checked', 'false'); });
-            el.classList.add('selected'); el.setAttribute('aria-checked', 'true'); val = v;
+            document.querySelectorAll('.smiley-btn').forEach(b => { b.classList.remove('selected'); b.setAttribute('aria-pressed', 'false'); });
+            el.classList.add('selected'); el.setAttribute('aria-pressed', 'true'); val = v;
         };
         $('exit-submit').onclick = () => SubmitExit(val);
 
@@ -969,9 +978,9 @@ function RenderExit(d) {
         a.innerHTML = `
             <div style="padding: 0 20px;" class="exit-mc">
                 <div class="exit-mode-badge">🔘 Multiple Choice</div>
-                <div role="radiogroup" aria-label="Answer choices">
+                <div role="group" aria-label="Answer choices">
                 ${d.opts.map((o, i) => `
-                    <button class="mc-btn" role="radio" aria-checked="false" aria-label="Option ${letters[i]}: ${o}" onclick="SelectMC(this,${JSON.stringify(o)})">
+                    <button type="button" class="mc-btn" aria-pressed="false" aria-label="Option ${letters[i]}: ${o}" onclick="SelectMC(this,${JSON.stringify(o)})">
                         <span class="mc-letter">${letters[i]}</span>
                         <span class="mc-text">${sanitizeHTML(o)}</span>
                     </button>
@@ -979,8 +988,8 @@ function RenderExit(d) {
                 </div>
             </div>`;
         window.SelectMC = (el, v) => {
-            document.querySelectorAll('.mc-btn').forEach(b => { b.classList.remove('selected'); b.setAttribute('aria-checked', 'false'); });
-            el.classList.add('selected'); el.setAttribute('aria-checked', 'true'); val = v;
+            document.querySelectorAll('.mc-btn').forEach(b => { b.classList.remove('selected'); b.setAttribute('aria-pressed', 'false'); });
+            el.classList.add('selected'); el.setAttribute('aria-pressed', 'true'); val = v;
         };
         $('exit-submit').onclick = () => SubmitExit(val);
 
@@ -991,7 +1000,7 @@ function RenderExit(d) {
                 <div class="exit-mode-badge">☑️ Multi-Select</div>
                 <div class="exit-multi-hint">Select all that apply</div>
                 ${d.opts.map(o => `
-                    <button class="multi-btn" role="checkbox" aria-checked="false" aria-label="${o}" onclick="ToggleMulti(this,${JSON.stringify(o)})">
+                    <button type="button" class="multi-btn" aria-pressed="false" aria-label="${o}" onclick="ToggleMulti(this,${JSON.stringify(o)})">
                         <span class="multi-check" aria-hidden="true">✓</span>
                         <span class="multi-text">${sanitizeHTML(o)}</span>
                     </button>
@@ -1000,7 +1009,7 @@ function RenderExit(d) {
         window.ToggleMulti = (el, v) => {
             el.classList.toggle('selected');
             const checked = el.classList.contains('selected');
-            el.setAttribute('aria-checked', checked ? 'true' : 'false');
+            el.setAttribute('aria-pressed', checked ? 'true' : 'false');
             if(checked) selected.add(v); else selected.delete(v);
         };
         $('exit-submit').onclick = () => SubmitExit(Array.from(selected));

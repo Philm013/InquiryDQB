@@ -146,6 +146,7 @@
             box-shadow: var(--shadow); transition: 0.15s;
         }
         .type-btn:hover { transform: translateY(-1px); box-shadow: rgba(0,0,0,0.06) 0px 6px 20px, rgba(0,0,0,0.03) 0px 2px 6px; }
+        .type-btn:focus-visible { outline: 2px solid #097fe8; outline-offset: 2px; }
         .t-notice { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
         .t-wonder { background: #f0f9ff; border-color: #7dd3fc; color: #075985; }
         .t-idea { background: #f0fdf4; border-color: #86efac; color: #166534; }
@@ -323,6 +324,8 @@
 
         /* LEARN / WONDER */
         .lw-field { margin-bottom: 16px; }
+        .lw-label { display: flex; align-items: center; gap: 8px; font-size: 0.875rem; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+        .lw-icon { font-size: 1rem; }
     </style>
 </head>
 <body>
@@ -370,7 +373,7 @@
 
     <div id="action-container">
         <!-- 1. LOCKED -->
-        <div id="state-locked" style="text-align:center; padding:40px 20px; color:#64748b">
+        <div id="state-locked" style="text-align:center; padding:40px 20px; color: var(--text-light)">
             <div style="font-size:4rem; margin-bottom:16px">👀</div>
             <h3>Eyes on the Board</h3>
             <p>Wait for the teacher to open an activity.</p>
@@ -381,7 +384,7 @@
             <div class="active-zone-card">
                 <div class="zone-badge" id="zone-type-badge">ACTIVITY</div>
                 <h3 id="zone-title" style="margin:0 0 10px 0; color:var(--accent-dark)">Target Zone</h3>
-                <p style="margin:0 0 16px 0; color:#64748b; font-size:0.9rem" id="zone-desc">Contribute to this activity.</p>
+                <p style="margin:0 0 16px 0; color: var(--text-light); font-size:0.9rem" id="zone-desc">Contribute to this activity.</p>
                 
                 <div id="zone-buttons-default">
                     <button class="btn" onclick="Draft('idea')">💡 Add Note</button>
@@ -400,11 +403,11 @@
         <div id="state-open" style="display:none">
             <h3 style="margin:0 0 16px 0; text-align:center">Add to Board</h3>
             <div class="type-grid">
-                <div class="type-btn t-notice" onclick="Draft('notice')"><span>👁️</span>Notice</div>
-                <div class="type-btn t-wonder" onclick="Draft('wonder')"><span>❓</span>Wonder</div>
-                <div class="type-btn t-idea" onclick="Draft('idea')"><span>💡</span>Idea</div>
-                <div class="type-btn t-test" onclick="Draft('test')"><span>🧪</span>Test</div>
-                <div class="type-btn t-sketch" onclick="DraftSketch()"><span>✏️</span>Sketch</div>
+                <div class="type-btn t-notice" role="button" tabindex="0" onclick="Draft('notice')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();Draft('notice')}"><span>👁️</span>Notice</div>
+                <div class="type-btn t-wonder" role="button" tabindex="0" onclick="Draft('wonder')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();Draft('wonder')}"><span>❓</span>Wonder</div>
+                <div class="type-btn t-idea" role="button" tabindex="0" onclick="Draft('idea')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();Draft('idea')}"><span>💡</span>Idea</div>
+                <div class="type-btn t-test" role="button" tabindex="0" onclick="Draft('test')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();Draft('test')}"><span>🧪</span>Test</div>
+                <div class="type-btn t-sketch" role="button" tabindex="0" onclick="DraftSketch()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();DraftSketch()}"><span>✏️</span>Sketch</div>
             </div>
         </div>
 
@@ -438,7 +441,7 @@
 
     <!-- HISTORY -->
     <div class="hist-container">
-        <div style="display:flex; justify-content:space-between; margin-bottom:12px; color:#64748b; font-size:0.9rem; font-weight:700">
+        <div style="display:flex; justify-content:space-between; margin-bottom:12px; color: var(--text-light); font-size:0.9rem; font-weight:700">
             <span>YOUR CONTRIBUTIONS</span>
             <span onclick="RenderHist()">↻ Refresh</span>
         </div>
@@ -497,14 +500,14 @@
 </div>
 
 <!-- EXIT TICKET SCREEN -->
-<div id="scr-exit" class="screen">
+<div id="scr-exit" class="screen" role="main" aria-label="Exit Ticket">
     <div class="exit-header">
         <div class="exit-prompt-card">
             <div class="exit-prompt-label">🎯 Exit Ticket</div>
-            <div id="exit-prompt">...</div>
+            <div id="exit-prompt" role="heading" aria-level="1">...</div>
         </div>
     </div>
-    <div id="exit-area"></div>
+    <div id="exit-area" aria-live="polite"></div>
     <button class="btn" id="exit-submit">Submit Response →</button>
 </div>
 
@@ -544,7 +547,7 @@
             <h3 style="margin:0">Add Comment</h3>
             <button class="btn-icon" onclick="$('modal-discuss').classList.remove('active')">✕</button>
         </div>
-        <div id="md-text" style="background:#f1f5f9; padding:12px; border-radius:8px; margin-bottom:16px; font-style:italic; color:#475569"></div>
+        <div id="md-text" style="background: var(--warm-bg); padding:12px; border-radius:8px; margin-bottom:16px; font-style:italic; color: var(--text-light)"></div>
         <div style="display:flex; gap:8px; margin-bottom:16px; justify-content:center">
             <button class="status-pill online" onclick="SetDiscussTag(this, 'feedback')">Feedback</button>
             <button class="status-pill" onclick="SetDiscussTag(this, 'question')">Question</button>
@@ -615,10 +618,13 @@ const DB = {
 const EMOJIS = ['😀','😎','🦊','🐱','🚀','🎨','⚽','🦄','🍔','🧩'];
 EMOJIS.forEach(e => {
     let d = document.createElement('div'); d.className='av-item'; d.innerText=e;
-    d.onclick = () => { document.querySelectorAll('.av-item').forEach(x=>x.classList.remove('sel')); d.classList.add('sel'); State.me.av=e; };
+    d.setAttribute('role', 'radio'); d.setAttribute('aria-checked', 'false'); d.setAttribute('aria-label', `Avatar: ${e}`); d.setAttribute('tabindex', '0');
+    const selectFn = () => { document.querySelectorAll('.av-item').forEach(x=>{ x.classList.remove('sel'); x.setAttribute('aria-checked','false'); }); d.classList.add('sel'); d.setAttribute('aria-checked','true'); State.me.av=e; };
+    d.onclick = selectFn;
+    d.onkeydown = (ev) => { if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); selectFn(); } };
     $('av-grid').appendChild(d);
 });
-if($('av-grid').children[0]) $('av-grid').children[0].click();
+if($('av-grid').children[0]) { $('av-grid').children[0].click(); $('av-grid').setAttribute('role', 'radiogroup'); $('av-grid').setAttribute('aria-label', 'Choose avatar'); }
 
 function Setup() {
     State.me.name = $('inp-name').value.trim() || "Student";
@@ -855,7 +861,7 @@ function RenderSort(items) {
 }
 function SubmitSort() { SafeSend({ type: 'SUBMIT_SORT', actId: State.activity.id, order: State.sortOrder.map(i=>i.id) }); alert("Ranking Sent!"); }
 
-function RenderDiscuss(items) { $('discuss-items').innerHTML = items.map(i => `<div class="discuss-card" onclick="OpenDiscuss('${i.id}', '${i.text.replace(/'/g,"\\'")}')"><div style="font-size:0.8rem;color:#64748b;font-weight:700">NOTE</div><div>${i.text.substring(0,100)}...</div></div>`).join(''); }
+function RenderDiscuss(items) { $('discuss-items').innerHTML = items.map(i => `<div class="discuss-card" onclick="OpenDiscuss('${i.id}', '${i.text.replace(/'/g,"\\'")}')"><div style="font-size:0.8rem;color: var(--text-muted);font-weight:700">NOTE</div><div>${i.text.substring(0,100)}...</div></div>`).join(''); }
 let discussTarget = null;
 function OpenDiscuss(id, txt) { discussTarget = id; $('md-text').innerText = txt; $('md-input').value=''; $('modal-discuss').classList.add('active'); }
 function SetDiscussTag(el, tag) { document.querySelectorAll('.status-pill').forEach(b => b.classList.remove('online')); el.classList.add('online'); State.discussTag = tag; }
@@ -924,8 +930,8 @@ function RenderExit(d) {
         a.innerHTML = `
             <div style="padding: 0 20px;">
                 <div class="exit-mode-badge">📝 Short Answer</div>
-                <textarea id="ex-txt" class="exit-textarea" rows="6" placeholder="Type your response here…" maxlength="500"></textarea>
-                <div class="exit-char-count"><span id="ex-char">0</span> / 500</div>
+                <textarea id="ex-txt" class="exit-textarea" rows="6" placeholder="Type your response here…" maxlength="500" aria-label="Your response"></textarea>
+                <div class="exit-char-count" aria-live="polite"><span id="ex-char">0</span> / 500</div>
             </div>`;
         const ta = document.getElementById('ex-txt');
         const cc = document.getElementById('ex-char');
@@ -943,9 +949,9 @@ function RenderExit(d) {
         a.innerHTML = `
             <div style="padding: 0 20px;">
                 <div class="exit-mode-badge">⭐ Rating Scale</div>
-                <div class="smiley-grid">
+                <div class="smiley-grid" role="radiogroup" aria-label="Rating">
                     ${ratings.map(r => `
-                        <button class="smiley-btn" data-val="${r.e}" aria-label="${r.lbl}" onclick="SelectSmiley(this,'${r.e}')">
+                        <button class="smiley-btn" role="radio" aria-checked="false" data-val="${r.e}" aria-label="${r.lbl}" onclick="SelectSmiley(this,'${r.e}')">
                             <span class="smiley-emoji">${r.e}</span>
                             <span class="smiley-lbl">${r.lbl}</span>
                         </button>
@@ -953,8 +959,8 @@ function RenderExit(d) {
                 </div>
             </div>`;
         window.SelectSmiley = (el, v) => {
-            document.querySelectorAll('.smiley-btn').forEach(b => b.classList.remove('selected'));
-            el.classList.add('selected'); val = v;
+            document.querySelectorAll('.smiley-btn').forEach(b => { b.classList.remove('selected'); b.setAttribute('aria-checked', 'false'); });
+            el.classList.add('selected'); el.setAttribute('aria-checked', 'true'); val = v;
         };
         $('exit-submit').onclick = () => SubmitExit(val);
 
@@ -963,16 +969,18 @@ function RenderExit(d) {
         a.innerHTML = `
             <div style="padding: 0 20px;" class="exit-mc">
                 <div class="exit-mode-badge">🔘 Multiple Choice</div>
+                <div role="radiogroup" aria-label="Answer choices">
                 ${d.opts.map((o, i) => `
-                    <button class="mc-btn" aria-label="Option ${letters[i]}: ${o}" onclick="SelectMC(this,${JSON.stringify(o)})">
+                    <button class="mc-btn" role="radio" aria-checked="false" aria-label="Option ${letters[i]}: ${o}" onclick="SelectMC(this,${JSON.stringify(o)})">
                         <span class="mc-letter">${letters[i]}</span>
                         <span class="mc-text">${sanitizeHTML(o)}</span>
                     </button>
                 `).join('')}
+                </div>
             </div>`;
         window.SelectMC = (el, v) => {
-            document.querySelectorAll('.mc-btn').forEach(b => b.classList.remove('selected'));
-            el.classList.add('selected'); val = v;
+            document.querySelectorAll('.mc-btn').forEach(b => { b.classList.remove('selected'); b.setAttribute('aria-checked', 'false'); });
+            el.classList.add('selected'); el.setAttribute('aria-checked', 'true'); val = v;
         };
         $('exit-submit').onclick = () => SubmitExit(val);
 
@@ -983,7 +991,7 @@ function RenderExit(d) {
                 <div class="exit-mode-badge">☑️ Multi-Select</div>
                 <div class="exit-multi-hint">Select all that apply</div>
                 ${d.opts.map(o => `
-                    <button class="multi-btn" aria-label="${o}" onclick="ToggleMulti(this,${JSON.stringify(o)})">
+                    <button class="multi-btn" role="checkbox" aria-checked="false" aria-label="${o}" onclick="ToggleMulti(this,${JSON.stringify(o)})">
                         <span class="multi-check" aria-hidden="true">✓</span>
                         <span class="multi-text">${sanitizeHTML(o)}</span>
                     </button>
@@ -991,7 +999,9 @@ function RenderExit(d) {
             </div>`;
         window.ToggleMulti = (el, v) => {
             el.classList.toggle('selected');
-            if(el.classList.contains('selected')) selected.add(v); else selected.delete(v);
+            const checked = el.classList.contains('selected');
+            el.setAttribute('aria-checked', checked ? 'true' : 'false');
+            if(checked) selected.add(v); else selected.delete(v);
         };
         $('exit-submit').onclick = () => SubmitExit(Array.from(selected));
 
@@ -1016,8 +1026,8 @@ function SubmitExit(val) { if(!val) return; SafeSend({ type:'EXIT_SUBMIT', actId
 /* --- HISTORY --- */
 function RenderHist() {
     const list=$('hist-list'), notes=State.notes.filter(n=>n.boardId===State.boardId).sort((a,b)=>b.ts-a.ts);
-    if(!notes.length) return list.innerHTML=`<div style="text-align:center;color:#cbd5e1;padding:20px">No notes yet</div>`;
-    list.innerHTML=notes.map(n=>`<div class="note-card n-${n.sub}"><div>${n.sub==='sketch'?`<img src="${n.src}" style="width:100%">`:`${sanitizeHTML(n.text)}`}</div><div style="text-align:right;margin-top:5px"><span onclick="DeleteNote('${n.id}')" style="font-size:0.8rem;color:#ef4444;cursor:pointer">Delete</span></div></div>`).join('');
+    if(!notes.length) return list.innerHTML=`<div style="text-align:center;color: var(--text-muted);padding:20px">No notes yet</div>`;
+    list.innerHTML=notes.map(n=>`<div class="note-card n-${n.sub}"><div>${n.sub==='sketch'?`<img src="${n.src}" style="width:100%">`:`${sanitizeHTML(n.text)}`}</div><div style="text-align:right;margin-top:5px"><span onclick="DeleteNote('${n.id}')" style="font-size:0.8rem;color:#dc2626;cursor:pointer">Delete</span></div></div>`).join('');
 }
 function DeleteNote(id) { if(confirm("Delete?")) { DB.delNote(id); SafeSend({ type:'DELETE_NOTE', id }); } }
 

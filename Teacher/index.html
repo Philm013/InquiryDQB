@@ -1414,8 +1414,14 @@ window.UI = {
     },
     toggleA11y: () => {
         const v = $('a11y-view');
-        if(v.style.display==='block') { v.style.display='none'; return; }
+        if(v.style.display==='block') { 
+            v.style.display='none';
+            return;
+        }
         v.style.display='block';
+        // Focus the close button for accessible modal behavior
+        const closeBtn = v.querySelector('button');
+        if(closeBtn) setTimeout(() => closeBtn.focus(), 50);
         const content = State.items.map(i => {
             let txt = i.text || i.title || i.q || "Item";
             return `<div style="border-bottom: var(--border); padding:10px; color: var(--text)"><strong style="color: var(--accent)">${i.type.toUpperCase()}</strong>: ${sanitizeHTML(txt)}</div>`;

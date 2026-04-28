@@ -763,7 +763,7 @@
             <div style="padding:10px; font-weight:bold;">Participants</div>
             <div id="consensus-participants" style="flex: 1; overflow-y: auto;"></div>
             <div style="padding:15px; border-top:1px solid var(--panel-border); margin-top:auto;">
-                <button class="btn-s" style="background:#7f1d1d; color:#fecaca" onclick="Consensus.stop()">Stop Modeling Session</button>
+                <button class="btn-s" style="background: rgba(127,29,29,0.1); color:#dc2626; border: 1px solid rgba(220,38,38,0.2);" onclick="Consensus.stop()">Stop Modeling Session</button>
             </div>
         </div>
 
@@ -790,13 +790,24 @@
                 </div>
             </div>
             <div id="cm-drawer-users" class="drawer" style="padding:10px; max-height: 250px; overflow-y: auto;">
-                 <div style="width:100%; text-align:center; color:#9ca3af; font-size:0.8rem; margin-bottom:8px; font-weight:bold">PARTICIPANTS</div>
+                 <div style="width:100%; text-align:center; color: var(--text-muted); font-size:0.75rem; margin-bottom:8px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">PARTICIPANTS</div>
                  <div id="cm-mobile-participants"></div>
             </div>
         </div>
     </div>
 </div>
 
+<!-- A11Y VIEW OVERLAY -->
+<div id="a11y-view" style="display:none; position:fixed; inset:0; background: rgba(246,245,244,0.98); z-index:9000; overflow-y:auto; padding:24px;" role="dialog" aria-modal="true" aria-label="Accessibility text view of the board">
+    <div style="max-width:700px; margin:0 auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h2 style="margin:0; color: var(--accent); font-size:1.5rem; font-weight:700; letter-spacing:-0.625px;">♿ Accessibility View</h2>
+            <button class="btn-s" style="width:auto; margin:0; padding:8px 14px; min-height:0;" onclick="document.getElementById('a11y-view').style.display='none'" aria-label="Close accessibility view">Close ✕</button>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom:16px; font-size:0.875rem;">A text-only representation of all items on the board for screen reader accessibility.</p>
+        <div id="a11y-content" style="border: var(--border); border-radius:8px; background:white; overflow:hidden;"></div>
+    </div>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -1407,9 +1418,9 @@ window.UI = {
         v.style.display='block';
         const content = State.items.map(i => {
             let txt = i.text || i.title || i.q || "Item";
-            return `<div style="border-bottom:1px solid #eee; padding:10px"><strong>${i.type.toUpperCase()}</strong>: ${txt}</div>`;
+            return `<div style="border-bottom: var(--border); padding:10px; color: var(--text)"><strong style="color: var(--accent)">${i.type.toUpperCase()}</strong>: ${sanitizeHTML(txt)}</div>`;
         }).join('');
-        $('a11y-content').innerHTML = content || "Board is empty.";
+        $('a11y-content').innerHTML = content || '<div style="padding:10px; color: var(--text-muted)">Board is empty.</div>';
     },
     toggleZoneResults: (id) => {
         const el = document.getElementById(`zr-${id}`);
@@ -1880,9 +1891,9 @@ window.Render = {
 
         // Draw Items
         State.items.forEach(i => {
-            ctx.fillStyle = i.type === 'zone' ? 'rgba(255, 255, 255, 0.2)' : (TYPES[i.sub] ? TYPES[i.sub].bor : '#94a3b8');
+            ctx.fillStyle = i.type === 'zone' ? 'rgba(0,117,222,0.08)' : (TYPES[i.sub] ? TYPES[i.sub].bor : '#a39e98');
             if (i.type === 'zone') {
-                ctx.strokeStyle = i.color || '#cbd5e1';
+                ctx.strokeStyle = i.color || 'rgba(0,0,0,0.15)';
                 ctx.lineWidth = 1;
                 ctx.strokeRect(mapX(i.x), mapY(i.y), i.w * scale, i.h * scale);
             } else {
@@ -1891,7 +1902,7 @@ window.Render = {
         });
 
         // Draw Viewport
-        ctx.strokeStyle = '#ef4444';
+        ctx.strokeStyle = '#0075de';
         ctx.lineWidth = 2;
         ctx.strokeRect(mapX(vx), mapY(vy), vw * scale, vh * scale);
 

@@ -175,6 +175,33 @@
         @keyframes shake { 0% { transform: rotate(0deg); } 25% { transform: rotate(-5deg) scale(1.05); } 75% { transform: rotate(5deg) scale(1.05); } 100% { transform: rotate(0deg); } }
         .item.jiggling .jiggle-wrapper { animation: shake 0.4s ease-in-out infinite; border-color: #ef4444; z-index: 500; }
 
+        /* ZONE LIVE / LOCKED STATES */
+        .item.zone.zone-active .jiggle-wrapper {
+            box-shadow: 0 0 0 2px #22c55e, 0 0 14px rgba(34,197,94,0.22), var(--shadow) !important;
+            border-color: #22c55e !important;
+            background: rgba(240,253,244,0.92) !important;
+            transition: all 0.3s !important;
+        }
+        .item.zone.zone-active .zone-label { color: #16a34a !important; }
+        .item.zone.zone-active .i-head { background: rgba(34,197,94,0.12) !important; border-bottom-color: rgba(34,197,94,0.3) !important; }
+        .live-badge {
+            display: inline-flex; align-items: center; gap: 3px;
+            font-size: 0.63rem; font-weight: 700; color: #16a34a;
+            background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.3);
+            padding: 1px 6px; border-radius: 9999px; letter-spacing: 0.5px; margin-left: 4px;
+            flex-shrink: 0;
+        }
+        .live-badge::before {
+            content: ''; width: 5px; height: 5px; background: #22c55e; border-radius: 50%;
+            animation: livePulse 1.5s ease-in-out infinite; flex-shrink: 0;
+        }
+        @keyframes livePulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.35; transform:scale(1.5); } }
+        .item.zone.zone-locked .jiggle-wrapper {
+            opacity: 0.55; filter: grayscale(0.2) saturate(0.7);
+            transition: opacity 0.3s, filter 0.3s !important;
+        }
+        .item.zone.zone-locked .jiggle-wrapper:hover { opacity: 0.82; filter: none; }
+
         /* SEAMLESS CONSENSUS ITEMS */
         .item.consensus-child .jiggle-wrapper {
             background: transparent !important;
@@ -642,9 +669,15 @@
             <input type="range" min="2" max="10" value="4" onchange="InkManager.setWidth(this.value)" style="flex:1">
         </div>
         <div class="tool-row">
+            <button class="sub-btn" id="sketch-mode-btn" onclick="InkManager.toggleSketchMode()" title="Sketch Mode: each stroke becomes a selectable item">🖊️ Sketch Items: OFF</button>
+        </div>
+        <div class="tool-row">
             <button class="sub-btn" onclick="window.setTool('eraser')">🧹 Eraser</button>
             <button class="sub-btn" onclick="window.setTool('laser')">🔦 Laser</button>
             <button class="sub-btn" onclick="InkManager.clear()">🗑️ Clear All</button>
+        </div>
+        <div class="tool-row" style="border-top: var(--border); margin-top:4px; padding-top:8px">
+            <button class="sub-btn" style="background:#f2f9ff; color:var(--accent); border-color:rgba(0,117,222,0.3);" onclick="InkManager.pinToItems()">📌 Pin Ink as Items</button>
         </div>
     </div>
 
@@ -1231,11 +1264,14 @@ window.LayoutSystem = {
             contentHeight = LayoutSystem.layoutFlow(zone, items);
         }
 
-        const minH = 300; 
+        // Type-specific minimum heights: CER/consensus need more room for multi-column layout
+        const zoneMinH = { cer: 300, exit: 200, consensus: 300 };
+        const minH = zoneMinH[zone.zoneType] || 150;
         const newH = Math.max(minH, contentHeight);
         
-        if (newH > zone.h) {
-            StateManager.updateItem(zone.id, { h: newH });
+        if (newH !== zone.h) {
+            // Use silent:true to avoid undo history spam and network broadcasts for layout-only changes
+            StateManager.updateItem(zone.id, { h: newH }, { silent: true });
         }
     },
 
@@ -1271,7 +1307,10 @@ window.LayoutSystem = {
 
     layoutColumns: (zone, items, colCount) => {
         const colW = (zone.w - (LayoutSystem.padding * 2)) / colCount;
-        const colY = new Array(colCount).fill(74); // 44px for main header, 30px for CER headers
+        // Items must fit within their column (leave padding on both sides)
+        // 80px minimum ensures even narrow columns have usable item width
+        const maxItemW = Math.max(80, Math.floor(colW - LayoutSystem.padding * 2));
+        const colY = new Array(colCount).fill(74); // 44px i-head + 30px CER col labels
         const updates = [];
 
         items.forEach(item => {
@@ -1292,13 +1331,22 @@ window.LayoutSystem = {
             if(colIdx < 0) colIdx = 0;
             if(colIdx >= colCount) colIdx = colCount - 1;
 
+            const props = {};
+            // Enforce width constraint so items don't overflow into adjacent columns
+            if (!item._isVirtual && item.w > maxItemW) {
+                item.w = maxItemW;
+                props.w = maxItemW;
+            }
+
             const tx = LayoutSystem.padding + (colIdx * colW) + (colW/2 - item.w/2);
             const ty = colY[colIdx];
 
             const newPos = { x: zone.x + tx, y: zone.y + ty };
             LayoutSystem.apply(zone, item, tx, ty);
             if (!item._isVirtual) {
-                updates.push({ id: item.id, props: newPos });
+                props.x = newPos.x;
+                props.y = newPos.y;
+                updates.push({ id: item.id, props });
             }
             
             colY[colIdx] += item.h + LayoutSystem.gap;
@@ -1389,12 +1437,12 @@ window.UI = {
         const list = $('tpl-list');
         if(type === 'system') {
             const sysTpls = [
-                { name: "See-Think-Wonder", items: [{type:'zone',title:'I See',x:0,y:0,w:300,h:400},{type:'zone',title:'I Think',x:320,y:0,w:300,h:400},{type:'zone',title:'I Wonder',x:640,y:0,w:300,h:400}] },
-                { name: "Frayer Model", items: [{type:'zone',title:'Definition',x:0,y:0,w:300,h:200},{type:'zone',title:'Characteristics',x:320,y:0,w:300,h:200},{type:'zone',title:'Examples',x:0,y:220,w:300,h:200},{type:'zone',title:'Non-Examples',x:320,y:220,w:300,h:200}] },
-                { name: "K-W-L Chart", items: [{type:'zone',title:'What I Know',x:0,y:0,w:300,h:500},{type:'zone',title:'What I Want to Know',x:320,y:0,w:300,h:500},{type:'zone',title:'What I Learned',x:640,y:0,w:300,h:500}] },
-                { name: "Venn Diagram", items: [{type:'zone',title:'Topic A',x:0,y:0,w:300,h:400},{type:'zone',title:'Both',x:320,y:0,w:300,h:400},{type:'zone',title:'Topic B',x:640,y:0,w:300,h:400}] },
-                { name: "Four Corners", items: [{type:'zone',title:'Strongly Agree',x:0,y:0,w:300,h:250},{type:'zone',title:'Agree',x:320,y:0,w:300,h:250},{type:'zone',title:'Disagree',x:0,y:270,w:300,h:250},{type:'zone',title:'Strongly Disagree',x:320,y:270,w:300,h:250}] },
-                { name: "Compass Points", items: [{type:'zone',title:'North (Need to Know)',x:320,y:0,w:300,h:200},{type:'zone',title:'West (Worrisome)',x:0,y:220,w:300,h:200},{type:'zone',title:'East (Excited)',x:640,y:220,w:300,h:200},{type:'zone',title:'South (Stance/Steps)',x:320,y:440,w:300,h:200}] }
+                { name: "See-Think-Wonder", items: [{type:'zone',title:'I See',x:0,y:0,w:300,h:400},{type:'zone',title:'I Think',x:340,y:0,w:300,h:400},{type:'zone',title:'I Wonder',x:680,y:0,w:300,h:400}] },
+                { name: "Frayer Model", items: [{type:'zone',title:'Definition',x:0,y:0,w:300,h:200},{type:'zone',title:'Characteristics',x:340,y:0,w:300,h:200},{type:'zone',title:'Examples',x:0,y:240,w:300,h:200},{type:'zone',title:'Non-Examples',x:340,y:240,w:300,h:200}] },
+                { name: "K-W-L Chart", items: [{type:'zone',title:'What I Know',x:0,y:0,w:300,h:500},{type:'zone',title:'What I Want to Know',x:340,y:0,w:300,h:500},{type:'zone',title:'What I Learned',x:680,y:0,w:300,h:500}] },
+                { name: "Venn Diagram", items: [{type:'zone',title:'Topic A',x:0,y:0,w:300,h:400},{type:'zone',title:'Both',x:340,y:0,w:300,h:400},{type:'zone',title:'Topic B',x:680,y:0,w:300,h:400}] },
+                { name: "Four Corners", items: [{type:'zone',title:'Strongly Agree',x:0,y:0,w:300,h:250},{type:'zone',title:'Agree',x:340,y:0,w:300,h:250},{type:'zone',title:'Disagree',x:0,y:290,w:300,h:250},{type:'zone',title:'Strongly Disagree',x:340,y:290,w:300,h:250}] },
+                { name: "Compass Points", items: [{type:'zone',title:'North (Need to Know)',x:340,y:0,w:300,h:200},{type:'zone',title:'West (Worrisome)',x:0,y:240,w:300,h:200},{type:'zone',title:'East (Excited)',x:680,y:240,w:300,h:200},{type:'zone',title:'South (Stance/Steps)',x:340,y:480,w:300,h:200}] }
             ];
             list.innerHTML = sysTpls.map((t,i) => `<button class="btn-s" onclick='UI.loadTemplate(${JSON.stringify(t)})'>${t.name}</button>`).join('');
         } else {
@@ -1403,10 +1451,21 @@ window.UI = {
         }
     },
     loadTemplate: (t) => {
-        const groupId = genId(); 
+        const groupId = genId();
+        // Center template in current viewport
+        const viewCx = -State.view.x + window.innerWidth / (2 * State.view.z);
+        const viewCy = -State.view.y + window.innerHeight / (2 * State.view.z);
+        // Find template bounding box center
+        const allX = t.items.flatMap(i => [i.x, i.x + (i.w || 200)]);
+        const allY = t.items.flatMap(i => [i.y, i.y + (i.h || 150)]);
+        const tplCx = (Math.min(...allX) + Math.max(...allX)) / 2;
+        const tplCy = (Math.min(...allY) + Math.max(...allY)) / 2;
+        const offX = viewCx - tplCx;
+        const offY = viewCy - tplCy;
         const newItems = t.items.map(i => {
-            const item = { ...i, id: genId(), groupId: groupId }; 
-            item.x += -State.view.x + 100; item.y += -State.view.y + 100;
+            const item = { ...i, id: genId(), groupId: groupId };
+            item.x += offX; item.y += offY;
+            if (item.type === 'zone' && !item.children) item.children = [];
             return item;
         });
         StateManager.addItems(newItems);
@@ -1648,53 +1707,94 @@ window.Board = {
         URL.revokeObjectURL(url);
         UI.toast("Board Exported");
     },
-    getFreeSpace: (x, y, w, h) => {
-        let attempts = 0;
-        let nx = x, ny = y;
-        const pad = 10; 
-        
+    getFreeSpace: (preferX, preferY, w, h) => {
+        const pad = 20;
         const checkCollision = (cx, cy) => {
-            return State.items.some(i => 
+            return State.items.some(i =>
                 cx < i.x + i.w + pad && cx + w + pad > i.x &&
                 cy < i.y + i.h + pad && cy + h + pad > i.y
             );
         };
 
-        let angle = 0;
-        let radius = 0;
-        const step = 20;
+        if (!checkCollision(preferX, preferY)) return { x: preferX, y: preferY };
 
-        while(checkCollision(nx, ny) && attempts < 150) {
-            attempts++;
-            if(attempts === 1) { radius = 50; }
-            else {
-                angle += 0.5;
-                radius = 30 + (angle * 10);
+        // Spiral outward from the preferred position.
+        // Step size 40px gives enough granularity; max radius 480px keeps items near visible content.
+        for (let r = 40; r <= 480; r += 40) {
+            const steps = Math.max(8, Math.ceil((2 * Math.PI * r) / 80));
+            for (let s = 0; s < steps; s++) {
+                const angle = (s / steps) * Math.PI * 2;
+                const nx = preferX + Math.cos(angle) * r;
+                const ny = preferY + Math.sin(angle) * r;
+                if (!checkCollision(nx, ny)) return { x: nx, y: ny };
             }
-            nx = x + Math.cos(angle) * radius;
-            ny = y + Math.sin(angle) * radius;
-        }
-        
-        if (attempts >= 150) {
-            nx = x + (Math.random() * 40 - 20);
-            ny = y + (Math.random() * 40 - 20);
         }
 
-        return { x: nx, y: ny };
+        return { x: preferX + 30, y: preferY + 30 };
     }
 };
 
 /* --- INK & DRAWING --- */
 window.InkManager = {
     currentPath: [],
+    sketchMode: false,
     setColor: (c) => { State.draw.color = c; window.setTool('draw'); UI.toast("Color Changed"); },
     setWidth: (w) => { State.draw.width = w; window.setTool('draw'); },
+    toggleSketchMode: () => {
+        InkManager.sketchMode = !InkManager.sketchMode;
+        const btn = $('sketch-mode-btn');
+        if (btn) {
+            btn.textContent = `🖊️ Sketch Items: ${InkManager.sketchMode ? 'ON' : 'OFF'}`;
+            btn.style.background = InkManager.sketchMode ? 'var(--accent)' : '';
+            btn.style.color = InkManager.sketchMode ? 'white' : '';
+            btn.style.borderColor = InkManager.sketchMode ? 'var(--accent)' : '';
+        }
+        UI.toast(InkManager.sketchMode ? '🖊️ Sketch Mode: strokes become items' : '✏️ Annotate Mode: ink layer');
+    },
+    strokeToItem: (pts, color, width) => {
+        if (!pts || pts.length < 2) return null;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        pts.forEach(p => {
+            minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+            maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+        });
+        const margin = 16;
+        const bx = minX - margin, by = minY - margin;
+        const bw = Math.max(80, maxX - minX + margin * 2);
+        const bh = Math.max(60, maxY - minY + margin * 2);
+        const canvas = document.createElement('canvas');
+        canvas.width = bw; canvas.height = bh;
+        const ctx = canvas.getContext('2d');
+        ctx.strokeStyle = color || State.draw.color;
+        ctx.lineWidth = width || State.draw.width;
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.beginPath();
+        pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x - bx, p.y - by); else ctx.lineTo(p.x - bx, p.y - by); });
+        ctx.stroke();
+        const src = canvas.toDataURL();
+        return { id: genId(), type: 'note', sub: 'sketch', src, text: '', x: bx, y: by, w: bw, h: bh };
+    },
+    pinToItems: () => {
+        if (State.ink.length === 0) { UI.toast("No ink to pin"); return; }
+        const count = State.ink.length;
+        const newItems = State.ink.map(s => InkManager.strokeToItem(s.points, s.color, s.width)).filter(Boolean);
+        if (newItems.length > 0) {
+            StateManager.setInk([]);
+            StateManager.addItems(newItems);
+            UI.toast(`📌 Pinned ${newItems.length} drawing${newItems.length > 1 ? 's' : ''} as items`);
+        }
+    },
     start: (x, y) => { InkManager.currentPath = [{x,y}]; },
     move: (x, y) => { InkManager.currentPath.push({x,y}); InkManager.renderTemp(); },
     end: () => {
         if(InkManager.currentPath.length > 1) {
-            const newInk = { id: genId(), points: [...InkManager.currentPath], color: State.draw.color, width: State.draw.width };
-            StateManager.addInk(newInk);
+            if (InkManager.sketchMode) {
+                const it = InkManager.strokeToItem(InkManager.currentPath);
+                if (it) StateManager.addItem(it);
+            } else {
+                const newInk = { id: genId(), points: [...InkManager.currentPath], color: State.draw.color, width: State.draw.width };
+                StateManager.addInk(newInk);
+            }
         }
         InkManager.currentPath = []; InkManager.renderTemp();
     },
@@ -1743,7 +1843,27 @@ window.Render = {
                 el.classList.toggle('selected', State.selection.includes(i.id));
                 el.classList.toggle('grouped', !!i.groupId);
 
-                if(i.type==='zone') { const lbl = el.querySelector('.zone-label'); if(lbl && lbl.innerText !== i.title) lbl.innerText = i.title; }
+                if(i.type==='zone') {
+                    const lbl = el.querySelector('.zone-label'); if(lbl && lbl.innerText !== i.title) lbl.innerText = i.title;
+                    // Zone live/locked visual state
+                    const isActive = !!i.isOpen;
+                    const hasActiveZone = (State.activity.type === 'ZONE_ACT' || State.activity.type === 'EXIT_TICKET' || State.activity.type === 'WIDGET_ACT');
+                    el.classList.toggle('zone-active', isActive);
+                    el.classList.toggle('zone-locked', hasActiveZone && !isActive);
+                    // LIVE badge
+                    const iHead = el.querySelector('.i-head');
+                    let liveBadge = el.querySelector('.live-badge');
+                    if (isActive) {
+                        if (!liveBadge && iHead) {
+                            liveBadge = document.createElement('span');
+                            liveBadge.className = 'live-badge';
+                            liveBadge.textContent = 'LIVE';
+                            iHead.appendChild(liveBadge);
+                        }
+                    } else if (liveBadge) {
+                        liveBadge.remove();
+                    }
+                }
 
                 const cmts = State.comments.filter(c => c.targetId === i.id);
                 const badge = el.querySelector('.cmt-badge');
@@ -1959,11 +2079,13 @@ window.Render = {
                 const inkContent = (d.ink || []).map(s => `<path d="${InkManager.pointsToPath(s.points)}" stroke="${s.color}" stroke-width="${s.width}" fill="none" stroke-linecap="round"/>`).join('');
                 inner = `<svg style="width:100%; height:100%; pointer-events:none;">${inkContent}</svg>`;
             }
-            else if(d.zoneType === 'exit') {
-                const modeIcon = { short: '📝', smiley: '⭐', mc: '🔘', multi: '☑️', lw: '🧠' }[d.mode] || '🚪';
+                if (d.zoneType === 'exit') {
+                    // Support both exitMode (teacher-created) and mode (legacy/network) property names
+                    const exitMode = d.exitMode || d.mode;
+                const modeIcon = { short: '📝', smiley: '⭐', mc: '🔘', multi: '☑️', lw: '🧠' }[exitMode] || '🚪';
                 inner = `<div style="padding:12px 15px; border-bottom: 1px solid rgba(0,0,0,0.08); background: #f2f9ff; display:flex; align-items:center; gap:8px;">
                     <span style="font-size:1.1rem">${modeIcon}</span>
-                    <span style="font-weight:600; color: #097fe8; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.5px;">${(d.mode||'exit').toUpperCase()}</span>
+                    <span style="font-weight:600; color: #097fe8; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.5px;">${(exitMode||'exit').toUpperCase()}</span>
                 </div>
                 <div style="padding:10px 15px; font-size:0.875rem; color: rgba(0,0,0,0.95); font-weight:500; line-height:1.4;">${sanitizeHTML(d.prompt)}</div>
                 <div style="flex:1; position:relative"></div>`;
@@ -2053,8 +2175,8 @@ window.Render = {
 /* --- ACTIONS --- */
 window.Actions = {
     create: (type, sub) => {
-        let cx = -State.view.x + window.innerWidth/2/State.view.z - 100;
-        let cy = -State.view.y + window.innerHeight/2/State.view.z - 75;
+        let cx = -State.view.x + window.innerWidth / (2 * State.view.z) - 100;
+        let cy = -State.view.y + window.innerHeight / (2 * State.view.z) - 75;
         const id = genId();
         let it = { id, type, w:200, h:150, groupId: null };
         if(type==='note') { it.sub=sub; it.text=''; }
@@ -2076,8 +2198,8 @@ window.Actions = {
         UI.toggleDrawer(null);
     },
     createExit: (mode) => {
-        let cx = -State.view.x + window.innerWidth/2/State.view.z - 200;
-        let cy = -State.view.y + window.innerHeight/2/State.view.z - 150;
+        let cx = -State.view.x + window.innerWidth / (2 * State.view.z) - 200;
+        let cy = -State.view.y + window.innerHeight / (2 * State.view.z) - 150;
         const id = genId();
 
         let promptTxt = "Exit Ticket";
@@ -3367,7 +3489,7 @@ window.Network = {
                 if (d.type === 'NOTE') {
                     if(!i) {
                         i = { id:d.id, type:'note', sub:d.sub, text:d.text, author:State.students[pid]?.name, w:200, h:150, votes:0, groupId: null };
-                        const pos = Board.getFreeSpace(-State.view.x+100, -State.view.y+100, i.w, i.h);
+                        const pos = Board.getFreeSpace(-State.view.x + window.innerWidth/(2*State.view.z) - 100, -State.view.y + window.innerHeight/(2*State.view.z) - 75, i.w, i.h);
                         i.x = pos.x; i.y = pos.y;
                         StateManager.addItem(i, silent);
                     } else { 
@@ -3376,7 +3498,7 @@ window.Network = {
                 } else { 
                     if (!d.src) return;
                     i = { id:d.id, type:'note', sub:'sketch', src:d.src, text:d.text, author:State.students[pid]?.name, w:200, h:200, votes:0, groupId: null };
-                    const pos = Board.getFreeSpace(-State.view.x+100, -State.view.y+100, i.w, i.h);
+                    const pos = Board.getFreeSpace(-State.view.x + window.innerWidth/(2*State.view.z) - 100, -State.view.y + window.innerHeight/(2*State.view.z) - 100, i.w, i.h);
                     i.x = pos.x; i.y = pos.y;
                     StateManager.addItem(i, silent);
                 }
@@ -3784,7 +3906,7 @@ window.Roster = function() {
             ).join('');
             colorHtml = `<div style="display:flex; gap: 6px; padding-left: 34px; margin-top: 8px;">${colorButtons}</div>`;
         }
-        return `<div style="padding:8px 0; border-bottom:1px solid #374151;">
+        return `<div style="padding:8px 0; border-bottom: var(--border);">
                     <div style="display:flex; gap:10px; align-items:center;">
                         <span style="font-size:1.2rem">${x.avatar}</span>
                         <b>${sanitizeHTML(x.name)}</b>

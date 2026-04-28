@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#ffffff">
     <!-- Add these inside the <head> tag -->
 <title>InquiryDQB | Teacher Console</title>
 <meta name="robots" content="noindex, nofollow">
@@ -16,15 +17,20 @@
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Patrick+Hand&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #111827; --grid: #1f2937; --text: #f3f4f6; --accent: #6366f1; 
-            --panel: #1f2937; --panel-border: #374151;
-            --shadow: 0 10px 15px -3px rgba(0,0,0,0.5);
-            --font-ui: 'Nunito', sans-serif; --font-hand: 'Patrick Hand', cursive;
+            --bg: #ffffff; --warm-bg: #f6f5f4; --text: rgba(0,0,0,0.95); --accent: #0075de;
+            --accent-dark: #005bab; --panel: #f6f5f4; --panel-border: rgba(0,0,0,0.1);
+            --text-secondary: #615d59; --text-muted: #a39e98;
+            --shadow: rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2.025px 7.85px, rgba(0,0,0,0.02) 0px 0.8px 2.93px, rgba(0,0,0,0.01) 0px 0.175px 1.04px;
+            --shadow-deep: rgba(0,0,0,0.01) 0px 1px 3px, rgba(0,0,0,0.02) 0px 3px 7px, rgba(0,0,0,0.02) 0px 7px 15px, rgba(0,0,0,0.04) 0px 14px 28px, rgba(0,0,0,0.05) 0px 23px 52px;
+            --border: 1px solid rgba(0,0,0,0.1);
+            --font-ui: 'Inter', -apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif; --font-hand: 'Patrick Hand', cursive;
         }
-        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; user-select: none; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+        *:focus { outline: none; }
+        *:focus-visible { outline: 2px solid #097fe8; outline-offset: 2px; border-radius: 4px; }
         input, textarea { user-select: text; }
         body { margin: 0; overflow: hidden; background: var(--bg); font-family: var(--font-ui); color: var(--text); height: 100vh; touch-action: none; }
 
@@ -33,23 +39,24 @@
 
         /* SIDEBAR */
         #sidebar { 
-            width: 320px; background: var(--panel); border-right: 1px solid var(--panel-border); 
+            width: 320px; background: var(--panel); border-right: var(--border); 
             z-index: 2000; display: flex; flex-direction: column; transition: 0.3s; 
-            box-shadow: 4px 0 15px rgba(0,0,0,0.3); position: absolute; height: 100%; top:0; left:0;
+            box-shadow: rgba(0,0,0,0.04) 4px 0 12px; position: absolute; height: 100%; top:0; left:0;
         }
         #sidebar.closed { transform: translateX(-100%); }
         
         #sidebar .in-txt {
-            background: #374151;
-            border: 1px solid #4b5563;
+            background: #ffffff;
+            border: var(--border);
             color: var(--text);
             padding: 10px;
-            border-radius: 8px;
-            font-size: 1rem;
+            border-radius: 4px;
+            font-size: 0.9375rem;
+            font-family: var(--font-ui);
         }
         #sidebar .in-txt:focus {
             border-color: var(--accent);
-            outline: none;
+            box-shadow: 0 0 0 3px rgba(0,117,222,0.12);
         }
         
         /* VIEWPORT */
@@ -59,7 +66,7 @@
         #viewport.drawing { cursor: crosshair; }
 
         #world { position: absolute; top:0; left:0; transform-origin: 0 0; will-change: transform; }
-        #bg-grid { position: absolute; inset:0; pointer-events: none; background-image: radial-gradient(#374151 2px, transparent 2px); background-size: 24px 24px; opacity: 0.5; }
+        #bg-grid { position: absolute; inset:0; pointer-events: none; background-image: radial-gradient(rgba(0,0,0,0.09) 1.5px, transparent 1.5px); background-size: 24px 24px; }
 
         /* MINIMAP */
         #minimap-container {
@@ -70,11 +77,11 @@
         }
         #minimap {
             width: 100%; height: 100%;
-            background: rgba(31, 41, 55, 0.9);
-            border: 1px solid #4b5563;
+            background: rgba(246, 245, 244, 0.96);
+            border: var(--border);
             border-radius: 12px;
             cursor: crosshair;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            box-shadow: var(--shadow);
             backdrop-filter: blur(4px);
             position: relative;
         }
@@ -94,8 +101,8 @@
             position: absolute;
             right: 4px; bottom: 4px;
             width: 8px; height: 8px;
-            border-bottom: 2px solid rgba(255,255,255,0.5);
-            border-right: 2px solid rgba(255,255,255,0.5);
+            border-bottom: 2px solid rgba(0,0,0,0.3);
+            border-right: 2px solid rgba(0,0,0,0.3);
         }
 
 
@@ -122,23 +129,23 @@
             /* transition is handled by no-transition class */
             z-index: 9999 !important; 
             opacity: 0.95; 
-            filter: drop-shadow(0 15px 30px rgba(0,0,0,0.4));
+            filter: drop-shadow(0 8px 24px rgba(0,0,0,0.12));
             transform: scale(1.02) !important;
         }
 
         /* ZONE DROP TARGET */
         .item.zone { transition: background-color 0.2s, border-color 0.2s, width 0.1s, height 0.1s; }
         .item.zone.drag-over {
-            box-shadow: 0 0 0 4px var(--accent), 0 0 40px rgba(99,102,241,0.2) !important;
-            background: rgba(99,102,241,0.08) !important;
+            box-shadow: 0 0 0 2px var(--accent), rgba(0,117,222,0.08) 0px 4px 18px !important;
+            background: rgba(0,117,222,0.04) !important;
             border-color: var(--accent) !important;
         }
 
         /* GHOST SLOT & GUIDES */
         .ghost-slot {
             position: absolute;
-            border: 2px dashed rgba(99,102,241,0.4);
-            background: rgba(99,102,241,0.1);
+            border: 2px dashed rgba(0,117,222,0.35);
+            background: rgba(0,117,222,0.06);
             border-radius: 12px;
             pointer-events: none;
             z-index: 3;
@@ -156,14 +163,14 @@
         .snap-anim { animation: snapPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
         @keyframes snapPop { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
 
-        .jiggle-wrapper { width:100%; height:100%; display:flex; flex-direction:column; background:white; border-radius:16px; box-shadow: var(--shadow); position:relative; overflow:hidden; color: #1e293b; border: 2px solid transparent; transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s; }
-        .item.selected .jiggle-wrapper { box-shadow: 0 0 0 3px var(--accent), 0 20px 25px -5px rgba(0,0,0,0.5) !important; z-index: 50; border-color: var(--accent) !important; }
+        .jiggle-wrapper { width:100%; height:100%; display:flex; flex-direction:column; background:white; border-radius:12px; box-shadow: var(--shadow); position:relative; overflow:hidden; color: rgba(0,0,0,0.95); border: 1px solid rgba(0,0,0,0.1); transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s; }
+        .item.selected .jiggle-wrapper { box-shadow: 0 0 0 2px var(--accent), var(--shadow) !important; z-index: 50; border-color: var(--accent) !important; }
         .item.grouped .jiggle-wrapper {
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.7), 0 10px 15px -3px rgba(0,0,0,0.5) !important;
-            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 2px rgba(0,117,222,0.5), var(--shadow) !important;
+            border-color: rgba(0,117,222,0.5) !important;
         }
         .item.grouped.selected .jiggle-wrapper {
-            box-shadow: 0 0 0 3px var(--accent), 0 0 0 6px #3b82f6, 0 20px 25px -5px rgba(0,0,0,0.5) !important;
+            box-shadow: 0 0 0 2px var(--accent), 0 0 0 4px rgba(0,117,222,0.25), var(--shadow) !important;
         }
         @keyframes shake { 0% { transform: rotate(0deg); } 25% { transform: rotate(-5deg) scale(1.05); } 75% { transform: rotate(5deg) scale(1.05); } 100% { transform: rotate(0deg); } }
         .item.jiggling .jiggle-wrapper { animation: shake 0.4s ease-in-out infinite; border-color: #ef4444; z-index: 500; }
@@ -201,16 +208,16 @@
         }
 
         /* HEADER BUTTONS */
-        .btn-toggle { cursor: pointer; font-size: 0.75rem; padding: 4px 8px; border-radius: 10px; margin-left: 8px; border: 1px solid #e2e8f0; background: white; transition: 0.2s; }
-        .btn-toggle.active { background: #dcfce7; color: #166534; border-color: #22c55e; }
-        .btn-toggle.results-btn { background: #e0e7ff; color: #4338ca; border-color: #6366f1; display: none; }
+        .btn-toggle { cursor: pointer; font-size: 0.72rem; padding: 4px 8px; border-radius: 9999px; margin-left: 8px; border: var(--border); background: white; transition: 0.12s; font-weight: 600; font-family: var(--font-ui); }
+        .btn-toggle.active { background: #f0fff4; color: #166534; border-color: #22c55e; }
+        .btn-toggle.results-btn { background: #f2f9ff; color: #097fe8; border-color: rgba(0,117,222,0.3); display: none; }
         .btn-toggle.results-btn.active { display: inline-block; animation: popIn 0.3s; }
 
         /* GLOBAL CONTEXT MENU */
         #context-menu {
             position: absolute; display: none; flex-wrap: wrap; 
-            background: #ffffff; border: 1px solid #cbd5e1; border-radius: 16px; 
-            padding: 8px; gap: 6px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3); 
+            background: #ffffff; border: var(--border); border-radius: 12px; 
+            padding: 8px; gap: 6px; box-shadow: var(--shadow-deep); 
             z-index: 3000; width: 260px; animation: popIn 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
         @keyframes popIn { from { opacity:0; transform:scale(0.9); } to { opacity:1; transform:scale(1); } }
@@ -226,37 +233,37 @@
         .ctx-row:last-child { margin-bottom: 0; }
 
         .ctx-btn { 
-            flex: 1; height: 36px; border: 1px solid #e2e8f0; background: #f8fafc; 
-            border-radius: 8px; cursor: pointer; display: flex; align-items: center; 
-            justify-content: center; font-size: 0.9rem; font-weight: 700; color: #475569; 
-            padding: 0 8px; white-space: nowrap; 
+            flex: 1; height: 36px; border: var(--border); background: rgba(0,0,0,0.04); 
+            border-radius: 4px; cursor: pointer; display: flex; align-items: center; 
+            justify-content: center; font-size: 0.875rem; font-weight: 600; color: var(--text); 
+            padding: 0 8px; white-space: nowrap; font-family: var(--font-ui); transition: 0.12s;
         }
-        .ctx-btn:hover { background: #e2e8f0; }
-        .ctx-btn.btn-del { color: #ef4444; background: #fef2f2; border-color: #fca5a5; }
+        .ctx-btn:hover { background: rgba(0,0,0,0.08); }
+        .ctx-btn.btn-del { color: #ef4444; background: rgba(239,68,68,0.06); border-color: rgba(239,68,68,0.2); }
 
         /* MENU BUTTON */
-        .menu-trigger { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; cursor: pointer; font-size: 1.4rem; line-height: 1; color: #4b5563; }
-        .menu-trigger:hover { background: rgba(0,0,0,0.1); }
+        .menu-trigger { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 4px; cursor: pointer; font-size: 1.2rem; line-height: 1; color: var(--text-secondary); transition: 0.12s; }
+        .menu-trigger:hover { background: rgba(0,0,0,0.08); color: var(--text); }
 
         /* CONTENT */
-        .item.note textarea { width: 100%; height: 100%; border: none; background: transparent; padding: 16px; font-family: var(--font-hand); font-size: 1.4rem; resize: none; line-height: 1.4; color: #1e293b; }
+        .item.note textarea { width: 100%; height: 100%; border: none; background: transparent; padding: 14px; font-family: var(--font-hand); font-size: 1.4rem; resize: none; line-height: 1.4; color: var(--text); }
         .item.note img { width: 100%; flex: 1; object-fit: contain; background: transparent; pointer-events: none; min-height: 0; display: block; }
-        .caption-in { width: 100%; height: 40px; border: none; border-top: 1px solid rgba(0,0,0,0.1); background: rgba(255,255,255,0.8); padding: 8px; font-family: var(--font-ui); font-size: 0.9rem; resize: none; color: #1e293b; flex-shrink: 0; }
+        .caption-in { width: 100%; height: 40px; border: none; border-top: 1px solid rgba(0,0,0,0.1); background: rgba(255,255,255,0.8); padding: 8px; font-family: var(--font-ui); font-size: 0.875rem; resize: none; color: var(--text); flex-shrink: 0; }
 
         .i-body { flex: 1; position: relative; min-height: 0; display: flex; flex-direction: column; }
-        .zone-label { position:absolute; top:-25px; left:0; color: var(--accent); font-weight:800; letter-spacing:1px; font-size:0.9rem; white-space:nowrap; text-shadow: 0 2px 4px rgba(0,0,0,0.5); pointer-events: none; transition: color 0.2s; }
+        .zone-label { position:absolute; top:-25px; left:0; color: var(--accent); font-weight:700; letter-spacing:0.5px; font-size:0.875rem; white-space:nowrap; pointer-events: none; transition: color 0.2s; }
         .cer-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; height: 100%; width: 100%; pointer-events: none; }
-        .cer-col { border-right: 2px dashed #cbd5e1; position: relative; display: flex; justify-content: center; padding-top: 10px; font-weight: 800; color: #94a3b8; letter-spacing: 1px; font-size: 0.8rem; }
-        .consensus-bg { background-image: radial-gradient(#bae6fd 1px, transparent 1px); background-size: 20px 20px; background-color: #f0f9ff; }
+        .cer-col { border-right: 2px dashed rgba(0,0,0,0.12); position: relative; display: flex; justify-content: center; padding-top: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px; font-size: 0.75rem; }
+        .consensus-bg { background-image: radial-gradient(rgba(0,117,222,0.15) 1px, transparent 1px); background-size: 20px 20px; background-color: #f2f9ff; }
         
         /* ZONE RESULTS WIDGET */
-        .zone-res-box { display: none; background: #f8fafc; border-top: 1px solid #cbd5e1; max-height: 50%; overflow-y: auto; padding: 10px; font-size: 0.9rem; flex-shrink: 0; }
+        .zone-res-box { display: none; background: var(--warm-bg); border-top: var(--border); max-height: 50%; overflow-y: auto; padding: 10px; font-size: 0.875rem; flex-shrink: 0; color: var(--text); }
         .zone-res-box.active { display: block; }
         .result-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-        .bar-bg { flex: 1; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+        .bar-bg { flex: 1; height: 6px; background: rgba(0,0,0,0.08); border-radius: 4px; overflow: hidden; }
         .bar-fill { height: 100%; background: var(--accent); transition: width 0.5s; }
 
-        .disc-item { padding: 8px; border-bottom: 1px solid #e2e8f0; margin-bottom: 8px; background: white; border-radius: 8px; }
+        .disc-item { padding: 8px; border-bottom: var(--border); margin-bottom: 8px; background: white; border-radius: 8px; }
         .disc-tag { font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: 800; margin-right: 6px; }
         .dt-notice { background:#fef3c7; color:#d97706; }
         .dt-wonder { background:#bae6fd; color:#0284c7; }
@@ -270,81 +277,89 @@
         /* --- DESKTOP TOOLBAR (>768px) --- */
         #desktop-toolbar {
             position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
-            background: #1e293b; padding: 8px 12px; border-radius: 20px;
-            display: none; gap: 8px; z-index: 200; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
-            align-items: center;
+            background: #ffffff; padding: 6px 10px; border-radius: 12px;
+            display: none; gap: 4px; z-index: 200; box-shadow: var(--shadow-deep);
+            align-items: center; border: var(--border);
         }
-        .tb-btn { height: 44px; min-width: 44px; padding: 0 16px; border: none; background: rgba(255,255,255,0.1); color: white; border-radius: 12px; font-size: 0.9rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; white-space: nowrap; }
-        .tb-btn:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
+        .tb-btn { height: 38px; min-width: 38px; padding: 0 14px; border: none; background: transparent; color: var(--text); border-radius: 4px; font-size: 0.875rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: 0.12s; white-space: nowrap; font-family: var(--font-ui); }
+        .tb-btn:hover { background: rgba(0,0,0,0.06); }
         .tb-btn.active { background: var(--accent); color: white; }
-        .sep { width:1px; height: 24px; background:rgba(255,255,255,0.2); margin:0 4px; flex-shrink: 0; }
+        .sep { width:1px; height: 20px; background: rgba(0,0,0,0.1); margin:0 4px; flex-shrink: 0; }
 
         /* --- MOBILE DOCK (<768px) --- */
         #mobile-dock {
             position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-            background: rgba(31, 41, 55, 0.95); backdrop-filter: blur(10px);
-            border: 1px solid #374151; border-radius: 24px;
-            display: flex; align-items: center; padding: 6px; gap: 6px;
-            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
+            background: rgba(255,255,255,0.97); backdrop-filter: blur(12px);
+            border: var(--border); border-radius: 14px;
+            display: flex; align-items: center; padding: 5px; gap: 3px;
+            box-shadow: var(--shadow-deep);
             z-index: 1000; width: auto; max-width: 95vw;
         }
         .dock-btn {
-            width: 36px; height: 36px; border-radius: 16px; border: none;
-            background: transparent; color: #9ca3af; font-size: 1.4rem;
+            width: 36px; height: 36px; border-radius: 8px; border: none;
+            background: transparent; color: var(--text-secondary); font-size: 1.3rem;
             display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: 0.2s; position: relative; flex-shrink: 0;
+            cursor: pointer; transition: 0.12s; position: relative; flex-shrink: 0;
         }
-        .dock-btn.active { background: var(--accent); color: white; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4); transform: translateY(-4px); }
-        .sep-mobile { width:1px; height:24px; background:#4b5563; margin:0 2px; }
+        .dock-btn:hover { background: rgba(0,0,0,0.06); color: var(--text); }
+        .dock-btn.active { background: var(--accent); color: white; box-shadow: 0 2px 8px rgba(0,117,222,0.3); transform: translateY(-2px); }
+        .sep-mobile { width:1px; height:20px; background: rgba(0,0,0,0.1); margin:0 2px; }
 
         /* --- DRAWERS (Sub-menus) --- */
         .drawer {
             position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
-            background: var(--panel); border: 1px solid var(--panel-border);
-            border-radius: 20px; padding: 12px; display: none; flex-wrap: wrap; gap: 8px;
-            width: 320px; justify-content: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            background: #ffffff; border: var(--border);
+            border-radius: 12px; padding: 12px; display: none; flex-wrap: wrap; gap: 8px;
+            width: 320px; justify-content: center; box-shadow: var(--shadow-deep);
             opacity: 0; transition: 0.2s; pointer-events: none; z-index: 999;
         }
         .drawer.open { display: flex; opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
 
         .tool-row { display: flex; gap: 8px; width: 100%; justify-content: center; margin-bottom: 8px; }
-        .color-btn { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #374151; cursor: pointer; }
-        .color-btn.active { border-color: white; transform: scale(1.2); }
+        .color-btn { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(0,0,0,0.1); cursor: pointer; transition: 0.12s; }
+        .color-btn:hover { transform: scale(1.1); border-color: rgba(0,0,0,0.3); }
+        .color-btn.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); transform: scale(1.15); }
         #host-id { user-select: text; }
         .sub-btn {
-            padding: 10px 16px; background: #374151; color: white; border-radius: 12px;
-            border: 1px solid #4b5563; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+            padding: 8px 14px; background: rgba(0,0,0,0.04); color: var(--text); border-radius: 4px;
+            border: var(--border); font-size: 0.875rem; font-weight: 600; cursor: pointer;
             display: flex; align-items: center; gap: 6px; flex: 1; justify-content: center;
+            font-family: var(--font-ui); transition: 0.12s;
         }
-        .sub-btn:hover { background: #4b5563; }
-        .sub-btn.active { background: var(--accent); border-color: var(--accent); }
+        .sub-btn:hover { background: rgba(0,0,0,0.08); }
+        .sub-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
 
         /* SVG ICON BUTTONS */
         .icon-btn {
-            width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center;
-            background: #374151; border: 1px solid #4b5563; border-radius: 8px; cursor: pointer;
-            color: #e2e8f0; transition: 0.2s;
+            width: 40px; height: 40px; padding: 0; display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.04); border: var(--border); border-radius: 4px; cursor: pointer;
+            color: var(--text); transition: 0.12s;
         }
-        .icon-btn:hover { background: #4b5563; color: white; }
-        .icon-btn svg { width: 24px; height: 24px; fill: currentColor; }
+        .icon-btn:hover { background: rgba(0,0,0,0.08); }
+        .icon-btn svg { width: 22px; height: 22px; fill: currentColor; }
 
         /* COMMON UI */
         #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 4000; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
-        .toast { background: #1e293b; color: white; padding: 10px 20px; border-radius: 30px; font-weight: 600; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); animation: fadeUp 0.3s ease-out; display:flex; align-items:center; gap:8px; }
+        .toast { background: rgba(0,0,0,0.95); color: white; padding: 10px 20px; border-radius: 9999px; font-weight: 600; font-size: 0.875rem; box-shadow: var(--shadow-deep); animation: fadeUp 0.3s ease-out; display:flex; align-items:center; gap:8px; }
         @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
 
         .modal-bg { position: fixed; inset:0; background: rgba(0,0,0,0.6); z-index: 3000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
-        .modal { background: white; padding: 24px; border-radius: 24px; width: 500px; max-width: 90%; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); max-height: 85vh; overflow-y: auto; color: #1f2937; }
-        .btn-p { width: 100%; padding: 14px; background: var(--accent); color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; font-size:1rem; transition:0.2s; min-height: 48px; }
-        .btn-s { width: 100%; padding: 14px; background: #f1f5f9; color: #334155; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; font-size:1rem; margin-top:8px; min-height: 48px; }
-        input.in-txt, select.in-txt { width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1rem; background: #fff; }
+        .modal { background: white; padding: 24px; border-radius: 12px; width: 500px; max-width: 90%; border: var(--border); box-shadow: var(--shadow-deep); max-height: 85vh; overflow-y: auto; color: var(--text); }
+        .btn-p { width: 100%; padding: 12px 16px; background: var(--accent); color: white; border: 1px solid transparent; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 0.9375rem; font-family: var(--font-ui); transition: 0.12s; min-height: 44px; }
+        .btn-p:hover { background: var(--accent-dark); }
+        .btn-p:active { transform: scale(0.98); }
+        .btn-s { width: 100%; padding: 12px 16px; background: rgba(0,0,0,0.05); color: var(--text); border: none; border-radius: 4px; font-weight: 600; cursor: pointer; font-size: 0.9375rem; font-family: var(--font-ui); margin-top:8px; min-height: 44px; transition: 0.12s; }
+        .btn-s:hover { background: rgba(0,0,0,0.08); }
+        input.in-txt, select.in-txt { width: 100%; padding: 10px 12px; border: var(--border); border-radius: 4px; font-size: 0.9375rem; background: #fff; font-family: var(--font-ui); color: var(--text); transition: 0.12s; }
+        input.in-txt:focus, select.in-txt:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(0,117,222,0.12); }
         .input-group { margin-bottom: 15px; }
-        .input-group label { display: block; font-weight: 700; color: #64748b; margin-bottom: 6px; font-size: 0.9rem; }
+        .input-group label { display: block; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; font-size: 0.875rem; }
 
-        #marquee { position: absolute; border: 1px solid var(--accent); background: rgba(99,102,241,0.1); display: none; pointer-events: none; z-index: 100; }
+        #marquee { position: absolute; border: 1px solid var(--accent); background: rgba(0,117,222,0.06); display: none; pointer-events: none; z-index: 100; }
 
-        .tab-head { display: flex; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; min-height: 50px; border-radius: 12px 12px 0 0; flex-shrink: 0; }
-        .tab-btn { flex: 1; padding: 12px; text-align: center; font-weight: 700; font-size: 0.9rem; cursor: pointer; color: #64748b; }
+        .tab-head { display: flex; background: rgba(0,0,0,0.03); border-bottom: var(--border); min-height: 48px; border-radius: 12px 12px 0 0; flex-shrink: 0; }
+        .tab-btn { flex: 1; padding: 12px; text-align: center; font-weight: 600; font-size: 0.875rem; cursor: pointer; color: var(--text-secondary); font-family: var(--font-ui); transition: 0.12s; }
+        .tab-btn:hover { color: var(--text); }
         .tab-btn.active { background: white; color: var(--accent); border-bottom: 2px solid var(--accent); }
         
         /* Sidebar Tab Content Fix */
@@ -354,16 +369,17 @@
             overflow-y: auto;
             padding: 15px;
             flex-direction: column;
-            color: #d1d5db;
+            color: var(--text);
             min-height: 0; /* Prevents flexbox from overflowing its container */
         }
         .tab-content.active {
             display: flex;
         }
 
-        #landing { position: fixed; inset:0; background: #f1f5f9; z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #1f2937; }
-        .land-card { background: white; padding: 40px; border-radius: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 500px; max-width: 90%; text-align: center; }
-        .board-row { padding: 16px; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; justify-content: space-between; align-items: center; text-align: left; }
+        #landing { position: fixed; inset:0; background: var(--warm-bg); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text); }
+        .land-card { background: white; padding: 40px; border-radius: 12px; border: var(--border); box-shadow: var(--shadow-deep); width: 500px; max-width: 90%; text-align: center; }
+        .board-row { padding: 14px 16px; border-bottom: var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; text-align: left; transition: 0.12s; }
+        .board-row:hover { background: rgba(0,0,0,0.02); }
 
         /* --- CONSENSUS MODEL OVERLAY --- */
         #consensus-overlay {
@@ -372,7 +388,8 @@
         }
         #consensus-main {
             flex: 1; position: relative; overflow: hidden;
-            background-image: radial-gradient(#374151 2px, transparent 2px); 
+            background-color: #ffffff;
+            background-image: radial-gradient(rgba(0,0,0,0.09) 1.5px, transparent 1.5px); 
             background-size: 32px 32px; cursor: default;
         }
         #consensus-main.cm-pan { cursor: grab; }
@@ -426,15 +443,16 @@
                 width: 100%;
             }
             .cm-dock-btn {
-                width: 44px; height: 44px; border-radius: 16px; border: none;
-                background: #374151; color: #e2e8f0; font-size: 1.6rem;
+                width: 44px; height: 44px; border-radius: 8px; border: none;
+                background: rgba(0,0,0,0.05); color: var(--text); font-size: 1.4rem;
                 display: flex; align-items: center; justify-content: center;
-                cursor: pointer; transition: 0.2s; flex-shrink: 0;
+                cursor: pointer; transition: 0.12s; flex-shrink: 0;
             }
+            .cm-dock-btn:hover { background: rgba(0,0,0,0.08); }
             .cm-dock-btn.active {
                 background: var(--accent); color: white;
             }
-            .cm-sep { width:1px; height:24px; background:#4b5563; margin: 0 4px; }
+            .cm-sep { width:1px; height:20px; background: rgba(0,0,0,0.1); margin: 0 4px; }
             #consensus-participants {
               flex: none; /* Override desktop flex grow */
             }
@@ -452,16 +470,16 @@
 <div id="modal-join" class="modal-bg">
     <div class="modal">
         <h2 style="margin-top:0; color:var(--accent)">Join as Co-Host</h2>
-        <div id="reader" style="width:100%; min-height:250px; background:#f1f5f9; border-radius:12px; overflow:hidden; display:none; margin-bottom:20px"></div>
-        <button id="btn-scan" class="btn-s" style="background:#e0e7ff; color:#4338ca; display:flex; align-items:center; justify-content:center; gap:8px" onclick="Network.startQRScan()">
+        <div id="reader" style="width:100%; min-height:250px; background: var(--warm-bg); border-radius:8px; overflow:hidden; display:none; margin-bottom:20px"></div>
+        <button id="btn-scan" class="btn-s" style="background: #f2f9ff; color: var(--accent); display:flex; align-items:center; justify-content:center; gap:8px; border: 1px solid rgba(0,117,222,0.2);" onclick="Network.startQRScan()">
             <svg style="width:20px;height:20px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
             Scan QR Code
         </button>
-        <div style="margin:20px 0; text-align:center; font-weight:bold; color:#cbd5e1">- OR -</div>
-        <div style="margin-bottom:8px; font-weight:700; color:#64748b">Enter Host ID Manually</div>
+        <div style="margin:20px 0; text-align:center; font-weight:600; color: var(--text-muted)">— OR —</div>
+        <div style="margin-bottom:8px; font-weight:600; color: var(--text-secondary)">Enter Host ID Manually</div>
         <input id="join-id-input" class="in-txt" placeholder="e.g. a1b2c3d4e">
         <button class="btn-p" style="margin-top:20px" onclick="Network.submitJoin()">Join Board</button>
-        <button class="btn-s" style="color:#ef4444; background:#fef2f2" onclick="Network.closeJoinModal()">Cancel</button>
+        <button class="btn-s" style="color:#ef4444; background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15);" onclick="Network.closeJoinModal()">Cancel</button>
     </div>
 </div>
 
@@ -491,10 +509,10 @@
         </div>
         
         <div id="settings-tab-0" class="tab-content active" style="gap:15px; padding:0">
-             <p style="margin:0 0 10px 0; color:#64748b; text-align:center;">Allow students and co-hosts to join this board using the QR code or ID below.</p>
-             <div id="settings-qr-tgt" style="background:white; padding:10px; border-radius:8px; margin:0 auto 10px auto; display:flex; justify-content:center"></div>
-             <div style="text-align:center; font-size:1.4rem; font-weight:bold; margin-bottom:10px; color:#334155; user-select:text;" id="settings-host-id"></div>
-             <button class="btn-s" style="background:#4338ca; color:#e0e7ff;" onclick="Network.host(null)">Reset Network ID</button>
+             <p style="margin:0 0 10px 0; color: var(--text-secondary); text-align:center;">Allow students and co-hosts to join this board using the QR code or ID below.</p>
+             <div id="settings-qr-tgt" style="background:white; padding:10px; border-radius:8px; border: var(--border); margin:0 auto 10px auto; display:flex; justify-content:center"></div>
+             <div style="text-align:center; font-size:1.4rem; font-weight:700; margin-bottom:10px; color: var(--text); user-select:text;" id="settings-host-id"></div>
+             <button class="btn-s" style="background: var(--accent); color: white;" onclick="Network.host(null)">Reset Network ID</button>
         </div>
 
         <div id="settings-tab-1" class="tab-content" style="gap:15px; padding:0">
@@ -519,11 +537,11 @@
 <!-- LANDING -->
 <div id="landing">
     <div class="land-card">
-        <h1 style="color:var(--accent); margin:0 0 10px 0; font-size:2.5rem">InquiryDQB</h1>
-        <p style="color:#64748b; margin-bottom:30px">Teacher Console</p>
+        <h1 style="color:var(--accent); margin:0 0 10px 0; font-size:2.5rem; font-weight:700; letter-spacing:-1.5px;">InquiryDQB</h1>
+        <p style="color: var(--text-secondary); margin-bottom:30px">Teacher Console</p>
         <button class="btn-p" onclick="Board.create()">+ New Board</button>
-        <button class="btn-s" style="background:#e0e7ff; color:#4338ca" onclick="Network.joinAsCoHost()">🤝 Join as Co-Host</button>
-        <div id="saved-list" style="text-align: left; max-height: 300px; overflow-y: auto; margin: 20px 0; border: 1px solid #e2e8f0; border-radius: 12px;"></div>
+        <button class="btn-s" style="background: #f2f9ff; color: var(--accent); border: 1px solid rgba(0,117,222,0.2);" onclick="Network.joinAsCoHost()">🤝 Join as Co-Host</button>
+        <div id="saved-list" style="text-align: left; max-height: 300px; overflow-y: auto; margin: 20px 0; border: var(--border); border-radius: 8px;"></div>
         <button class="btn-s" onclick="$('file-up').click()">Import JSON</button>
         <input type="file" id="file-up" hidden onchange="Board.import(this)">
     </div>
@@ -532,9 +550,9 @@
 <div id="app">
     <!-- SIDEBAR -->
     <div id="sidebar" class="closed">
-        <div style="padding:15px; border-bottom:1px solid #374151; display:flex; justify-content:space-between; align-items:flex-start; flex-shrink: 0;">
+        <div style="padding:15px; border-bottom: var(--border); display:flex; justify-content:space-between; align-items:flex-start; flex-shrink: 0;">
             <div style="flex:1">
-                <div style="font-size:0.75rem; color:#9ca3af; font-weight:800; text-transform:uppercase; margin-bottom:6px;">Board Name</div>
+                <div style="font-size:0.72rem; color: var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Board Name</div>
                 <input class="in-txt" id="board-name" value="My Board" oninput="State.name=this.value; Board.save(true)">
             </div>
             <button class="btn-s" style="width:auto; margin: 24px 0 0 10px; padding:8px 12px; height: 44px; min-height:0;" onclick="window.UI.toggleMenu()">✕</button>
@@ -544,24 +562,24 @@
             <div class="tab-btn" onclick="Tab(1)">Activity</div>
         </div>
         <div id="tab-roster" class="tab-content active">
-            <div id="roster" style="width: 100%;"><div style="text-align:center">Waiting for connections...</div></div>
+            <div id="roster" style="width: 100%;"><div style="text-align:center; color: var(--text-secondary);">Waiting for connections...</div></div>
         </div>
         <div id="tab-activity" class="tab-content">
             <div id="act-controls" style="display:none; margin-bottom:10px; width: 100%;">
-                <div style="padding:10px; background:#374151; border-radius:8px; margin-bottom:10px">
-                    <div style="font-weight:bold; color:#60a5fa;">Active Session</div>
-                    <div id="act-info" style="font-size:0.8rem;"></div>
+                <div style="padding:10px; background: rgba(0,117,222,0.06); border: var(--border); border-radius:8px; margin-bottom:10px">
+                    <div style="font-weight:600; color: var(--accent);">Active Session</div>
+                    <div id="act-info" style="font-size:0.8rem; color: var(--text-secondary);"></div>
                 </div>
-                <button class="btn-s" style="background:#7f1d1d; color:#fecaca" onclick="Network.stopActivity()">Stop Activity</button>
+                <button class="btn-s" style="background: rgba(239,68,68,0.08); color:#dc2626; border: 1px solid rgba(239,68,68,0.15);" onclick="Network.stopActivity()">Stop Activity</button>
             </div>
-            <div id="act-results" style="width: 100%;"><div style="text-align:center">Select a Zone to see activity or create an Exit Ticket.</div></div>
+            <div id="act-results" style="width: 100%;"><div style="text-align:center; color: var(--text-secondary);">Select a Zone to see activity or create an Exit Ticket.</div></div>
         </div>
         <!-- Sidebar Actions -->
-        <div style="margin-top:auto; padding:15px; border-top:1px solid #374151; display:flex; flex-direction:column; gap:8px; flex-shrink: 0;">
+        <div style="margin-top:auto; padding:15px; border-top: var(--border); display:flex; flex-direction:column; gap:8px; flex-shrink: 0;">
             <button class="sub-btn" onclick="UI.showSettingsModal()">📡 Share Board</button>
             <button class="sub-btn" onclick="Board.export()">📤 Export JSON</button>
             <button class="sub-btn" onclick="window.UI.toggleA11y()">♿ Accessibility View</button>
-            <button class="sub-btn" style="background:#7f1d1d; color:#fecaca" onclick="Board.exit()">🚪 Exit Board</button>
+            <button class="sub-btn" style="background: rgba(239,68,68,0.08); color:#dc2626; border: 1px solid rgba(239,68,68,0.15);" onclick="Board.exit()">🚪 Exit Board</button>
         </div>
     </div>
 
@@ -574,51 +592,51 @@
             <div id="ghost-layer"></div>
         </div>
         <div id="marquee"></div>
-        <div id="minimap-container">
-            <div id="minimap-drag-handle"></div>
-            <div id="minimap-resize-handle"></div>
-            <canvas id="minimap"></canvas>
+        <div id="minimap-container" role="region" aria-label="Board minimap">
+            <div id="minimap-drag-handle" role="button" aria-label="Move minimap" tabindex="0"></div>
+            <div id="minimap-resize-handle" role="button" aria-label="Resize minimap" tabindex="0"></div>
+            <canvas id="minimap" aria-hidden="true"></canvas>
         </div>
     </div>
 
     <!-- DESKTOP TOOLBAR -->
-    <div id="desktop-toolbar">
-        <button class="tb-btn" onclick="window.UI.toggleMenu()">☰ Menu</button>
-        <div class="sep"></div>
-        <button class="tb-btn active" id="dt-pan" onclick="window.setTool('pan')">✋ Pan</button>
-        <button class="tb-btn" id="dt-select" onclick="window.setTool('select')">⛝ Select</button>
-        <button class="tb-btn" id="dt-draw" onclick="window.UI.toggleDrawer('draw')">✏️ Draw</button>
-        <div class="sep"></div>
-        <button class="tb-btn" onclick="window.UI.toggleDrawer('board')">⚙️ Board</button>
-        <button class="tb-btn" onclick="window.UI.toggleDrawer('add')">➕ Add</button>
-        <button class="tb-btn" id="btn-arrange" style="display:none" onclick="window.UI.toggleDrawer('arrange')">📏 Arrange</button>
-        <div class="sep"></div>
-        <button class="tb-btn" onclick="ActionHistory.undo()">↩️</button>
-        <button class="tb-btn" onclick="ActionHistory.redo()">↪️</button>
+    <div id="desktop-toolbar" role="toolbar" aria-label="Board tools">
+        <button class="tb-btn" aria-label="Open menu" onclick="window.UI.toggleMenu()">☰ Menu</button>
+        <div class="sep" role="separator"></div>
+        <button class="tb-btn active" id="dt-pan" aria-label="Pan tool" onclick="window.setTool('pan')">✋ Pan</button>
+        <button class="tb-btn" id="dt-select" aria-label="Select tool" onclick="window.setTool('select')">⛝ Select</button>
+        <button class="tb-btn" id="dt-draw" aria-label="Draw tool" onclick="window.UI.toggleDrawer('draw')">✏️ Draw</button>
+        <div class="sep" role="separator"></div>
+        <button class="tb-btn" aria-label="Board settings" onclick="window.UI.toggleDrawer('board')">⚙️ Board</button>
+        <button class="tb-btn" aria-label="Add item" onclick="window.UI.toggleDrawer('add')">➕ Add</button>
+        <button class="tb-btn" id="btn-arrange" style="display:none" aria-label="Arrange" onclick="window.UI.toggleDrawer('arrange')">📏 Arrange</button>
+        <div class="sep" role="separator"></div>
+        <button class="tb-btn" aria-label="Undo" onclick="ActionHistory.undo()">↩️</button>
+        <button class="tb-btn" aria-label="Redo" onclick="ActionHistory.redo()">↪️</button>
     </div>
 
     <!-- MOBILE DOCK -->
-    <div id="mobile-dock">
-        <button class="dock-btn" onclick="window.UI.toggleMenu()">☰</button>
-        <div class="sep-mobile"></div>
-        <button class="dock-btn active" id="mt-pan" onclick="window.setTool('pan')">✋</button>
-        <button class="dock-btn" id="mt-select" onclick="window.setTool('select')">⛝</button>
-        <button class="dock-btn" id="mt-draw" onclick="window.UI.toggleDrawer('draw')">✏️</button>
-        <button class="dock-btn" id="mt-add" onclick="window.UI.toggleDrawer('add')">➕</button>
-        <button class="dock-btn" id="mt-arrange" style="display:none" onclick="window.UI.toggleDrawer('arrange')">📏</button>
-        <button class="dock-btn" id="mt-board" onclick="window.UI.toggleDrawer('board')">⚙️</button>
-        <div class="sep-mobile"></div>
-        <button class="dock-btn" onclick="ActionHistory.undo()">↩️</button>
-        <button class="dock-btn" onclick="ActionHistory.redo()">↪️</button>
+    <div id="mobile-dock" role="toolbar" aria-label="Board tools">
+        <button class="dock-btn" aria-label="Open menu" onclick="window.UI.toggleMenu()">☰</button>
+        <div class="sep-mobile" role="separator"></div>
+        <button class="dock-btn active" id="mt-pan" aria-label="Pan tool" onclick="window.setTool('pan')">✋</button>
+        <button class="dock-btn" id="mt-select" aria-label="Select tool" onclick="window.setTool('select')">⛝</button>
+        <button class="dock-btn" id="mt-draw" aria-label="Draw tool" onclick="window.UI.toggleDrawer('draw')">✏️</button>
+        <button class="dock-btn" id="mt-add" aria-label="Add item" onclick="window.UI.toggleDrawer('add')">➕</button>
+        <button class="dock-btn" id="mt-arrange" style="display:none" aria-label="Arrange" onclick="window.UI.toggleDrawer('arrange')">📏</button>
+        <button class="dock-btn" id="mt-board" aria-label="Board settings" onclick="window.UI.toggleDrawer('board')">⚙️</button>
+        <div class="sep-mobile" role="separator"></div>
+        <button class="dock-btn" aria-label="Undo" onclick="ActionHistory.undo()">↩️</button>
+        <button class="dock-btn" aria-label="Redo" onclick="ActionHistory.redo()">↪️</button>
     </div>
 
     <!-- SHARED DRAWERS -->
-    <div id="drawer-draw" class="drawer">
+    <div id="drawer-draw" class="drawer" role="toolbar" aria-label="Drawing tools">
         <div class="tool-row">
-            <div class="color-btn" style="background:#ef4444" onclick="InkManager.setColor('#ef4444')"></div>
-            <div class="color-btn" style="background:#3b82f6" onclick="InkManager.setColor('#3b82f6')"></div>
-            <div class="color-btn" style="background:#10b981" onclick="InkManager.setColor('#10b981')"></div>
-            <div class="color-btn" style="background:#000000; border-color:#6b7280" onclick="InkManager.setColor('#000000')"></div>
+            <div class="color-btn" role="button" tabindex="0" aria-label="Red" style="background:#ef4444" onclick="InkManager.setColor('#ef4444')"></div>
+            <div class="color-btn" role="button" tabindex="0" aria-label="Blue" style="background:#3b82f6" onclick="InkManager.setColor('#3b82f6')"></div>
+            <div class="color-btn" role="button" tabindex="0" aria-label="Green" style="background:#10b981" onclick="InkManager.setColor('#10b981')"></div>
+            <div class="color-btn" role="button" tabindex="0" aria-label="Black" style="background:#000000; border-color:#6b7280" onclick="InkManager.setColor('#000000')"></div>
         </div>
         <div class="tool-row">
             <input type="range" min="2" max="10" value="4" onchange="InkManager.setWidth(this.value)" style="flex:1">
@@ -646,15 +664,15 @@
             <button class="sub-btn" onclick="Actions.create('graph')">📈 Graph</button>
             <button class="sub-btn" onclick="Actions.create('spin')">🎡 Spin</button>
         </div>
-        <div class="tool-row" style="border-top:1px solid #4b5563; margin-top:5px; padding-top:5px">
+        <div class="tool-row" style="border-top: var(--border); margin-top:5px; padding-top:5px">
              <button class="sub-btn" onclick="window.UI.showTemplates()">📄 Templates</button>
-             <button class="sub-btn" style="background:#4f46e5; color:white; border-color:#6366f1" onclick="window.UI.toggleDrawer('exit')">🚪 Exit Ticket</button>
+             <button class="sub-btn" style="background: var(--accent); color:white; border-color: var(--accent);" onclick="window.UI.toggleDrawer('exit')">🚪 Exit Ticket</button>
         </div>
     </div>
     
     <!-- NEW BOARD CONTROLS DRAWER -->
     <div id="drawer-board" class="drawer">
-         <div style="width:100%; text-align:center; color:#9ca3af; font-size:0.8rem; margin-bottom:8px; font-weight:bold">BOARD CONTROLS</div>
+     <div style="width:100%; text-align:center; color: var(--text-muted); font-size:0.72rem; margin-bottom:8px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">BOARD CONTROLS</div>
         <div class="tool-row">
              <button class="sub-btn" id="drawer-open-notes-btn" onclick="UI.toggleOpenNotes()">🔓 Open Board</button>
              <button class="sub-btn" onclick="Board.setStartView()">📍 Set Start View</button>
@@ -666,7 +684,7 @@
 
     <!-- NEW EXIT TICKET DRAWER -->
     <div id="drawer-exit" class="drawer" style="width: 340px;">
-        <div style="width:100%; text-align:center; color:#9ca3af; font-size:0.8rem; margin-bottom:8px; font-weight:bold">ADD EXIT TICKET WIDGET</div>
+        <div style="width:100%; text-align:center; color: var(--text-muted); font-size:0.72rem; margin-bottom:8px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">ADD EXIT TICKET WIDGET</div>
         <div class="tool-row">
             <button class="sub-btn" onclick="Actions.createExit('short')">📝 Short Answer</button>
             <button class="sub-btn" onclick="Actions.createExit('smiley')">🙂 Rating</button>
@@ -696,7 +714,7 @@
             <button class="icon-btn" title="Match Size" onclick="Actions.matchSize()"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 9h-2V7h-2v5H6v2h2v5h2v-5h2v-2z"/></svg></button>
             <button class="icon-btn" title="Duplicate" onclick="Actions.duplicate()"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg></button>
         </div>
-        <div class="tool-row" style="border-top:1px solid #4b5563; padding-top:8px; margin-top:4px">
+        <div class="tool-row" style="border-top: var(--border); padding-top:8px; margin-top:4px">
              <button class="sub-btn" onclick="Actions.collectByType()" style="font-size:0.8rem">Sort: Type</button>
              <button class="sub-btn" onclick="Actions.collectByUser()" style="font-size:0.8rem">Sort: User</button>
         </div>
@@ -719,18 +737,18 @@
         <!-- Common Header -->
         <div style="padding:15px; border-bottom:1px solid var(--panel-border); text-align:center;">
             <h3 style="margin:0; color:var(--accent);">Modeling Mode</h3>
-            <div id="consensus-zone-name" style="font-size:0.9rem; color:#9ca3af;"></div>
+            <div id="consensus-zone-name" style="font-size:0.875rem; color: var(--text-muted);"></div>
         </div>
 
         <!-- Desktop View -->
         <div id="cm-desktop-view">
             <div style="padding:10px; border-bottom:1px solid var(--panel-border);">
-                <div style="font-weight:bold; margin-bottom:10px;">Interaction Tools</div>
+                <div style="font-weight:600; margin-bottom:10px;">Interaction Tools</div>
                 <div class="tool-row">
                     <button class="sub-btn active" id="cm-btn-pan" onclick="Consensus.setTool('pan')">✋ Pan</button>
                     <button class="sub-btn" id="cm-btn-select" onclick="Consensus.setTool('select')">⛝ Select</button>
                 </div>
-                <div style="font-weight:bold; margin-bottom:10px; margin-top:10px">Drawing Tools</div>
+                <div style="font-weight:600; margin-bottom:10px; margin-top:10px">Drawing Tools</div>
                 <div class="tool-row">
                     <div class="color-btn" style="background:#ef4444" onclick="Consensus.setTool('draw', '#ef4444')"></div>
                     <div class="color-btn" style="background:#3b82f6" onclick="Consensus.setTool('draw', '#3b82f6')"></div>
@@ -1370,7 +1388,7 @@ window.UI = {
             list.innerHTML = sysTpls.map((t,i) => `<button class="btn-s" onclick='UI.loadTemplate(${JSON.stringify(t)})'>${t.name}</button>`).join('');
         } else {
             const userTpls = await DB.getAll('templates');
-            list.innerHTML = userTpls.length ? userTpls.map(t => `<button class="btn-s" onclick='UI.loadTemplate(${JSON.stringify(t)})'>${t.name}</button>`).join('') : '<div style="text-align:center; color:#94a3b8; padding: 20px 0;">No saved templates</div>';
+            list.innerHTML = userTpls.length ? userTpls.map(t => `<button class="btn-s" onclick='UI.loadTemplate(${JSON.stringify(t)})'>${t.name}</button>`).join('') : '<div style="text-align:center; color: var(--text-muted); padding: 20px 0;">No saved templates</div>';
         }
     },
     loadTemplate: (t) => {
@@ -1524,8 +1542,8 @@ window.Board = {
     list: async () => {
         const boards = await DB.getAll('boards');
         const c = $('saved-list');
-        if(boards.length === 0) { c.innerHTML = '<div style="padding:10px; color:#94a3b8">No saved boards</div>'; return; }
-        c.innerHTML = boards.map(b => `<div class="board-row" onclick="Board.load('${b.id}')"><div><b>${b.name}</b><br><span style="font-size:0.8rem; color:#64748b">${new Date(b.ts).toLocaleString()}</span></div><div>➡️</div></div>`).join('');
+        if(boards.length === 0) { c.innerHTML = '<div style="padding:10px; color: var(--text-muted)">No saved boards</div>'; return; }
+        c.innerHTML = boards.map(b => `<div class="board-row" onclick="Board.load('${b.id}')"><div><b>${b.name}</b><br><span style="font-size:0.8rem; color: var(--text-muted)">${new Date(b.ts).toLocaleString()}</span></div><div>➡️</div></div>`).join('');
     },
     create: () => { 
         State.id = genId(); State.name="My Board"; 
@@ -1758,9 +1776,9 @@ window.Render = {
                         wrapper.style.border = `2px solid ${i.color}`;
                         if (label) label.style.color = i.color;
                     } else {
-                        wrapper.style.border = '2px dashed #cbd5e1';
-                        if(i.zoneType === 'consensus') { wrapper.style.border = '2px solid #0ea5e9'; } 
-                        else if(i.zoneType === 'exit') { wrapper.style.border = '2px solid #6366f1'; }
+                        wrapper.style.border = '1px dashed rgba(0,0,0,0.15)';
+                        if(i.zoneType === 'consensus') { wrapper.style.border = '1px solid #0075de'; } 
+                        else if(i.zoneType === 'exit') { wrapper.style.border = '2px solid #0075de'; }
                         if (label) label.style.color = 'var(--accent)';
                     }
                 }
@@ -1912,7 +1930,7 @@ window.Render = {
         if(d.type === 'note') {
             if(d.sub === 'sketch' || d.src) {
                 inner = `<div style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
-                    <img src="${d.src}" draggable="false" style="flex:1;width:100%;object-fit:contain;background:${isConsensusChild ? 'transparent' : '#f8fafc'}">
+                    <img src="${d.src}" draggable="false" style="flex:1;width:100%;object-fit:contain;background:${isConsensusChild ? 'transparent' : '#f6f5f4'}">
                     ${!isConsensusChild ? `<textarea class="caption-in" placeholder="Caption...">${d.text||''}</textarea>` : ''}
                 </div>`;
             } else {
@@ -1925,11 +1943,15 @@ window.Render = {
                 inner = `<svg style="width:100%; height:100%; pointer-events:none;">${inkContent}</svg>`;
             }
             else if(d.zoneType === 'exit') {
-                inner = `<div style="padding:15px; text-align:center; color:#1e293b; font-weight:bold; border-bottom:1px solid #e2e8f0; background:#f8fafc">
-                    ${sanitizeHTML(d.prompt)}
-                </div><div style="flex:1; position:relative"></div>`;
+                const modeIcon = { short: '📝', smiley: '⭐', mc: '🔘', multi: '☑️', lw: '🧠' }[d.mode] || '🚪';
+                inner = `<div style="padding:12px 15px; border-bottom: 1px solid rgba(0,0,0,0.08); background: #f2f9ff; display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:1.1rem">${modeIcon}</span>
+                    <span style="font-weight:600; color: #097fe8; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.5px;">${(d.mode||'exit').toUpperCase()}</span>
+                </div>
+                <div style="padding:10px 15px; font-size:0.875rem; color: rgba(0,0,0,0.95); font-weight:500; line-height:1.4;">${sanitizeHTML(d.prompt)}</div>
+                <div style="flex:1; position:relative"></div>`;
             }
-            else inner = `<div style="padding:20px;text-align:center;color:#94a3b8;pointer-events:none;display:flex;align-items:center;justify-content:center;height:100%"></div>`;
+            else inner = `<div style="padding:20px;text-align:center;color: var(--text-muted);pointer-events:none;display:flex;align-items:center;justify-content:center;height:100%;font-size:0.875rem;">Drop notes here</div>`;
 
             inner += `<div id="zr-${d.id}" class="zone-res-box"></div>`;
             el.innerHTML = `<div class="zone-label">${sanitizeHTML(d.title)}</div>` + el.innerHTML;
@@ -1953,10 +1975,10 @@ window.Render = {
                         ${btnHtml}
                         ${resBtn}
                     </div>
-                    <div class="menu-trigger" onpointerdown="event.stopPropagation()" onclick="Actions.showContextMenu(event, '${d.id}')">⋮</div>
+                    <div class="menu-trigger" role="button" aria-label="Item options" tabindex="0" onpointerdown="event.stopPropagation()" onclick="Actions.showContextMenu(event, '${d.id}')">⋮</div>
                 </div>
                 <div class="i-body">${inner}</div>
-                <div class="resize-h"></div>
+                <div class="resize-h" role="button" aria-label="Resize item"></div>
             </div>`;
 
         const w = el.querySelector('.jiggle-wrapper');
@@ -1970,10 +1992,10 @@ window.Render = {
             }
         }
         else if(d.type==='zone') { 
-            w.style.border = '2px dashed #cbd5e1';
-            if(d.zoneType === 'consensus') { w.classList.add('consensus-bg'); w.style.border = '2px solid #0ea5e9'; } 
-            else if(d.zoneType === 'exit') { w.style.border = '2px solid #6366f1'; w.style.background = '#fefeff'; }
-            else { w.style.background = 'rgba(255,255,255,0.5)'; }
+            w.style.border = '1px dashed rgba(0,0,0,0.15)';
+            if(d.zoneType === 'consensus') { w.classList.add('consensus-bg'); w.style.border = '1px solid #0075de'; } 
+            else if(d.zoneType === 'exit') { w.style.border = '2px solid #0075de'; w.style.background = '#f9fdff'; }
+            else { w.style.background = 'rgba(255,255,255,0.6)'; }
             if (d.color) {
                 w.style.border = `2px solid ${d.color}`;
                 const label = el.querySelector('.zone-label');
@@ -1991,11 +2013,11 @@ window.Render = {
     },
     updatePoll: (el, d) => {
         const tot = d.opts.reduce((a,b)=>a+b.v, 0);
-        el.querySelector('.poll-opts').innerHTML = d.opts.map(o => `<div style="margin:5px;background:#f1f5f9;border-radius:4px;position:relative;height:24px"><div style="position:absolute;height:100%;background:#93c5fd;border-radius:4px;width:${tot?(o.v/tot)*100:0}%"></div><div style="position:absolute;inset:0;display:flex;justify-content:space-between;padding:0 8px;align-items:center;font-size:0.8rem;font-weight:700"><span>${sanitizeHTML(o.lbl)}</span><span>${o.v}</span></div></div>`).join('');
+        el.querySelector('.poll-opts').innerHTML = d.opts.map(o => `<div style="margin:5px;background: rgba(0,0,0,0.05);border-radius:4px;position:relative;height:24px"><div style="position:absolute;height:100%;background:#93c5fd;border-radius:4px;width:${tot?(o.v/tot)*100:0}%"></div><div style="position:absolute;inset:0;display:flex;justify-content:space-between;padding:0 8px;align-items:center;font-size:0.8rem;font-weight:600"><span>${sanitizeHTML(o.lbl)}</span><span>${o.v}</span></div></div>`).join('');
     },
     updateGraph: (el, d) => {
         const max = Math.max(...d.data, 10);
-        el.querySelector('.graph-bars').innerHTML = d.data.map(v => `<div style="flex:1;background:#6366f1;border-radius:4px 4px 0 0;transition:height 0.5s;height:${(v/max)*100}%;position:relative;min-height:1px"><div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:0.7rem;font-weight:bold">${v}</div></div>`).join('');
+        el.querySelector('.graph-bars').innerHTML = d.data.map(v => `<div style="flex:1;background:#0075de;border-radius:4px 4px 0 0;transition:height 0.5s;height:${(v/max)*100}%;position:relative;min-height:1px"><div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:0.7rem;font-weight:600">${v}</div></div>`).join('');
     },
     updateSpin: (el, d) => {
         const svg = el.querySelector('.spin-svg');
@@ -2122,7 +2144,7 @@ window.Actions = {
                     <button class="ctx-btn" onclick="Network.startActivity('sort')">🔢 Rank</button>
                     <button class="ctx-btn" onclick="Network.startActivity('discuss')">💬 Discuss</button>
                 </div>
-                <div class="ctx-row" style="border-top:1px solid #e2e8f0; margin-top:5px; padding-top:5px">
+                <div class="ctx-row" style="border-top: var(--border); margin-top:5px; padding-top:5px">
                     <button class="ctx-btn" style="background:#ef4444" onclick="Actions.setZoneColor('${id}', '#ef4444')"></button>
                     <button class="ctx-btn" style="background:#3b82f6" onclick="Actions.setZoneColor('${id}', '#3b82f6')"></button>
                     <button class="ctx-btn" style="background:#10b981" onclick="Actions.setZoneColor('${id}', '#10b981')"></button>
@@ -2184,15 +2206,18 @@ window.Actions = {
         if(zones.length > 0) {
             html += zones.map(z => `<div class="ctx-row"><button class="ctx-btn" onclick="Actions.moveToZone('${z.id}')">${z.title}</button></div>`).join('');
         }
-        html += `<div class="ctx-row" style="border-top:1px solid #e2e8f0; margin-top:5px; padding-top:5px"><button class="ctx-btn" onclick="Actions.groupToZone()">+ New Zone</button></div>`;
+        html += `<div class="ctx-row" style="border-top: var(--border); margin-top:5px; padding-top:5px"><button class="ctx-btn" onclick="Actions.groupToZone()">+ New Zone</button></div>`;
         html += `</div>`;
         menu.innerHTML = html;
     },
     moveToZone: (zoneId) => {
         const items = State.selection.map(id => State.items.find(i => i.id === id)).filter(i => i && i.type === 'note');
         if(items.length === 0) return;
+        // Capture old parent zones before relinking so they can be reflowed
+        const oldZoneIds = new Set(items.map(i => i.parentZone).filter(Boolean));
         items.forEach(i => HierarchyManager.link(i.id, zoneId));
         LayoutSystem.update(zoneId);
+        oldZoneIds.forEach(id => { if (id !== zoneId) LayoutSystem.update(id); });
         UI.closeAllMenus();
     },
     posMenu: (menu, e) => {
@@ -2262,7 +2287,7 @@ window.Actions = {
         if(i && i.type==='zone') {
             if(State.activeSorts[i.id] || State.activity && State.activity.targetId === i.id) {
                  Tab(1);
-                 $('act-results').innerHTML = `<div style="padding:10px;font-weight:bold;color:#6366f1">Zone: ${i.title}</div><div id="zone-res-${i.id}">Loading results...</div>`;
+                 $('act-results').innerHTML = `<div style="padding:10px;font-weight:600;color: var(--accent)">Zone: ${i.title}</div><div id="zone-res-${i.id}">Loading results...</div>`;
                  Network.updateResults(i.id);
             }
         }
@@ -2613,6 +2638,8 @@ window.Modes = {
                 const zone = State.items.find(i => i.id === d.hoverZoneId);
                 if (zone) {
                     const itemsToLink = updatedItems.filter(i => i && i.type !== 'zone');
+                    // Capture old parent zones before linking so we can reflow them
+                    const oldZoneIds = new Set(itemsToLink.map(i => i.parentZone).filter(Boolean));
                     const primaryItemToLink = itemsToLink.find(i => i.id === d.primaryId);
                     
                     if (primaryItemToLink) {
@@ -2624,6 +2651,8 @@ window.Modes = {
                         itemsToLink.forEach(item => HierarchyManager.link(item.id, d.hoverZoneId));
                     }
                     LayoutSystem.update(d.hoverZoneId);
+                    // Reflow any zones items were moved away from
+                    oldZoneIds.forEach(id => { if (id !== d.hoverZoneId) LayoutSystem.update(id); });
                 }
             } else {
                 d.moveTargets.forEach(target => {
@@ -2668,6 +2697,10 @@ window.Modes = {
             if (i.parentZone) {
                 LayoutSystem.update(i.parentZone);
             }
+            // If the item being resized is a zone, reflow its children
+            if (i.type === 'zone') {
+                LayoutSystem.update(i.id);
+            }
         },
         up: (e) => { 
             const i = State.items.find(x=>x.id===State.drag.id);
@@ -2675,6 +2708,10 @@ window.Modes = {
             
             if(i && i.parentZone) {
                 LayoutSystem.update(i.parentZone);
+            }
+            // If a zone was resized, reflow its children
+            if(i && i.type === 'zone') {
+                LayoutSystem.update(i.id);
             }
             State.drag = null;
         }
@@ -3108,10 +3145,10 @@ window.Network = {
                 $('act-info').innerText = `Mode: ${payload.subType.replace('ACT_','')} | Items: ${payload.items.length}`;
                 
                 const modeLabel = payload.subType === 'ACT_DISCUSS' ? 'Discussion' : 'Results';
-                const html = `<div style="color:#64748b">Waiting for ${modeLabel}...</div>`;
+                const html = `<div style="color: var(--text-secondary)">Waiting for ${modeLabel}...</div>`;
                 const zContainer = $(`zr-${targetId}`); 
                 if(zContainer) { 
-                    zContainer.innerHTML = `<h4 style="margin:0 0 10px 0; color:#475569">${modeLabel}</h4>` + html; 
+                    zContainer.innerHTML = `<h4 style="margin:0 0 10px 0; color: var(--text-secondary)">${modeLabel}</h4>` + html; 
                     zContainer.classList.add('active'); 
                 }
                 $('act-results').innerHTML = html;
@@ -3406,8 +3443,8 @@ window.Network = {
         submissions.forEach(sub => { if(Array.isArray(sub)) sub.forEach((itemId, idx) => { scores[itemId] = (scores[itemId] || 0) + (sub.length - idx); }); else scores[sub] = (scores[sub] || 0) + 1; });
         const results = Object.keys(scores).map(id => { const item = State.items.find(x=>x.id===id); return { text: item ? item.text.substring(0,30) : "Unknown", score: scores[id] }; }).sort((a,b) => b.score - a.score);
         const max = results.length ? results[0].score : 1;
-        const html = `<div style="margin-bottom:10px;font-weight:bold;color:#64748b">${submissions.length} Responses</div>${results.map((r, i) => `<div class="result-row"><div style="width:20px;font-weight:bold;color:#64748b">#${i+1}</div><div style="flex:2; font-weight:600; color:#334155">${sanitizeHTML(r.text)}</div><div class="bar-bg"><div class="bar-fill" style="width:${(r.score/max)*100}%"></div></div><div style="font-size:0.8rem;font-weight:bold;color:#6366f1">${r.score}</div></div>`).join('')}`;
-        const zContainer = $(`zr-${actId}`); if(zContainer) zContainer.innerHTML = `<h4 style="margin:0 0 10px 0; color:#475569">Activity Results</h4>` + html;
+        const html = `<div style="margin-bottom:10px;font-weight:600;color: var(--text-secondary)">${submissions.length} Responses</div>${results.map((r, i) => `<div class="result-row"><div style="width:20px;font-weight:600;color: var(--text-secondary)">#${i+1}</div><div style="flex:2; font-weight:600; color: var(--text)">${sanitizeHTML(r.text)}</div><div class="bar-bg"><div class="bar-fill" style="width:${(r.score/max)*100}%"></div></div><div style="font-size:0.8rem;font-weight:600;color: var(--accent)">${r.score}</div></div>`).join('')}`;
+        const zContainer = $(`zr-${actId}`); if(zContainer) zContainer.innerHTML = `<h4 style="margin:0 0 10px 0; color: var(--text-secondary)">Activity Results</h4>` + html;
         if($('act-results')) $('act-results').innerHTML = html;
     },
     
@@ -3423,8 +3460,8 @@ window.Network = {
              return false;
         });
 
-        const html = relevant.map(c => { const item = State.items.find(x=>x.id===c.targetId); const txt = item ? item.text.substring(0,20)+'...' : 'Unknown'; return `<div class="disc-item"><div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#94a3b8;margin-bottom:4px"><span>${sanitizeHTML(c.author)}</span><span>Ref: ${sanitizeHTML(txt)}</span></div><span class="disc-tag dt-${c.tag}">${c.tag.toUpperCase()}</span><div style="color:#334155">${sanitizeHTML(c.text)}</div></div>`; }).reverse().join('');
-        const zContainer = $(`zr-${actId}`); if(zContainer) zContainer.innerHTML = `<h4 style="margin:0 0 10px 0; color:#475569">Discussion</h4>` + html;
+        const html = relevant.map(c => { const item = State.items.find(x=>x.id===c.targetId); const txt = item ? item.text.substring(0,20)+'...' : 'Unknown'; return `<div class="disc-item"><div style="display:flex;justify-content:space-between;font-size:0.8rem;color: var(--text-muted);margin-bottom:4px"><span>${sanitizeHTML(c.author)}</span><span>Ref: ${sanitizeHTML(txt)}</span></div><span class="disc-tag dt-${c.tag}">${c.tag.toUpperCase()}</span><div style="color: var(--text)">${sanitizeHTML(c.text)}</div></div>`; }).reverse().join('');
+        const zContainer = $(`zr-${actId}`); if(zContainer) zContainer.innerHTML = `<h4 style="margin:0 0 10px 0; color: var(--text-secondary)">Discussion</h4>` + html;
         if($('act-results')) $('act-results').innerHTML = html;
     },
     

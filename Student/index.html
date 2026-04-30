@@ -326,9 +326,32 @@
         .lw-field { margin-bottom: 16px; }
         .lw-label { display: flex; align-items: center; gap: 8px; font-size: 0.875rem; font-weight: 600; color: var(--text); margin-bottom: 8px; }
         .lw-icon { font-size: 1rem; }
+
+        /* TOAST */
+        #s-toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; align-items: center; }
+        .s-toast { background: rgba(0,0,0,0.9); color: white; padding: 10px 20px; border-radius: 9999px; font-weight: 600; font-size: 0.875rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2); animation: s-fadeUp 0.3s ease-out; white-space: nowrap; }
+        @keyframes s-fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+
+        /* CONFIRM DIALOG */
+        #s-confirm { position: fixed; inset:0; background: rgba(0,0,0,0.5); z-index: 9000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        #s-confirm .s-dlg { background: white; padding: 24px; border-radius: 12px; width: 320px; max-width: 90%; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
     </style>
 </head>
 <body>
+
+<div id="s-toast-container"></div>
+
+<!-- CONFIRM DIALOG -->
+<div id="s-confirm" style="display:none">
+    <div class="s-dlg">
+        <div id="s-confirm-icon" style="font-size:2rem; margin-bottom:8px">⚠️</div>
+        <p id="s-confirm-msg" style="margin:0 0 20px 0; font-size:0.9375rem; color: var(--text); line-height:1.5"></p>
+        <div style="display:flex; flex-direction:column; gap:8px">
+            <button class="btn" id="s-confirm-ok" style="margin-bottom:0">Confirm</button>
+            <button class="btn btn-s" onclick="sConfirmCancel()">Cancel</button>
+        </div>
+    </div>
+</div>
 
 <!-- SETUP SCREEN -->
 <div id="scr-setup" class="screen active">
@@ -683,7 +706,25 @@ function SetupConn(c) {
 
 function SafeSend(data) { if(conn && conn.open) conn.send(JSON.stringify(data)); }
 function UpdateStatus(msg, cls) { $('status-badge').innerText = msg; $('status-badge').className = cls; }
-function ManualDisconnect() { if(confirm("Leave session?")) { if(conn) conn.close(); localStorage.removeItem('dqb_host_id'); location.reload(); } }
+
+function showToast(msg) {
+    const t = document.createElement('div');
+    t.className = 's-toast'; t.textContent = msg;
+    document.getElementById('s-toast-container').appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+}
+let _sConfirmCb = null;
+function sConfirm(msg, onOk, icon, okLabel) {
+    _sConfirmCb = onOk;
+    $('s-confirm-msg').textContent = msg;
+    $('s-confirm-icon').textContent = icon || '⚠️';
+    $('s-confirm-ok').textContent = okLabel || 'Confirm';
+    $('s-confirm-ok').onclick = () => { $('s-confirm').style.display = 'none'; if (_sConfirmCb) { _sConfirmCb(); _sConfirmCb = null; } };
+    $('s-confirm').style.display = 'flex';
+}
+function sConfirmCancel() { $('s-confirm').style.display = 'none'; _sConfirmCb = null; }
+
+function ManualDisconnect() { sConfirm("Leave this session?", () => { if(conn) conn.close(); localStorage.removeItem('dqb_host_id'); location.reload(); }, '👋', 'Leave'); }
 
 /* --- LOGIC HANDLER --- */
 function Handle(d) {
@@ -860,7 +901,7 @@ function SelectVote(id, el) {
     document.querySelectorAll('.vote-item').forEach(e => e.classList.remove('selected')); 
     el.classList.add('selected'); State.selectedVote = id; $('btn-submit-vote').disabled = false; 
 }
-$('btn-submit-vote').onclick = () => { if(State.selectedVote) { SafeSend({ type: 'SUBMIT_VOTE', actId: State.activity.id, choiceId: State.selectedVote }); alert("Vote Sent!"); } };
+$('btn-submit-vote').onclick = () => { if(State.selectedVote) { SafeSend({ type: 'SUBMIT_VOTE', actId: State.activity.id, choiceId: State.selectedVote }); showToast("✅ Vote Sent!"); } };
 
 function RenderSort(items) {
     State.sortOrder = [...items];
@@ -868,7 +909,7 @@ function RenderSort(items) {
     render();
     window.MoveItem = (idx, dir) => { if(idx+dir<0||idx+dir>=State.sortOrder.length)return; [State.sortOrder[idx],State.sortOrder[idx+dir]]=[State.sortOrder[idx+dir],State.sortOrder[idx]]; render(); };
 }
-function SubmitSort() { SafeSend({ type: 'SUBMIT_SORT', actId: State.activity.id, order: State.sortOrder.map(i=>i.id) }); alert("Ranking Sent!"); }
+function SubmitSort() { SafeSend({ type: 'SUBMIT_SORT', actId: State.activity.id, order: State.sortOrder.map(i=>i.id) }); showToast("✅ Ranking Submitted!"); }
 
 function RenderDiscuss(items) { $('discuss-items').innerHTML = items.map(i => `<div class="discuss-card" onclick="OpenDiscuss('${i.id}', '${i.text.replace(/'/g,"\\'")}')"><div style="font-size:0.8rem;color: var(--text-muted);font-weight:700">NOTE</div><div>${i.text.substring(0,100)}...</div></div>`).join(''); }
 let discussTarget = null;
@@ -1038,7 +1079,7 @@ function RenderHist() {
     if(!notes.length) return list.innerHTML=`<div style="text-align:center;color: var(--text-muted);padding:20px">No notes yet</div>`;
     list.innerHTML=notes.map(n=>`<div class="note-card n-${n.sub}"><div>${n.sub==='sketch'?`<img src="${n.src}" style="width:100%">`:`${sanitizeHTML(n.text)}`}</div><div style="text-align:right;margin-top:5px"><span onclick="DeleteNote('${n.id}')" style="font-size:0.8rem;color:#dc2626;cursor:pointer">Delete</span></div></div>`).join('');
 }
-function DeleteNote(id) { if(confirm("Delete?")) { DB.delNote(id); SafeSend({ type:'DELETE_NOTE', id }); } }
+function DeleteNote(id) { sConfirm("Delete this note?", () => { DB.delNote(id); SafeSend({ type:'DELETE_NOTE', id }); }, '🗑️', 'Delete'); }
 
 window.onload = () => DB.init().then(() => { if(State.me.name) Setup(); });
 </script>

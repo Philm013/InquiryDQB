@@ -561,6 +561,74 @@
 </div>
 
 
+<!-- CUSTOM DIALOG (replaces alert/confirm/prompt) -->
+<div id="ui-dialog" class="modal-bg" style="z-index:5500; display:none">
+    <div class="modal" style="max-width:380px; text-align:center">
+        <div id="ui-dialog-icon" style="font-size:2rem; margin-bottom:8px"></div>
+        <h3 id="ui-dialog-title" style="margin:0 0 10px 0; font-size:1.1rem; color:var(--text)"></h3>
+        <p id="ui-dialog-msg" style="margin:0 0 16px 0; color:var(--text-secondary); font-size:0.9375rem; line-height:1.5; text-align:left; white-space:pre-wrap"></p>
+        <div id="ui-dialog-input-wrap" style="display:none; margin-bottom:16px; text-align:left">
+            <input id="ui-dialog-input" class="in-txt" type="text" style="margin-bottom:0">
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px">
+            <button id="ui-dialog-ok" class="btn-p" onclick="UI.dialogOk()">OK</button>
+            <button id="ui-dialog-cancel" class="btn-s" style="margin-top:0" onclick="UI.dialogCancel()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- INK STROKE TOOLBAR -->
+<div id="ink-toolbar" style="display:none; position:fixed; z-index:3500; background:#ffffff; border:1px solid rgba(0,0,0,0.12); border-radius:10px; padding:10px 12px; box-shadow:0 4px 20px rgba(0,0,0,0.15); min-width:200px">
+    <div style="font-size:0.72rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px">Ink Stroke</div>
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px">
+        <div class="color-btn" style="background:#ef4444" title="Red" onclick="InkManager.colorSelected('#ef4444')"></div>
+        <div class="color-btn" style="background:#3b82f6" title="Blue" onclick="InkManager.colorSelected('#3b82f6')"></div>
+        <div class="color-btn" style="background:#10b981" title="Green" onclick="InkManager.colorSelected('#10b981')"></div>
+        <div class="color-btn" style="background:#000000; border-color:#6b7280" title="Black" onclick="InkManager.colorSelected('#000000')"></div>
+        <div class="color-btn" style="background:#f97316" title="Orange" onclick="InkManager.colorSelected('#f97316')"></div>
+        <div class="color-btn" style="background:#8b5cf6" title="Purple" onclick="InkManager.colorSelected('#8b5cf6')"></div>
+        <div class="color-btn" style="background:#ffffff; border-color:#6b7280" title="White" onclick="InkManager.colorSelected('#ffffff')"></div>
+    </div>
+    <div style="display:flex; gap:6px">
+        <button class="sub-btn" style="background:#f2f9ff; color:var(--accent); border-color:rgba(0,117,222,0.3); flex:1" aria-label="Pin stroke as item" onclick="InkManager.pinSelected()">📌 Pin</button>
+        <button class="sub-btn" style="background:rgba(239,68,68,0.06); color:#ef4444; border-color:rgba(239,68,68,0.2); flex:1" aria-label="Delete stroke" onclick="InkManager.deleteSelected()">🗑️ Delete</button>
+    </div>
+</div>
+
+<!-- POLL EDIT MODAL -->
+<div id="modal-poll-edit" class="modal-bg" style="display:none">
+    <div class="modal" style="max-width:440px">
+        <h2 style="margin-top:0; color:var(--accent)">Edit Poll</h2>
+        <div class="input-group">
+            <label>Question</label>
+            <input id="poll-edit-q" class="in-txt" type="text" placeholder="Poll question">
+        </div>
+        <div class="input-group">
+            <label>Options <span style="font-weight:400; color:var(--text-muted)">(one per line)</span></label>
+            <textarea id="poll-edit-opts" class="in-txt" rows="4" style="height:auto; resize:vertical" placeholder="Option A&#10;Option B&#10;Option C"></textarea>
+        </div>
+        <button class="btn-p" onclick="Actions.submitPollEdit()">Save Poll</button>
+        <button class="btn-s" onclick="$('modal-poll-edit').style.display='none'">Cancel</button>
+    </div>
+</div>
+
+<!-- EXIT TICKET CREATE MODAL -->
+<div id="modal-exit-create" class="modal-bg" style="display:none">
+    <div class="modal" style="max-width:440px">
+        <h2 style="margin-top:0; color:var(--accent)" id="exit-create-title">Create Exit Ticket</h2>
+        <div class="input-group">
+            <label id="exit-create-q-label">Question / Prompt</label>
+            <textarea id="exit-create-q" class="in-txt" rows="3" style="height:auto; resize:vertical" placeholder="Enter your question here..."></textarea>
+        </div>
+        <div id="exit-create-opts-group" class="input-group" style="display:none">
+            <label>Options <span style="font-weight:400; color:var(--text-muted)">(one per line)</span></label>
+            <textarea id="exit-create-opts" class="in-txt" rows="4" style="height:auto; resize:vertical" placeholder="Option A&#10;Option B&#10;Option C"></textarea>
+        </div>
+        <button class="btn-p" onclick="Actions.submitExitCreate()">Create Exit Ticket</button>
+        <button class="btn-s" onclick="$('modal-exit-create').style.display='none'">Cancel</button>
+    </div>
+</div>
+
 <!-- LANDING -->
 <div id="landing">
     <div class="land-card">
@@ -1267,7 +1335,8 @@ window.LayoutSystem = {
         // Type-specific minimum heights: CER/consensus need more room for multi-column layout
         const zoneMinH = { cer: 300, exit: 200, consensus: 300 };
         const minH = zoneMinH[zone.zoneType] || 150;
-        const newH = Math.max(minH, contentHeight);
+        // Use zone.h as a floor so zones only expand, never shrink
+        const newH = Math.max(minH, zone.h, contentHeight);
         
         if (newH !== zone.h) {
             // Use silent:true to avoid undo history spam and network broadcasts for layout-only changes
@@ -1421,12 +1490,13 @@ window.UI = {
         $('sidebar').classList.add('closed');
     },
     showTemplates: () => { UI.renderTplList('system'); $('modal-templates').style.display='flex'; UI.toggleDrawer(null); },
-    saveTemplate: async () => {
-        const name = prompt("Template Name:");
-        if(!name) return;
-        const tpl = { id: genId(), name: name, items: JSON.parse(JSON.stringify(State.items)) };
-        await DB.saveTemplate(tpl);
-        UI.toast("Template Saved");
+    saveTemplate: () => {
+        UI.prompt("Template Name:", "", "Save Template", async (name) => {
+            if(!name) return;
+            const tpl = { id: genId(), name: name, items: JSON.parse(JSON.stringify(State.items)) };
+            await DB.saveTemplate(tpl);
+            UI.toast("✅ Template Saved");
+        }, null, '💾');
     },
     renderTplList: async (type) => {
         const modal = $('modal-templates');
@@ -1561,6 +1631,72 @@ window.UI = {
         $('minimap-size').value = size;
         UI.setMinimapPosition(pos);
         UI.setMinimapSize(size);
+    },
+
+    /* --- CUSTOM DIALOG SYSTEM (replaces alert/confirm/prompt) --- */
+    _dialogCallback: null,
+    _dialogType: null,
+    _exitCreateMode: null,
+
+    confirm: (msg, title, onOk, onCancel, icon) => {
+        UI._dialogCallback = { ok: onOk, cancel: onCancel };
+        UI._dialogType = 'confirm';
+        $('ui-dialog-icon').textContent = icon || '⚠️';
+        $('ui-dialog-title').textContent = title || 'Confirm';
+        $('ui-dialog-msg').textContent = msg;
+        $('ui-dialog-input-wrap').style.display = 'none';
+        $('ui-dialog-ok').textContent = 'Confirm';
+        $('ui-dialog-cancel').style.display = '';
+        $('ui-dialog').style.display = 'flex';
+        setTimeout(() => $('ui-dialog-ok').focus(), 50);
+    },
+    prompt: (msg, defaultVal, title, onOk, onCancel, icon) => {
+        UI._dialogCallback = { ok: onOk, cancel: onCancel };
+        UI._dialogType = 'prompt';
+        $('ui-dialog-icon').textContent = icon || '✏️';
+        $('ui-dialog-title').textContent = title || 'Enter Value';
+        $('ui-dialog-msg').textContent = msg;
+        $('ui-dialog-input').value = defaultVal || '';
+        $('ui-dialog-input-wrap').style.display = 'block';
+        $('ui-dialog-ok').textContent = 'OK';
+        $('ui-dialog-cancel').style.display = '';
+        $('ui-dialog').style.display = 'flex';
+        $('ui-dialog-input').onkeydown = (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); UI.dialogOk(); }
+            if (e.key === 'Escape') { e.preventDefault(); UI.dialogCancel(); }
+        };
+        setTimeout(() => { $('ui-dialog-input').focus(); $('ui-dialog-input').select(); }, 50);
+    },
+    notify: (msg, title, icon) => {
+        UI._dialogCallback = null;
+        UI._dialogType = 'notify';
+        $('ui-dialog-icon').textContent = icon || 'ℹ️';
+        $('ui-dialog-title').textContent = title || '';
+        $('ui-dialog-msg').textContent = msg;
+        $('ui-dialog-input-wrap').style.display = 'none';
+        $('ui-dialog-ok').textContent = 'OK';
+        $('ui-dialog-cancel').style.display = 'none';
+        $('ui-dialog').style.display = 'flex';
+        setTimeout(() => $('ui-dialog-ok').focus(), 50);
+    },
+    dialogOk: () => {
+        const cb = UI._dialogCallback;
+        const type = UI._dialogType;
+        $('ui-dialog').style.display = 'none';
+        UI._dialogCallback = null;
+        if (!cb) return;
+        if (type === 'prompt') {
+            const val = $('ui-dialog-input').value.trim();
+            if (cb.ok) cb.ok(val);
+        } else {
+            if (cb.ok) cb.ok();
+        }
+    },
+    dialogCancel: () => {
+        const cb = UI._dialogCallback;
+        $('ui-dialog').style.display = 'none';
+        UI._dialogCallback = null;
+        if (cb && cb.cancel) cb.cancel();
     }
 };
 
@@ -1738,6 +1874,7 @@ window.Board = {
 window.InkManager = {
     currentPath: [],
     sketchMode: false,
+    selectedId: null,
     setColor: (c) => { State.draw.color = c; window.setTool('draw'); UI.toast("Color Changed"); },
     setWidth: (w) => { State.draw.width = w; window.setTool('draw'); },
     toggleSketchMode: () => {
@@ -1809,7 +1946,7 @@ window.InkManager = {
         path.id = "temp-ink"; svg.appendChild(path);
     },
     pointsToPath: (pts) => { if(!pts || pts.length===0) return ""; let d=`M ${pts[0].x} ${pts[0].y}`; for(let i=1;i<pts.length;i++) d+=` L ${pts[i].x} ${pts[i].y}`; return d; },
-    clear: () => { if(confirm("Clear all drawings?")) { StateManager.setInk([]); } },
+    clear: () => { UI.confirm("Clear all drawings? This cannot be undone.", "Clear Drawings", () => { InkManager.selectedId = null; InkManager.hideInkToolbar(); StateManager.setInk([]); }, null, '🗑️'); },
     eraseAt: (x, y, inkArray) => {
         const thresh = 20 / State.view.z;
         const initLen = inkArray.length;
@@ -1819,6 +1956,57 @@ window.InkManager = {
             return { changed: true, newInk: filteredInk };
         }
         return { changed: false, newInk: inkArray };
+    },
+    selectStroke: (id, e) => {
+        if (State.tool !== 'select') return;
+        e.stopPropagation();
+        InkManager.selectedId = id;
+        Render.ink();
+        const toolbar = $('ink-toolbar');
+        const x = Math.min(e.clientX, window.innerWidth - 220);
+        const y = Math.max(10, e.clientY - 120);
+        toolbar.style.left = x + 'px';
+        toolbar.style.top = y + 'px';
+        toolbar.style.display = 'block';
+    },
+    deselectStroke: () => {
+        if (!InkManager.selectedId) return;
+        InkManager.selectedId = null;
+        Render.ink();
+        InkManager.hideInkToolbar();
+    },
+    hideInkToolbar: () => { const t = $('ink-toolbar'); if (t) t.style.display = 'none'; },
+    deleteSelected: () => {
+        if (!InkManager.selectedId) return;
+        const newInk = State.ink.filter(s => s.id !== InkManager.selectedId);
+        InkManager.selectedId = null;
+        InkManager.hideInkToolbar();
+        StateManager.setInk(newInk);
+        UI.toast("🗑️ Stroke deleted");
+    },
+    colorSelected: (color) => {
+        if (!InkManager.selectedId) return;
+        const sid = InkManager.selectedId;
+        const newInk = State.ink.map(s => s.id === sid ? { ...s, color } : s);
+        StateManager.setInk(newInk);
+        InkManager.selectedId = sid;
+        InkManager.hideInkToolbar();
+        Render.ink();
+        UI.toast("🎨 Color updated");
+    },
+    pinSelected: () => {
+        if (!InkManager.selectedId) return;
+        const stroke = State.ink.find(s => s.id === InkManager.selectedId);
+        if (!stroke) return;
+        const item = InkManager.strokeToItem(stroke.points, stroke.color, stroke.width);
+        if (item) {
+            const newInk = State.ink.filter(s => s.id !== InkManager.selectedId);
+            InkManager.selectedId = null;
+            InkManager.hideInkToolbar();
+            StateManager.setInk(newInk);
+            StateManager.addItem(item);
+            UI.toast("📌 Stroke pinned as item");
+        }
     }
 };
 
@@ -1964,7 +2152,12 @@ window.Render = {
         if(mobArr) mobArr.style.display = State.selection.length > 1 ? 'flex' : 'none';
     },
     ink: () => {
-        $('ink-layer').innerHTML = State.ink.map(s => `<path d="${InkManager.pointsToPath(s.points)}" stroke="${s.color}" stroke-width="${s.width}" fill="none" stroke-linecap="round"/>`).join('');
+        const sel = InkManager.selectedId;
+        $('ink-layer').innerHTML = State.ink.map(s => {
+            const d = InkManager.pointsToPath(s.points);
+            const halo = sel === s.id ? `<path d="${d}" stroke="rgba(0,117,222,0.3)" stroke-width="${parseFloat(s.width) + 8}" fill="none" stroke-linecap="round" pointer-events="none"/>` : '';
+            return halo + `<path id="ink-${s.id}" d="${d}" stroke="${s.color}" stroke-width="${s.width}" fill="none" stroke-linecap="round" style="pointer-events:stroke;cursor:pointer" onclick="InkManager.selectStroke('${s.id}', event)"/>`;
+        }).join('');
     },
     minimap: () => {
         const canvas = $('minimap');
@@ -2181,9 +2374,16 @@ window.Actions = {
         let it = { id, type, w:200, h:150, groupId: null };
         if(type==='note') { it.sub=sub; it.text=''; }
         if(type==='zone') { 
-            const name = prompt("Name your new zone:", "New Zone");
-            if(!name) return;
-            it.title=name; it.w=300; it.h=300; it.children=[];
+            it.w=300; it.h=300; it.children=[];
+            UI.prompt("Zone Name:", "New Zone", "Create Zone", (name) => {
+                if (!name) return;
+                it.title = name;
+                const pos2 = Board.getFreeSpace(cx, cy, it.w, it.h);
+                it.x = pos2.x; it.y = pos2.y;
+                StateManager.addItem(it);
+                UI.toggleDrawer(null);
+            }, null, '🔳');
+            return;
         }
         if(type==='cer') { it.type='zone'; it.zoneType='cer'; it.title="Argument Builder (CER)"; it.w=600; it.h=400; it.children=[]; }
         if(type==='consensus') { it.type='zone'; it.zoneType='consensus'; it.title="Consensus Model"; it.w=600; it.h=600; it.children=[]; it.ink = []; }
@@ -2198,41 +2398,53 @@ window.Actions = {
         UI.toggleDrawer(null);
     },
     createExit: (mode) => {
-        let cx = -State.view.x + window.innerWidth / (2 * State.view.z) - 200;
-        let cy = -State.view.y + window.innerHeight / (2 * State.view.z) - 150;
+        UI._exitCreateMode = mode;
+        if (mode === 'lw') {
+            // Learn/Wonder needs no question prompt — create directly
+            Actions.submitExitCreate(mode, "List one thing you Learned and one thing you Wonder.", null);
+            return;
+        }
+        const titles = { short: 'Short Answer', smiley: 'Rating Scale', mc: 'Multiple Choice', multi: 'Multi-Select' };
+        const qLabels = { short: 'Question', smiley: 'Statement to Rate', mc: 'Question', multi: 'Select all that apply' };
+        const defaults = { short: 'What was the most important thing you learned?', smiley: 'I feel confident about today\'s lesson.', mc: 'Which is correct?', multi: 'Which topics did we cover?' };
+        const showOpts = mode === 'mc' || mode === 'multi';
+
+        $('exit-create-title').textContent = `Create: ${titles[mode] || 'Exit Ticket'}`;
+        $('exit-create-q-label').textContent = qLabels[mode] || 'Question';
+        $('exit-create-q').value = defaults[mode] || '';
+        $('exit-create-opts-group').style.display = showOpts ? 'block' : 'none';
+        $('exit-create-opts').value = showOpts ? (mode === 'mc' ? 'Option A\nOption B\nOption C' : 'Topic A\nTopic B\nTopic C') : '';
+        $('modal-exit-create').style.display = 'flex';
+        setTimeout(() => $('exit-create-q').focus(), 50);
+        UI.toggleDrawer(null);
+    },
+    submitExitCreate: (modeOverride, promptOverride, optsOverride) => {
+        const mode = modeOverride !== undefined ? modeOverride : UI._exitCreateMode;
+        if (!mode) return;
+
+        const promptTxt = promptOverride !== undefined ? promptOverride : $('exit-create-q').value.trim();
+        if (!promptTxt && mode !== 'lw') { UI.toast("⚠️ Please enter a question"); return; }
+
+        let opts = optsOverride !== undefined ? optsOverride : null;
+        if ((mode === 'mc' || mode === 'multi') && optsOverride === undefined) {
+            const optsStr = $('exit-create-opts').value.trim();
+            opts = optsStr ? optsStr.split('\n').map(s => s.trim()).filter(Boolean) : null;
+            if (!opts || opts.length < 2) { UI.toast("⚠️ Add at least 2 options"); return; }
+        }
+
+        const cx = -State.view.x + window.innerWidth / (2 * State.view.z) - 200;
+        const cy = -State.view.y + window.innerHeight / (2 * State.view.z) - 150;
         const id = genId();
-
-        let promptTxt = "Exit Ticket";
-        let opts = null;
-
-        if(mode === 'short') promptTxt = prompt("Short Answer Question:", "What was the most important thing you learned?");
-        else if(mode === 'smiley') promptTxt = prompt("Statement to rate:", "I feel confident about today's lesson.");
-        else if(mode === 'mc') {
-            promptTxt = prompt("Multiple Choice Question:", "Which is correct?");
-            const o = prompt("Options (comma separated):", "Option A, Option B, Option C");
-            if(o) opts = o.split(',');
-        }
-        else if(mode === 'multi') {
-            promptTxt = prompt("Select all that apply:", "Which topics did we cover?");
-            const o = prompt("Options (comma separated):", "Topic A, Topic B, Topic C");
-            if(o) opts = o.split(',');
-        }
-        else if(mode === 'lw') promptTxt = "List one thing you Learned and one thing you Wonder.";
-
-        if(!promptTxt && mode !== 'lw') return;
-
-        let it = { 
+        const it = { 
             id, type: 'zone', zoneType: 'exit', exitMode: mode, 
             title: 'Exit Ticket', prompt: promptTxt, opts: opts,
-            w: 400, h: 300, children: [],
-            x: cx, y: cy 
+            w: 400, h: 300, children: []
         };
-
         const pos = Board.getFreeSpace(cx, cy, it.w, it.h);
         it.x = pos.x; it.y = pos.y;
-
         StateManager.addItem(it);
-        UI.toggleDrawer(null);
+        $('modal-exit-create').style.display = 'none';
+        UI._exitCreateMode = null;
     },
     showContextMenu: (e, id) => {
         const menu = $('context-menu');
@@ -2316,26 +2528,22 @@ window.Actions = {
             UI.closeAllMenus();
         }
     },
-    saveSelectionAsTemplate: async () => {
+    saveSelectionAsTemplate: () => {
         if(State.selection.length === 0) return;
-        const name = prompt("Template Name:");
-        if(!name) return;
-
-        const selectedItems = State.selection.map(id => State.items.find(i => i.id === id)).filter(Boolean);
-        const minX = Math.min(...selectedItems.map(i => i.x));
-        const minY = Math.min(...selectedItems.map(i => i.y));
-
-        const tplItems = selectedItems.map(i => {
-            const clone = JSON.parse(JSON.stringify(i));
-            clone.x -= minX;
-            clone.y -= minY;
-            return clone;
-        });
-
-        const tpl = { id: genId(), name: name, items: tplItems };
-        await DB.saveTemplate(tpl);
-        UI.toast("Template Saved");
         UI.closeAllMenus();
+        UI.prompt("Template Name:", "", "Save as Template", async (name) => {
+            if(!name) return;
+            const selectedItems = State.selection.map(id => State.items.find(i => i.id === id)).filter(Boolean);
+            const minX = Math.min(...selectedItems.map(i => i.x));
+            const minY = Math.min(...selectedItems.map(i => i.y));
+            const tplItems = selectedItems.map(i => {
+                const clone = JSON.parse(JSON.stringify(i));
+                clone.x -= minX; clone.y -= minY; return clone;
+            });
+            const tpl = { id: genId(), name: name, items: tplItems };
+            await DB.saveTemplate(tpl);
+            UI.toast("✅ Template Saved");
+        }, null, '💾');
     },
     showZoneList: (e) => {
         e.stopPropagation();
@@ -2369,27 +2577,23 @@ window.Actions = {
     groupToZone: () => {
         const sel = State.selection.map(id => State.items.find(i => i.id === id)).filter(i => i && i.type === 'note');
         if(sel.length === 0) return;
-        
-        const name = prompt("Name your new zone:", "Group");
-        if(!name) return;
-
-        let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
-        sel.forEach(i => { minX = Math.min(minX, i.x); minY = Math.min(minY, i.y); maxX = Math.max(maxX, i.x+i.w); maxY = Math.max(maxY, i.y+i.h); });
-        
-        const z = { 
-            id: genId(), type: 'zone', title: name, 
-            x: minX - 20, y: minY - 50, 
-            w: (maxX - minX) + 40, h: (maxY - minY) + 70, 
-            children: sel.map(i => i.id)
-        };
-        
-        StateManager.addItem(z);
-        sel.forEach(i => HierarchyManager.link(i.id, z.id));
-        LayoutSystem.update(z.id);
-        
-        Actions.sel(z.id); 
         UI.closeAllMenus();
-        setTimeout(() => { sel.forEach(i => { const el = $(i.id); if(el) el.classList.add('snap-anim'); }); }, 50);
+        UI.prompt("Zone Name:", "Group", "Group to Zone", (name) => {
+            if(!name) return;
+            let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+            sel.forEach(i => { minX = Math.min(minX, i.x); minY = Math.min(minY, i.y); maxX = Math.max(maxX, i.x+i.w); maxY = Math.max(maxY, i.y+i.h); });
+            const z = { 
+                id: genId(), type: 'zone', title: name, 
+                x: minX - 20, y: minY - 50, 
+                w: (maxX - minX) + 40, h: (maxY - minY) + 70, 
+                children: sel.map(i => i.id)
+            };
+            StateManager.addItem(z);
+            sel.forEach(i => HierarchyManager.link(i.id, z.id));
+            LayoutSystem.update(z.id);
+            Actions.sel(z.id);
+            setTimeout(() => { sel.forEach(i => { const el = $(i.id); if(el) el.classList.add('snap-anim'); }); }, 50);
+        }, null, '🔳');
     },
     groupSelection: () => {
         if (State.selection.length < 2) return;
@@ -2435,22 +2639,32 @@ window.Actions = {
         const i = State.items.find(x=>x.id===id);
         StateManager.updateItem(id, { ang: (i.ang || 0) + 720 + Math.random()*360 });
     },
-    rename: (id) => { 
-        const i = State.items.find(x=>x.id===id); 
-        const n = prompt("Rename Zone:", i.title); 
-        if(n) { StateManager.updateItem(id, { title: n }); } 
+    rename: (id) => {
+        const i = State.items.find(x=>x.id===id);
+        UI.closeAllMenus();
+        UI.prompt("Rename Zone:", i.title, "Rename", (n) => {
+            if(n) StateManager.updateItem(id, { title: n });
+        }, null, '✏️');
     },
     editPoll: (id) => {
         const p = State.items.find(x=>x.id===id); if(!p) return;
-        const q = prompt("Poll Question:", p.q);
-        if(q) { 
-            const optsStr = prompt("Options (comma separated):", p.opts.map(o=>o.lbl).join(',')); 
-            if(optsStr) { 
-                const opts = optsStr.split(',').map(s => ({lbl:s.trim(), v:0}));
-                StateManager.updateItem(id, { q, opts });
-            } 
-        }
         UI.closeAllMenus();
+        $('poll-edit-q').value = p.q;
+        $('poll-edit-opts').value = p.opts.map(o => o.lbl).join('\n');
+        $('modal-poll-edit').dataset.pollId = id;
+        $('modal-poll-edit').style.display = 'flex';
+        setTimeout(() => $('poll-edit-q').focus(), 50);
+    },
+    submitPollEdit: () => {
+        const id = $('modal-poll-edit').dataset.pollId;
+        const q = $('poll-edit-q').value.trim();
+        const optsStr = $('poll-edit-opts').value.trim();
+        if (!q || !id) { UI.toast("⚠️ Please enter a question"); return; }
+        const opts = optsStr.split('\n').map(s => s.trim()).filter(Boolean).map(lbl => ({ lbl, v: 0 }));
+        if (opts.length < 2) { UI.toast("⚠️ Add at least 2 options"); return; }
+        StateManager.updateItem(id, { q, opts });
+        $('modal-poll-edit').style.display = 'none';
+        UI.toast("✅ Poll updated");
     },
     showComments: (id) => {
         State.activeCommentId = id; 
@@ -2723,6 +2937,8 @@ window.Modes = {
                     LayoutSystem.update(d.hoverZoneId);
                     d.hoverZoneId = null; d.targetIndex = -1;
                     $('ghost-layer').innerHTML = '';
+                    // Clear expand timer when leaving zone
+                    if (d._expandTimer) { clearTimeout(d._expandTimer); d._expandTimer = null; }
                 }
                 if (currentHitZone) {
                     d.hoverZoneId = currentHitZone.id;
@@ -2739,6 +2955,26 @@ window.Modes = {
                             LayoutSystem.update(currentHitZone.id, virt, newIndex);
                         }
                     }
+
+                    // Auto-expand zone when item is held near right or bottom edge for 600ms
+                    const nearRight = currentCx > (currentHitZone.x + currentHitZone.w - primaryItem.w * 0.8);
+                    const nearBottom = (primaryItem.y + primaryItem.h) > (currentHitZone.y + currentHitZone.h - 30);
+                    if ((nearRight || nearBottom) && !d._expandTimer) {
+                        d._expandTimer = setTimeout(() => {
+                            d._expandTimer = null;
+                            const zone = State.items.find(i => i.id === d.hoverZoneId);
+                            if (!zone) return;
+                            const updates = {};
+                            if (nearRight) updates.w = zone.w + primaryItem.w + LayoutSystem.gap;
+                            if (nearBottom) updates.h = zone.h + primaryItem.h + LayoutSystem.gap;
+                            StateManager.updateItem(zone.id, updates, { silent: true });
+                            LayoutSystem.update(zone.id);
+                            UI.toast("↔ Zone expanded");
+                        }, 600);
+                    } else if (!nearRight && !nearBottom && d._expandTimer) {
+                        clearTimeout(d._expandTimer);
+                        d._expandTimer = null;
+                    }
                 }
             }
         },
@@ -2748,6 +2984,7 @@ window.Modes = {
 
             AutoScroll.stop();
 
+            if (d._expandTimer) { clearTimeout(d._expandTimer); d._expandTimer = null; }
             SnapSystem.clearGuides();
             $('ghost-layer').innerHTML = '';
             document.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
@@ -2935,6 +3172,11 @@ window.InputController = {
         if(e.target.closest('.drawer') || e.target.closest('.modal') || e.target.closest('.dock-btn') || e.target.closest('.tb-btn') || e.target.closest('input') || e.target.closest('textarea') || e.target.closest('select')) return;
         if(e.target.closest('.menu-trigger') || e.target.closest('[onclick]') || e.target.closest('.cmt-badge')) return;
         
+        // Deselect ink stroke when clicking on non-ink area
+        if (InkManager.selectedId && !e.target.closest('#ink-layer')) {
+            InkManager.deselectStroke();
+        }
+        
         if (e.target.id === 'minimap-drag-handle') {
             const cont = $('minimap-container');
             State.drag = { mode: 'minimap-drag', el: cont, sx: e.clientX, sy: e.clientY, ex: cont.offsetLeft, ey: cont.offsetTop };
@@ -3039,7 +3281,11 @@ window.InputController = {
     },
     keydown: (e) => {
         if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-        if(e.key === 'Backspace' || e.key === 'Delete') Actions.delete();
+        if(e.key === 'Escape') { InkManager.deselectStroke(); }
+        if(e.key === 'Backspace' || e.key === 'Delete') {
+            if (InkManager.selectedId) { InkManager.deleteSelected(); }
+            else { Actions.delete(); }
+        }
         if((e.metaKey || e.ctrlKey) && e.key === 'z') { e.preventDefault(); ActionHistory.undo(); }
         if((e.metaKey || e.ctrlKey) && e.key === 'y') { e.preventDefault(); ActionHistory.redo(); }
         if(e.code === 'Space') { e.preventDefault(); window.setTool('pan'); }
@@ -3224,7 +3470,7 @@ window.Network = {
 
     submitJoin: () => {
         const id = $('join-id-input').value.trim();
-        if(!id) return alert("Please enter a Host ID");
+        if(!id) { UI.notify("Please enter a Host ID to connect.", "Missing Host ID", "🔗"); return; }
         
         Network.closeJoinModal();
         State.isCoHost = true;
@@ -3239,7 +3485,7 @@ window.Network = {
                 conn.send(JSON.stringify({type: 'AUTH_COHOST'}));
             });
             conn.on('data', d => Network.handle('HOST', JSON.parse(d), conn));
-            conn.on('error', e => { alert("Connection Failed"); location.reload(); });
+            conn.on('error', e => { UI.notify("Connection failed. The page will reload in a moment.", "Connection Error", "❌"); setTimeout(() => location.reload(), 4000); });
         });
         Render.loop();
     },
@@ -3316,8 +3562,8 @@ window.Network = {
         });
         targets = [...new Set(targets)];
 
-        if(targets.length < 1 && mode==='discuss') return alert("Select notes to discuss.");
-        if(targets.length < 2 && mode!=='discuss') return alert("Select at least 2 notes.");
+        if(targets.length < 1 && mode==='discuss') { UI.toast("⚠️ Select at least one note to discuss."); return; }
+        if(targets.length < 2 && mode!=='discuss') { UI.toast("⚠️ Select at least 2 notes for this activity."); return; }
 
         if(!zoneId) {
             let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
@@ -3781,11 +4027,11 @@ window.Consensus = {
     },
 
     clearInk: () => {
-        if (confirm("Clear the entire model drawing?")) {
+        UI.confirm("Clear the entire model drawing? This cannot be undone.", "Clear Drawing", () => {
             State.consensusMode.ink = [];
             Consensus.renderInk();
             Network.broadcast({ type: 'CONSENSUS_CLEAR' });
-        }
+        }, null, '🗑️');
     },
     
     screenToWorld: (evt) => {

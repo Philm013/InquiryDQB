@@ -171,9 +171,9 @@
         }
 
         /* ZONE DROP TARGET */
-        .item.zone { transition: background-color 0.2s, border-color 0.2s, width 0.1s, height 0.1s; }
-        .item.zone.drag-over {
-            box-shadow: 0 0 0 2px var(--accent), var(--shadow) !important;
+        .item.zone { transition: width 0.1s, height 0.1s; }
+        .item.zone.drag-over .jiggle-wrapper {
+            box-shadow: 0 0 0 2.5px var(--accent), var(--shadow-deep) !important;
             background: var(--accent-light) !important;
             border-color: var(--accent) !important;
         }
@@ -269,25 +269,25 @@
 
         /* HEADER ACTIONS */
         .i-head { 
-            height: 44px; display: flex; align-items: center; justify-content: space-between; 
-            padding: 0 8px 0 12px; font-size: 0.875rem; font-weight: 700; 
+            height: 30px; display: flex; align-items: center; justify-content: space-between; 
+            padding: 0 4px 0 10px; font-size: 0.72rem; font-weight: 600; 
             cursor: grab; flex-shrink: 0; z-index: 2; 
-            background: rgba(255,255,255,0.5); 
-            border-bottom: 1px solid rgba(0,0,0,0.08); 
+            background: rgba(0,0,0,0.04); 
+            border-bottom: 1px solid rgba(0,0,0,0.07); 
             user-select: none; -webkit-user-select: none; 
-            letter-spacing: 0.01em;
+            letter-spacing: 0.02em; gap: 6px;
         }
         @media (prefers-color-scheme: dark) {
-            .i-head { background: rgba(255,255,255,0.05); border-bottom-color: rgba(255,255,255,0.08); }
+            .i-head { background: rgba(255,255,255,0.04); border-bottom-color: rgba(255,255,255,0.07); }
         }
         .i-head:active { cursor: grabbing; }
 
         /* COMMENT BADGE */
         .cmt-badge {
-            position: absolute; top: 6px; right: 40px;
+            position: absolute; top: 5px; right: 28px;
             background: #ef4444; color: white;
-            width: 20px; height: 20px; border-radius: 50%;
-            font-size: 0.68rem; display: flex; align-items: center;
+            width: 18px; height: 18px; border-radius: 50%;
+            font-size: 0.62rem; display: flex; align-items: center;
             justify-content: center; font-weight: 700;
             box-shadow: 0 2px 6px rgba(239,68,68,0.4); z-index: 100;
             cursor: pointer; pointer-events: auto;
@@ -348,26 +348,26 @@
 
         /* MENU BUTTON */
         .menu-trigger { 
-            width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; 
-            border-radius: var(--radius); cursor: pointer; font-size: 1.1rem; line-height: 1; 
-            color: var(--text-secondary); transition: 0.12s; 
+            width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; 
+            border-radius: var(--radius); cursor: pointer; font-size: 0.95rem; line-height: 1; 
+            color: var(--text-muted); transition: 0.12s; flex-shrink: 0;
         }
         .menu-trigger:hover { background: rgba(0,0,0,0.08); color: var(--text); }
 
         /* CONTENT */
-        .item.note textarea { 
+        .item.note .note-in { 
             width: 100%; height: 100%; border: none; background: transparent; 
             padding: 12px 14px; font-family: var(--font-hand); font-size: 1.35rem; 
             resize: none; line-height: 1.45; color: var(--text); 
         }
         .item.note img { width: 100%; flex: 1; object-fit: contain; background: transparent; pointer-events: none; min-height: 0; display: block; }
         .caption-in { 
-            width: 100%; height: 40px; border: none; border-top: var(--border); 
-            background: rgba(255,255,255,0.7); padding: 8px 12px; 
-            font-family: var(--font-ui); font-size: 0.8rem; resize: none; color: var(--text); flex-shrink: 0; 
+            width: 100%; height: 36px; border: none; border-top: var(--border); 
+            background: rgba(0,0,0,0.03); padding: 6px 10px; 
+            font-family: var(--font-ui); font-size: 0.78rem; resize: none; color: var(--text); flex-shrink: 0; 
         }
         @media (prefers-color-scheme: dark) {
-            .caption-in { background: rgba(255,255,255,0.05); }
+            .caption-in { background: rgba(255,255,255,0.04); }
         }
 
         .i-body { flex: 1; position: relative; min-height: 0; display: flex; flex-direction: column; }
@@ -375,7 +375,7 @@
             position: absolute; top: -26px; left: 0; 
             color: var(--accent); font-weight: 700; letter-spacing: 0.4px; 
             font-size: 0.8rem; white-space: nowrap; pointer-events: none; 
-            transition: color 0.2s; 
+            transition: color 0.2s, background 0.2s, border-color 0.2s; 
             background: var(--card-bg); padding: 2px 8px; 
             border: var(--border); border-radius: 9999px; 
             box-shadow: var(--shadow-sm);
@@ -2140,7 +2140,8 @@ window.InkManager = {
         const margin = 16;
         const bx = minX - margin, by = minY - margin;
         const bw = Math.max(80, maxX - minX + margin * 2);
-        const bh = Math.max(60, maxY - minY + margin * 2);
+        const contentH = Math.max(60, maxY - minY + margin * 2);
+        const bh = contentH; // canvas/image height
         const canvas = document.createElement('canvas');
         canvas.width = bw; canvas.height = bh;
         const ctx = canvas.getContext('2d');
@@ -2151,7 +2152,8 @@ window.InkManager = {
         pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x - bx, p.y - by); else ctx.lineTo(p.x - bx, p.y - by); });
         ctx.stroke();
         const src = canvas.toDataURL();
-        return { id: genId(), type: 'note', sub: 'sketch', src, text: '', x: bx, y: by, w: bw, h: bh };
+        const uiChrome = 66; // i-head (30px) + caption-in (36px)
+        return { id: genId(), type: 'note', sub: 'sketch', src, text: '', x: bx, y: by, w: bw, h: Math.max(140, contentH + uiChrome) };
     },
     pinToItems: () => {
         if (State.ink.length === 0) { UI.toast("No ink to pin"); return; }
@@ -2339,14 +2341,27 @@ window.Render = {
                 const wrapper = el.querySelector('.jiggle-wrapper');
                 if (wrapper && i.type === 'zone') {
                     const label = el.querySelector('.zone-label');
+                    const iHead = el.querySelector('.i-head');
                     if (i.color) {
-                        wrapper.style.border = `2px solid ${i.color}`;
-                        if (label) label.style.color = i.color;
+                        // color+'1a' = ~10% opacity bg, color+'28' = ~15% header, color+'60' = ~38% border
+                        wrapper.style.border = `3px solid ${i.color}`;
+                        wrapper.style.background = i.color + '1a';
+                        if (iHead) iHead.style.background = i.color + '28';
+                        if (label) {
+                            label.style.color = i.color;
+                            label.style.background = i.color + '1a';
+                            label.style.borderColor = i.color + '60';
+                        }
                     } else {
-                        wrapper.style.border = '1px dashed rgba(0,0,0,0.15)';
-                        if(i.zoneType === 'consensus') { wrapper.style.border = '1px solid #0075de'; } 
-                        else if(i.zoneType === 'exit') { wrapper.style.border = '2px solid #0075de'; }
-                        if (label) label.style.color = 'var(--accent)';
+                        if(i.zoneType === 'consensus') { wrapper.style.border = '1px solid #0075de'; }
+                        else if(i.zoneType === 'exit') { wrapper.style.border = '2px solid #0075de'; wrapper.style.background = '#f9fdff'; }
+                        else { wrapper.style.border = '1px dashed rgba(0,0,0,0.15)'; wrapper.style.background = 'rgba(255,255,255,0.6)'; }
+                        if (iHead) iHead.style.background = '';
+                        if (label) {
+                            label.style.color = 'var(--accent)';
+                            label.style.background = '';
+                            label.style.borderColor = '';
+                        }
                     }
                 }
                 
@@ -2571,9 +2586,17 @@ window.Render = {
             else if(d.zoneType === 'exit') { w.style.border = '2px solid #0075de'; w.style.background = '#f9fdff'; }
             else { w.style.background = 'rgba(255,255,255,0.6)'; }
             if (d.color) {
-                w.style.border = `2px solid ${d.color}`;
+                // color+'1a' = ~10% opacity bg, color+'28' = ~15% header, color+'60' = ~38% border
+                w.style.border = `3px solid ${d.color}`;
+                w.style.background = d.color + '1a';
+                const iHead = el.querySelector('.i-head');
+                if (iHead) iHead.style.background = d.color + '28';
                 const label = el.querySelector('.zone-label');
-                if (label) label.style.color = d.color;
+                if (label) {
+                    label.style.color = d.color;
+                    label.style.background = d.color + '1a';
+                    label.style.borderColor = d.color + '60';
+                }
             }
         }
 
@@ -2721,10 +2744,10 @@ window.Actions = {
         } else { 
              if(item.type === 'note') {
                 html += `<div class="ctx-row">
-                    <button class="ctx-btn" style="background:#fef3c7" onclick="Actions.setType('${id}','notice')">👁️</button>
-                    <button class="ctx-btn" style="background:#bae6fd" onclick="Actions.setType('${id}','wonder')">❓</button>
-                    <button class="ctx-btn" style="background:#bbf7d0" onclick="Actions.setType('${id}','idea')">💡</button>
-                    <button class="ctx-btn" style="background:#fecaca" onclick="Actions.setType('${id}','test')">🧪</button>
+                    <button class="ctx-btn" style="background:#fef3c7;flex-direction:column;height:48px;gap:1px;font-size:0.75rem" onclick="Actions.setType('${id}','notice')"><span>👁️</span>Notice</button>
+                    <button class="ctx-btn" style="background:#bae6fd;flex-direction:column;height:48px;gap:1px;font-size:0.75rem" onclick="Actions.setType('${id}','wonder')"><span>❓</span>Wonder</button>
+                    <button class="ctx-btn" style="background:#bbf7d0;flex-direction:column;height:48px;gap:1px;font-size:0.75rem" onclick="Actions.setType('${id}','idea')"><span>💡</span>Idea</button>
+                    <button class="ctx-btn" style="background:#fecaca;flex-direction:column;height:48px;gap:1px;font-size:0.75rem" onclick="Actions.setType('${id}','test')"><span>🧪</span>Test</button>
                 </div>
                 <div class="ctx-row">
                     <button class="ctx-btn" onclick="Actions.toggleLock('${id}')">${item.locked?'Unlock 🔓':'Lock 🔒'}</button>
@@ -2738,12 +2761,12 @@ window.Actions = {
                     <button class="ctx-btn" onclick="Network.startActivity('discuss')">💬 Discuss</button>
                 </div>
                 <div class="ctx-row" style="border-top: var(--border); margin-top:5px; padding-top:5px">
-                    <button class="ctx-btn" style="background:#ef4444" onclick="Actions.setZoneColor('${id}', '#ef4444')"></button>
-                    <button class="ctx-btn" style="background:#3b82f6" onclick="Actions.setZoneColor('${id}', '#3b82f6')"></button>
-                    <button class="ctx-btn" style="background:#10b981" onclick="Actions.setZoneColor('${id}', '#10b981')"></button>
-                    <button class="ctx-btn" style="background:#f97316" onclick="Actions.setZoneColor('${id}', '#f97316')"></button>
-                    <button class="ctx-btn" style="background:#8b5cf6" onclick="Actions.setZoneColor('${id}', '#8b5cf6')"></button>
-                    <button class="ctx-btn" onclick="Actions.setZoneColor('${id}', null)">✕</button>
+                    <button class="ctx-btn" style="background:#ef4444;color:white;font-size:0.7rem;flex-direction:column;height:40px;gap:1px" onclick="Actions.setZoneColor('${id}', '#ef4444')">🔴</button>
+                    <button class="ctx-btn" style="background:#3b82f6;color:white;font-size:0.7rem;flex-direction:column;height:40px;gap:1px" onclick="Actions.setZoneColor('${id}', '#3b82f6')">🔵</button>
+                    <button class="ctx-btn" style="background:#10b981;color:white;font-size:0.7rem;flex-direction:column;height:40px;gap:1px" onclick="Actions.setZoneColor('${id}', '#10b981')">🟢</button>
+                    <button class="ctx-btn" style="background:#f97316;color:white;font-size:0.7rem;flex-direction:column;height:40px;gap:1px" onclick="Actions.setZoneColor('${id}', '#f97316')">🟠</button>
+                    <button class="ctx-btn" style="background:#8b5cf6;color:white;font-size:0.7rem;flex-direction:column;height:40px;gap:1px" onclick="Actions.setZoneColor('${id}', '#8b5cf6')">🟣</button>
+                    <button class="ctx-btn" style="font-size:1rem;height:40px" onclick="Actions.setZoneColor('${id}', null)" title="Clear color">✕</button>
                 </div>
                 <div class="ctx-row"><button class="ctx-btn" onclick="Actions.rename('${id}')">Rename</button></div>
                 <div class="ctx-row">

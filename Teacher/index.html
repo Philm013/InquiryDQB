@@ -2152,7 +2152,8 @@ window.InkManager = {
         pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x - bx, p.y - by); else ctx.lineTo(p.x - bx, p.y - by); });
         ctx.stroke();
         const src = canvas.toDataURL();
-        return { id: genId(), type: 'note', sub: 'sketch', src, text: '', x: bx, y: by, w: bw, h: Math.max(140, contentH + 66) };
+        const uiChrome = 66; // i-head (30px) + caption-in (36px)
+        return { id: genId(), type: 'note', sub: 'sketch', src, text: '', x: bx, y: by, w: bw, h: Math.max(140, contentH + uiChrome) };
     },
     pinToItems: () => {
         if (State.ink.length === 0) { UI.toast("No ink to pin"); return; }
@@ -2342,16 +2343,25 @@ window.Render = {
                     const label = el.querySelector('.zone-label');
                     const iHead = el.querySelector('.i-head');
                     if (i.color) {
+                        // color+'1a' = ~10% opacity bg, color+'28' = ~15% header, color+'60' = ~38% border
                         wrapper.style.border = `3px solid ${i.color}`;
                         wrapper.style.background = i.color + '1a';
                         if (iHead) iHead.style.background = i.color + '28';
-                        if (label) { label.style.color = i.color; label.style.background = i.color + '1a'; label.style.borderColor = i.color + '60'; }
+                        if (label) {
+                            label.style.color = i.color;
+                            label.style.background = i.color + '1a';
+                            label.style.borderColor = i.color + '60';
+                        }
                     } else {
                         if(i.zoneType === 'consensus') { wrapper.style.border = '1px solid #0075de'; }
                         else if(i.zoneType === 'exit') { wrapper.style.border = '2px solid #0075de'; wrapper.style.background = '#f9fdff'; }
                         else { wrapper.style.border = '1px dashed rgba(0,0,0,0.15)'; wrapper.style.background = 'rgba(255,255,255,0.6)'; }
                         if (iHead) iHead.style.background = '';
-                        if (label) { label.style.color = 'var(--accent)'; label.style.background = ''; label.style.borderColor = ''; }
+                        if (label) {
+                            label.style.color = 'var(--accent)';
+                            label.style.background = '';
+                            label.style.borderColor = '';
+                        }
                     }
                 }
                 
@@ -2576,12 +2586,17 @@ window.Render = {
             else if(d.zoneType === 'exit') { w.style.border = '2px solid #0075de'; w.style.background = '#f9fdff'; }
             else { w.style.background = 'rgba(255,255,255,0.6)'; }
             if (d.color) {
+                // color+'1a' = ~10% opacity bg, color+'28' = ~15% header, color+'60' = ~38% border
                 w.style.border = `3px solid ${d.color}`;
                 w.style.background = d.color + '1a';
                 const iHead = el.querySelector('.i-head');
                 if (iHead) iHead.style.background = d.color + '28';
                 const label = el.querySelector('.zone-label');
-                if (label) { label.style.color = d.color; label.style.background = d.color + '1a'; label.style.borderColor = d.color + '60'; }
+                if (label) {
+                    label.style.color = d.color;
+                    label.style.background = d.color + '1a';
+                    label.style.borderColor = d.color + '60';
+                }
             }
         }
 

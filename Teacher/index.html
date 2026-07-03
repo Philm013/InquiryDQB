@@ -417,11 +417,20 @@
         .dt-feedback { background:#fecaca; color:#dc2626; }
 
         /* HANDLES */
-        .resize-h { position: absolute; bottom:-15px; right:-15px; width:40px; height:40px; cursor: nwse-resize; opacity: 0; background:transparent; z-index:20; }
+        .resize-h { position: absolute; bottom:-16px; right:-16px; width:44px; height:44px; cursor: nwse-resize; opacity: 0; background:transparent; z-index:20; }
+        .resize-h::before {
+            content: '';
+            position: absolute;
+            right: 10px;
+            bottom: 10px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 0 2px white, 0 0 0 4px var(--accent);
+        }
         .item.selected .resize-h { 
-            opacity: 1; background: var(--accent); border-radius: 50%; 
-            box-shadow: 0 0 0 2px white, 0 0 0 4px var(--accent); 
-            width: 14px; height: 14px; bottom: -7px; right: -7px; 
+            opacity: 1;
         }
 
         /* --- DESKTOP TOOLBAR (>768px) --- */
@@ -726,6 +735,22 @@
             .cm-dock-btn.active { background: var(--accent); color: white; box-shadow: 0 2px 8px rgba(37,99,235,0.3); }
             .cm-sep { width:1px; height:20px; background: var(--border-color); margin: 0 4px; }
             #consensus-participants { flex: none; }
+
+            /* Breakout Mobile Styles */
+            #breakout-overlay { flex-direction: column; }
+            #breakout-main { min-height: 0; }
+            #breakout-sidebar {
+                width: 100%;
+                max-height: min(44vh, 360px);
+                border-left: none;
+                border-top: 1px solid var(--border-color);
+            }
+            #breakout-header-bar {
+                position: sticky;
+                top: 0;
+                background: var(--panel);
+                z-index: 1;
+            }
         }
 
         /* --- CONSENSUS UPGRADED TOOLBAR --- */
@@ -753,6 +778,7 @@
             width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--border-color);
             background: var(--panel-raised); color: var(--text); font-size: 1rem;
             display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.1s;
+            touch-action: manipulation;
         }
         .cm-zoom-btn:hover { background: var(--accent-light); border-color: rgba(37,99,235,0.3); }
         #cm-zoom-level { flex: 1; text-align: center; font-size: 0.8rem; color: var(--text-secondary); font-weight: 600; }
@@ -4701,8 +4727,44 @@ window.Consensus = {
         const y = (evt.clientY - rect.top) / view.z - view.y;
         return { x, y };
     },
+    getTouchDistance: (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY),
+    getTouchMidpoint: (touches) => ({
+        x: (touches[0].clientX + touches[1].clientX) / 2,
+        y: (touches[0].clientY + touches[1].clientY) / 2
+    }),
+    applyPinchZoom: (distance) => {
+        if (!Consensus.drag || Consensus.drag.mode !== 'pinch' || !Consensus.drag.startDist) return;
+        const view = State.consensusMode.view;
+        const scale = distance / Consensus.drag.startDist;
+        const nz = Math.max(0.1, Math.min(Consensus.drag.startZ * scale, 8));
+        const rect = $('consensus-main').getBoundingClientRect();
+        const mx = Consensus.drag.midX - rect.left;
+        const my = Consensus.drag.midY - rect.top;
+        const wx = (mx / Consensus.drag.startZ) - Consensus.drag.startX;
+        const wy = (my / Consensus.drag.startZ) - Consensus.drag.startY;
+        view.z = nz;
+        view.x = (mx / nz) - wx;
+        view.y = (my / nz) - wy;
+        Consensus.updateZoomLabel();
+        Network.broadcast({type: 'CONSENSUS_VIEW_SYNC', view: view});
+    },
 
     inputStart: (e) => {
+        if (e.target.closest('.cm-zoom-btn, .cm-tool-btn, .cm-color-swatch, .cm-width-slider, .drawer, button, input, textarea, select')) return;
+        if (e.touches?.length === 2) {
+            e.preventDefault();
+            const mid = Consensus.getTouchMidpoint(e.touches);
+            Consensus.drag = {
+                mode: 'pinch',
+                startDist: Consensus.getTouchDistance(e.touches),
+                startZ: State.consensusMode.view.z,
+                startX: State.consensusMode.view.x,
+                startY: State.consensusMode.view.y,
+                midX: mid.x,
+                midY: mid.y
+            };
+            return;
+        }
         if (e.touches) e.preventDefault();
         const evt = e.touches ? e.touches[0] : e;
         if (!evt) return;
@@ -4728,6 +4790,24 @@ window.Consensus = {
 
     inputMove: (e) => {
         if (!Consensus.drag) return;
+        if (e.touches?.length === 2) {
+            e.preventDefault();
+            if (Consensus.drag.mode !== 'pinch') {
+                const mid = Consensus.getTouchMidpoint(e.touches);
+                Consensus.drag = {
+                    mode: 'pinch',
+                    startDist: Consensus.getTouchDistance(e.touches),
+                    startZ: State.consensusMode.view.z,
+                    startX: State.consensusMode.view.x,
+                    startY: State.consensusMode.view.y,
+                    midX: mid.x,
+                    midY: mid.y
+                };
+                return;
+            }
+            Consensus.applyPinchZoom(Consensus.getTouchDistance(e.touches));
+            return;
+        }
         if (e.touches) e.preventDefault();
         const evt = e.touches ? e.touches[0] : e;
         if (!evt) return;
@@ -4761,6 +4841,10 @@ window.Consensus = {
     
     inputEnd: (e) => {
         if (!Consensus.drag) return;
+        if (Consensus.drag.mode === 'pinch') {
+            Consensus.drag = null;
+            return;
+        }
         if (Consensus.drag.mode === 'draw' && Consensus.currentPath.length > 1) {
             const tool = State.consensusMode.tool;
             const newInk = { 
@@ -4996,6 +5080,25 @@ window.Breakout = {
         const v = Breakout._state.view;
         return { x: (evt.clientX - rect.left) / v.z - v.x, y: (evt.clientY - rect.top) / v.z - v.y };
     },
+    _getTouchDistance: (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY),
+    _getTouchMidpoint: (touches) => ({
+        x: (touches[0].clientX + touches[1].clientX) / 2,
+        y: (touches[0].clientY + touches[1].clientY) / 2
+    }),
+    _applyPinchZoom: (distance) => {
+        if (!Breakout.drag || Breakout.drag.mode !== 'pinch' || !Breakout.drag.startDist) return;
+        const v = Breakout._state.view;
+        const nz = Math.max(0.1, Math.min(Breakout.drag.startZ * (distance / Breakout.drag.startDist), 8));
+        const rect = $('breakout-main').getBoundingClientRect();
+        const mx = Breakout.drag.midX - rect.left;
+        const my = Breakout.drag.midY - rect.top;
+        const wx = (mx / Breakout.drag.startZ) - Breakout.drag.startX;
+        const wy = (my / Breakout.drag.startZ) - Breakout.drag.startY;
+        v.z = nz;
+        v.x = (mx / nz) - wx;
+        v.y = (my / nz) - wy;
+        Breakout.updateZoomLabel();
+    },
 
     _thumbTimer: null,
     _scheduleThumbUpdate: () => {
@@ -5055,7 +5158,21 @@ window.Breakout = {
     },
 
     _onMain: (e) => {
-        if (e.target.closest('#breakout-sidebar') || e.target.closest('#breakout-items-layer')) return;
+        if (e.target.closest('#breakout-sidebar, #breakout-items-layer, .cm-zoom-btn, .cm-tool-btn, .cm-color-swatch, .cm-width-slider, button, input, textarea, select')) return;
+        if (e.touches?.length === 2) {
+            e.preventDefault();
+            const mid = Breakout._getTouchMidpoint(e.touches);
+            Breakout.drag = {
+                mode: 'pinch',
+                startDist: Breakout._getTouchDistance(e.touches),
+                startZ: Breakout._state.view.z,
+                startX: Breakout._state.view.x,
+                startY: Breakout._state.view.y,
+                midX: mid.x,
+                midY: mid.y
+            };
+            return;
+        }
         if (e.touches) e.preventDefault();
         const evt = e.touches ? e.touches[0] : e;
         if (!evt) return;
@@ -5071,6 +5188,24 @@ window.Breakout = {
     },
     _onMove: (e) => {
         if (!Breakout.drag) return;
+        if (e.touches?.length === 2) {
+            e.preventDefault();
+            if (Breakout.drag.mode !== 'pinch') {
+                const mid = Breakout._getTouchMidpoint(e.touches);
+                Breakout.drag = {
+                    mode: 'pinch',
+                    startDist: Breakout._getTouchDistance(e.touches),
+                    startZ: Breakout._state.view.z,
+                    startX: Breakout._state.view.x,
+                    startY: Breakout._state.view.y,
+                    midX: mid.x,
+                    midY: mid.y
+                };
+                return;
+            }
+            Breakout._applyPinchZoom(Breakout._getTouchDistance(e.touches));
+            return;
+        }
         if (e.touches) e.preventDefault();
         const evt = e.touches ? e.touches[0] : e; if (!evt) return;
         const coords = Breakout._screenToWorld(evt);
@@ -5093,6 +5228,10 @@ window.Breakout = {
     },
     _onEnd: (e) => {
         if (!Breakout.drag) return;
+        if (Breakout.drag.mode === 'pinch') {
+            Breakout.drag = null;
+            return;
+        }
         if (Breakout.drag.mode === 'draw' && Breakout.currentPath.length > 1) {
             const zone = Breakout._getZone(); if (zone) {
                 if(!zone.subInk) zone.subInk = [];

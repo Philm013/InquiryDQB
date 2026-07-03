@@ -18,6 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Patrick+Hand&display=swap" rel="stylesheet">
+    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
     <style>
         :root {
             /* Brand */
@@ -726,6 +727,87 @@
             .cm-sep { width:1px; height:20px; background: var(--border-color); margin: 0 4px; }
             #consensus-participants { flex: none; }
         }
+
+        /* --- CONSENSUS UPGRADED TOOLBAR --- */
+        .cm-toolbar-section { padding: 10px 12px; border-bottom: 1px solid var(--panel-border); }
+        .cm-toolbar-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 8px; }
+        .cm-tool-grid { display: flex; flex-wrap: wrap; gap: 4px; }
+        .cm-tool-btn {
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+            padding: 7px 10px; border-radius: var(--radius); border: 1px solid transparent;
+            background: var(--panel-raised); color: var(--text); font-size: 0.82rem;
+            cursor: pointer; transition: 0.12s; white-space: nowrap; font-family: var(--font-ui);
+        }
+        .cm-tool-btn:hover { background: var(--accent-light); border-color: rgba(37,99,235,0.2); }
+        .cm-tool-btn.active { background: var(--accent); color: white; border-color: var(--accent); box-shadow: 0 2px 6px rgba(37,99,235,0.3); }
+        .cm-tool-btn iconify-icon { font-size: 1.1rem; }
+        .cm-color-swatch {
+            width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 3px solid transparent;
+            transition: 0.12s; flex-shrink: 0;
+        }
+        .cm-color-swatch:hover { transform: scale(1.15); }
+        .cm-color-swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px white, 0 0 0 4px var(--accent); }
+        .cm-width-slider { width: 100%; accent-color: var(--accent); }
+        .cm-zoom-controls { display: flex; align-items: center; gap: 4px; margin-top: 8px; }
+        .cm-zoom-btn {
+            width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--border-color);
+            background: var(--panel-raised); color: var(--text); font-size: 1rem;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.1s;
+        }
+        .cm-zoom-btn:hover { background: var(--accent-light); border-color: rgba(37,99,235,0.3); }
+        #cm-zoom-level { flex: 1; text-align: center; font-size: 0.8rem; color: var(--text-secondary); font-weight: 600; }
+        .cm-color-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+        /* --- BREAKOUT BOARD STYLES --- */
+        #breakout-overlay {
+            position: fixed; inset: 0; background: var(--bg);
+            z-index: 5000; display: none; flex-direction: row;
+        }
+        #breakout-main {
+            flex: 1; position: relative; overflow: hidden;
+            background-color: var(--card-bg);
+            background-image: radial-gradient(rgba(0,0,0,0.07) 1.5px, transparent 1.5px);
+            background-size: 32px 32px;
+        }
+        @media (prefers-color-scheme: dark) {
+            #breakout-main {
+                background-color: #0f172a;
+                background-image: radial-gradient(rgba(255,255,255,0.06) 1.5px, transparent 1.5px);
+            }
+        }
+        #breakout-main.bk-pan { cursor: grab; }
+        #breakout-main.bk-pan:active { cursor: grabbing; }
+        #breakout-main.bk-draw { cursor: crosshair; }
+        #breakout-world { position: absolute; top:0; left:0; transform-origin: 0 0; will-change: transform; }
+        #breakout-items-layer { position: absolute; inset: 0; }
+        #breakout-ink-layer { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+        #breakout-sidebar {
+            width: 280px; background: var(--panel);
+            border-left: 1px solid var(--border-color);
+            display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto;
+        }
+        #breakout-header-bar {
+            padding: 12px 15px; border-bottom: 1px solid var(--panel-border);
+            display: flex; align-items: center; gap: 10px;
+        }
+        #breakout-color-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+        .breakout-room-chip {
+            display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px;
+            border-radius: 20px; font-size: 0.78rem; font-weight: 600; margin: 2px;
+            color: white; cursor: default;
+        }
+        .bk-participant-row {
+            display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+            border-radius: var(--radius); cursor: pointer; transition: 0.1s;
+        }
+        .bk-participant-row:hover { background: var(--accent-light); }
+        .bk-participant-row.active { background: var(--accent-light); }
+        .bk-participant-row input[type=checkbox] { accent-color: var(--accent); }
+        .breakout-thumb { object-fit: contain; background: var(--warm-bg); }
+        .breakout-bg { background-color: rgba(139,92,246,0.06) !important; }
+        @media (prefers-color-scheme: dark) {
+            .breakout-bg { background-color: rgba(139,92,246,0.12) !important; }
+        }
     </style>
 </head>
 <body oncontextmenu="return false;">
@@ -1007,6 +1089,9 @@
             <button class="sub-btn" onclick="Actions.create('graph')">📈 Graph</button>
             <button class="sub-btn" onclick="Actions.create('spin')">🎡 Spin</button>
         </div>
+        <div class="tool-row">
+            <button class="sub-btn" style="background:rgba(139,92,246,0.1);color:#6d28d9;border-color:rgba(139,92,246,0.3);" onclick="Actions.create('breakout')">🚀 Breakout Board</button>
+        </div>
         <div class="tool-row" style="border-top: var(--border); margin-top:5px; padding-top:5px">
              <button class="sub-btn" onclick="window.UI.showTemplates()">📄 Templates</button>
              <button class="sub-btn" style="background: var(--accent); color:white; border-color: var(--accent);" onclick="window.UI.toggleDrawer('exit')">🚪 Exit Ticket</button>
@@ -1073,69 +1158,236 @@
     <div id="consensus-main">
         <div id="consensus-world">
             <div id="consensus-items-layer"></div>
-            <svg id="consensus-ink-layer"></svg>
+            <svg id="consensus-ink-layer" style="overflow:visible">
+                <defs>
+                    <marker id="cm-arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="currentColor"/>
+                    </marker>
+                </defs>
+            </svg>
         </div>
+        <!-- Floating zoom controls -->
+        <div style="position:absolute; bottom:16px; right:16px; display:flex; flex-direction:column; gap:4px; z-index:10;">
+            <button class="cm-zoom-btn" title="Zoom In" onclick="Consensus.zoom(1.25)"><iconify-icon icon="mdi:plus" noobserver></iconify-icon></button>
+            <button class="cm-zoom-btn" title="Reset Zoom" onclick="Consensus.zoom(null)" id="cm-zoom-reset" style="font-size:0.7rem; font-weight:700; width:auto; padding: 0 6px;">100%</button>
+            <button class="cm-zoom-btn" title="Zoom Out" onclick="Consensus.zoom(0.8)"><iconify-icon icon="mdi:minus" noobserver></iconify-icon></button>
+        </div>
+        <!-- Temp ink preview -->
+        <svg id="cm-temp-ink" style="position:absolute;inset:0;pointer-events:none;overflow:visible;"></svg>
     </div>
     <div id="consensus-sidebar">
-        <!-- Common Header -->
-        <div style="padding:15px; border-bottom:1px solid var(--panel-border); text-align:center;">
-            <h3 style="margin:0; color:var(--accent);">Modeling Mode</h3>
-            <div id="consensus-zone-name" style="font-size:0.875rem; color: var(--text-muted);"></div>
+        <!-- Header -->
+        <div style="padding:12px 15px; border-bottom:1px solid var(--panel-border); display:flex; align-items:center; justify-content:space-between;">
+            <div>
+                <div style="font-weight:700; color:var(--accent); font-size:0.95rem;">📐 Modeling Mode</div>
+                <div id="consensus-zone-name" style="font-size:0.8rem; color: var(--text-muted);"></div>
+            </div>
+            <button class="cm-tool-btn" style="color:#dc2626; border-color:rgba(220,38,38,0.3); padding:5px 8px;" onclick="Consensus.stop()" title="Stop Session">
+                <iconify-icon icon="mdi:stop-circle" noobserver></iconify-icon>
+            </button>
         </div>
 
         <!-- Desktop View -->
         <div id="cm-desktop-view">
-            <div style="padding:10px; border-bottom:1px solid var(--panel-border);">
-                <div style="font-weight:600; margin-bottom:10px;">Interaction Tools</div>
-                <div class="tool-row">
-                    <button class="sub-btn active" id="cm-btn-pan" onclick="Consensus.setTool('pan')">✋ Pan</button>
-                    <button class="sub-btn" id="cm-btn-select" onclick="Consensus.setTool('select')">⛝ Select</button>
+            <!-- Navigation tools -->
+            <div class="cm-toolbar-section">
+                <div class="cm-toolbar-label">Navigation</div>
+                <div class="cm-tool-grid">
+                    <button class="cm-tool-btn active" id="cm-btn-pan" onclick="Consensus.setTool('pan')">
+                        <iconify-icon icon="mdi:hand-back-right" noobserver></iconify-icon> Pan
+                    </button>
+                    <button class="cm-tool-btn" id="cm-btn-select" onclick="Consensus.setTool('select')">
+                        <iconify-icon icon="mdi:cursor-default" noobserver></iconify-icon> Select
+                    </button>
                 </div>
-                <div style="font-weight:600; margin-bottom:10px; margin-top:10px">Drawing Tools</div>
-                <div class="tool-row">
-                    <div class="color-btn" style="background:#ef4444" onclick="Consensus.setTool('draw', '#ef4444')"></div>
-                    <div class="color-btn" style="background:#3b82f6" onclick="Consensus.setTool('draw', '#3b82f6')"></div>
-                    <div class="color-btn" style="background:#10b981" onclick="Consensus.setTool('draw', '#10b981')"></div>
-                    <div class="color-btn" style="background:#ffffff; border-color:#6b7280" onclick="Consensus.setTool('draw', '#ffffff')"></div>
-                </div>
-                 <div class="tool-row">
-                    <button class="sub-btn" id="cm-btn-eraser" onclick="Consensus.setTool('eraser')">🧹 Eraser</button>
-                    <button class="sub-btn" onclick="Consensus.clearInk()">🗑️ Clear</button>
+                <div class="cm-zoom-controls">
+                    <button class="cm-zoom-btn" onclick="Consensus.zoom(0.8)" title="Zoom Out"><iconify-icon icon="mdi:minus" noobserver></iconify-icon></button>
+                    <span id="cm-zoom-level">100%</span>
+                    <button class="cm-zoom-btn" onclick="Consensus.zoom(1.25)" title="Zoom In"><iconify-icon icon="mdi:plus" noobserver></iconify-icon></button>
+                    <button class="cm-zoom-btn" onclick="Consensus.zoom(null)" title="Reset Zoom" style="font-size:0.65rem;font-weight:700;width:auto;padding:0 5px;">Reset</button>
                 </div>
             </div>
-            <div style="padding:10px; font-weight:bold;">Participants</div>
-            <div id="consensus-participants" style="flex: 1; overflow-y: auto;"></div>
-            <div style="padding:15px; border-top:1px solid var(--panel-border); margin-top:auto;">
-                <button class="btn-s" style="background: rgba(127,29,29,0.1); color:#dc2626; border: 1px solid rgba(220,38,38,0.2);" onclick="Consensus.stop()">Stop Modeling Session</button>
+
+            <!-- Drawing tools -->
+            <div class="cm-toolbar-section">
+                <div class="cm-toolbar-label">Drawing</div>
+                <div class="cm-tool-grid" style="margin-bottom:8px;">
+                    <button class="cm-tool-btn" id="cm-btn-pen" onclick="Consensus.setTool('draw')">
+                        <iconify-icon icon="mdi:pencil" noobserver></iconify-icon> Pen
+                    </button>
+                    <button class="cm-tool-btn" id="cm-btn-highlighter" onclick="Consensus.setTool('highlight')">
+                        <iconify-icon icon="mdi:marker" noobserver></iconify-icon> Highlight
+                    </button>
+                    <button class="cm-tool-btn" id="cm-btn-arrow" onclick="Consensus.setTool('arrow')">
+                        <iconify-icon icon="mdi:arrow-top-right" noobserver></iconify-icon> Arrow
+                    </button>
+                    <button class="cm-tool-btn" id="cm-btn-eraser" onclick="Consensus.setTool('eraser')">
+                        <iconify-icon icon="mdi:eraser" noobserver></iconify-icon> Eraser
+                    </button>
+                </div>
+                <!-- Color palette -->
+                <div class="cm-toolbar-label">Color</div>
+                <div class="cm-color-row" style="margin-bottom:8px;">
+                    <div class="cm-color-swatch active" id="cm-swatch-0" style="background:#ef4444" onclick="Consensus.setColor('#ef4444')" title="Red"></div>
+                    <div class="cm-color-swatch" id="cm-swatch-1" style="background:#f97316" onclick="Consensus.setColor('#f97316')" title="Orange"></div>
+                    <div class="cm-color-swatch" id="cm-swatch-2" style="background:#eab308" onclick="Consensus.setColor('#eab308')" title="Yellow"></div>
+                    <div class="cm-color-swatch" id="cm-swatch-3" style="background:#10b981" onclick="Consensus.setColor('#10b981')" title="Green"></div>
+                    <div class="cm-color-swatch" id="cm-swatch-4" style="background:#3b82f6" onclick="Consensus.setColor('#3b82f6')" title="Blue"></div>
+                    <div class="cm-color-swatch" id="cm-swatch-5" style="background:#8b5cf6" onclick="Consensus.setColor('#8b5cf6')" title="Purple"></div>
+                    <div class="cm-color-swatch" id="cm-swatch-6" style="background:#000000; border:2px solid #666" onclick="Consensus.setColor('#000000')" title="Black"></div>
+                    <div class="cm-color-swatch" id="cm-swatch-7" style="background:#ffffff; border:2px solid #ccc" onclick="Consensus.setColor('#ffffff')" title="White"></div>
+                </div>
+                <!-- Stroke width -->
+                <div class="cm-toolbar-label">Stroke Width</div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <iconify-icon icon="mdi:minus" noobserver style="color:var(--text-muted);font-size:0.8rem;"></iconify-icon>
+                    <input type="range" class="cm-width-slider" id="cm-width-slider" min="1" max="20" value="4" oninput="Consensus.setWidth(this.value)">
+                    <iconify-icon icon="mdi:plus" noobserver style="color:var(--text-muted);font-size:0.8rem;"></iconify-icon>
+                    <span id="cm-width-val" style="font-size:0.78rem;color:var(--text-secondary);min-width:20px;">4</span>
+                </div>
+                <div class="tool-row" style="margin-top:8px;">
+                    <button class="cm-tool-btn" style="flex:1; color:#dc2626; border-color:rgba(220,38,38,0.3);" onclick="Consensus.clearInk()">
+                        <iconify-icon icon="mdi:trash-can" noobserver></iconify-icon> Clear All
+                    </button>
+                </div>
+            </div>
+
+            <!-- Participants -->
+            <div class="cm-toolbar-section" style="flex:1; min-height:0; display:flex; flex-direction:column;">
+                <div class="cm-toolbar-label">Participants</div>
+                <div id="consensus-participants" style="flex:1; overflow-y:auto;"></div>
             </div>
         </div>
 
         <!-- Mobile View (Toolbar and Drawers) -->
         <div id="cm-mobile-view">
             <div id="cm-mobile-toolbar">
-                <button class="cm-dock-btn active" id="cm-mt-pan" onclick="Consensus.setTool('pan')">✋</button>
-                <button class="cm-dock-btn" id="cm-mt-select" onclick="Consensus.setTool('select')">⛝</button>
-                <button class="cm-dock-btn" id="cm-mt-draw" onclick="Consensus.toggleMobileDrawer('draw')">✏️</button>
+                <button class="cm-dock-btn active" id="cm-mt-pan" onclick="Consensus.setTool('pan')"><iconify-icon icon="mdi:hand-back-right" noobserver></iconify-icon></button>
+                <button class="cm-dock-btn" id="cm-mt-select" onclick="Consensus.setTool('select')"><iconify-icon icon="mdi:cursor-default" noobserver></iconify-icon></button>
+                <button class="cm-dock-btn" id="cm-mt-draw" onclick="Consensus.toggleMobileDrawer('draw')"><iconify-icon icon="mdi:pencil" noobserver></iconify-icon></button>
                 <div class="cm-sep"></div>
-                <button class="cm-dock-btn" onclick="Consensus.toggleMobileDrawer('users')">👥</button>
-                <button class="cm-dock-btn" style="color:#fecaca;" onclick="Consensus.stop()">🛑</button>
+                <button class="cm-dock-btn" onclick="Consensus.toggleMobileDrawer('users')"><iconify-icon icon="mdi:account-group" noobserver></iconify-icon></button>
+                <button class="cm-dock-btn" style="color:#fecaca;" onclick="Consensus.stop()"><iconify-icon icon="mdi:stop-circle" noobserver></iconify-icon></button>
             </div>
             <div id="cm-drawer-draw" class="drawer">
-                 <div class="tool-row">
-                    <div class="color-btn" style="background:#ef4444" onclick="Consensus.setTool('draw', '#ef4444')"></div>
-                    <div class="color-btn" style="background:#3b82f6" onclick="Consensus.setTool('draw', '#3b82f6')"></div>
-                    <div class="color-btn" style="background:#10b981" onclick="Consensus.setTool('draw', '#10b981')"></div>
-                    <div class="color-btn" style="background:#ffffff; border-color:#6b7280" onclick="Consensus.setTool('draw', '#ffffff')"></div>
+                <div class="cm-tool-grid" style="margin-bottom:6px;">
+                    <button class="cm-tool-btn active" id="cm-mt-pen" onclick="Consensus.setTool('draw')"><iconify-icon icon="mdi:pencil" noobserver></iconify-icon></button>
+                    <button class="cm-tool-btn" id="cm-mt-highlight" onclick="Consensus.setTool('highlight')"><iconify-icon icon="mdi:marker" noobserver></iconify-icon></button>
+                    <button class="cm-tool-btn" id="cm-mt-arrow" onclick="Consensus.setTool('arrow')"><iconify-icon icon="mdi:arrow-top-right" noobserver></iconify-icon></button>
+                    <button class="cm-tool-btn" id="cm-mt-eraser" onclick="Consensus.setTool('eraser')"><iconify-icon icon="mdi:eraser" noobserver></iconify-icon></button>
                 </div>
-                 <div class="tool-row">
-                    <button class="sub-btn" id="cm-mt-eraser" onclick="Consensus.setTool('eraser')">🧹 Eraser</button>
-                    <button class="sub-btn" onclick="Consensus.clearInk()">🗑️ Clear</button>
+                <div class="cm-color-row" style="margin-bottom:6px;">
+                    <div class="cm-color-swatch active" style="background:#ef4444" onclick="Consensus.setColor('#ef4444')"></div>
+                    <div class="cm-color-swatch" style="background:#f97316" onclick="Consensus.setColor('#f97316')"></div>
+                    <div class="cm-color-swatch" style="background:#10b981" onclick="Consensus.setColor('#10b981')"></div>
+                    <div class="cm-color-swatch" style="background:#3b82f6" onclick="Consensus.setColor('#3b82f6')"></div>
+                    <div class="cm-color-swatch" style="background:#8b5cf6" onclick="Consensus.setColor('#8b5cf6')"></div>
+                    <div class="cm-color-swatch" style="background:#000000;border:2px solid #666" onclick="Consensus.setColor('#000000')"></div>
+                    <div class="cm-color-swatch" style="background:#ffffff;border:2px solid #ccc" onclick="Consensus.setColor('#ffffff')"></div>
                 </div>
+                <input type="range" class="cm-width-slider" min="1" max="20" value="4" oninput="Consensus.setWidth(this.value)" style="width:100%;">
+                <button class="sub-btn" style="margin-top:6px;color:#dc2626;border-color:rgba(220,38,38,0.3);" onclick="Consensus.clearInk()">🗑️ Clear</button>
             </div>
             <div id="cm-drawer-users" class="drawer" style="padding:10px; max-height: 250px; overflow-y: auto;">
                  <div style="width:100%; text-align:center; color: var(--text-muted); font-size:0.75rem; margin-bottom:8px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">PARTICIPANTS</div>
                  <div id="cm-mobile-participants"></div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- BREAKOUT BOARD OVERLAY -->
+<div id="breakout-overlay">
+    <div id="breakout-main">
+        <div id="breakout-world">
+            <svg id="breakout-ink-layer" style="overflow:visible;position:absolute;inset:0;pointer-events:none;"></svg>
+            <div id="breakout-items-layer"></div>
+        </div>
+        <!-- Floating zoom controls -->
+        <div style="position:absolute; bottom:16px; right:16px; display:flex; flex-direction:column; gap:4px; z-index:10;">
+            <button class="cm-zoom-btn" onclick="Breakout.zoom(1.25)"><iconify-icon icon="mdi:plus" noobserver></iconify-icon></button>
+            <button class="cm-zoom-btn" id="bk-zoom-reset" style="font-size:0.7rem;font-weight:700;width:auto;padding:0 6px;" onclick="Breakout.zoom(null)">100%</button>
+            <button class="cm-zoom-btn" onclick="Breakout.zoom(0.8)"><iconify-icon icon="mdi:minus" noobserver></iconify-icon></button>
+        </div>
+        <!-- Temp ink preview -->
+        <svg id="bk-temp-ink" style="position:absolute;inset:0;pointer-events:none;overflow:visible;"></svg>
+    </div>
+    <div id="breakout-sidebar">
+        <div id="breakout-header-bar">
+            <div id="breakout-color-dot"></div>
+            <div style="flex:1; min-width:0;">
+                <div style="font-weight:700; font-size:0.95rem; color:var(--accent); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" id="breakout-board-name">Breakout Board</div>
+                <div style="font-size:0.75rem; color:var(--text-muted);" id="breakout-member-count">0 members</div>
+            </div>
+            <button class="cm-tool-btn" style="color:#dc2626;border-color:rgba(220,38,38,0.3);padding:5px 8px;flex-shrink:0;" onclick="Breakout.close()" title="Close">
+                <iconify-icon icon="mdi:arrow-left" noobserver></iconify-icon>
+            </button>
+        </div>
+
+        <!-- Breakout tools -->
+        <div class="cm-toolbar-section">
+            <div class="cm-toolbar-label">Tools</div>
+            <div class="cm-tool-grid">
+                <button class="cm-tool-btn active" id="bk-btn-pan" onclick="Breakout.setTool('pan')"><iconify-icon icon="mdi:hand-back-right" noobserver></iconify-icon> Pan</button>
+                <button class="cm-tool-btn" id="bk-btn-select" onclick="Breakout.setTool('select')"><iconify-icon icon="mdi:cursor-default" noobserver></iconify-icon> Select</button>
+                <button class="cm-tool-btn" id="bk-btn-pen" onclick="Breakout.setTool('draw')"><iconify-icon icon="mdi:pencil" noobserver></iconify-icon> Pen</button>
+                <button class="cm-tool-btn" id="bk-btn-eraser" onclick="Breakout.setTool('eraser')"><iconify-icon icon="mdi:eraser" noobserver></iconify-icon> Eraser</button>
+            </div>
+            <div class="cm-zoom-controls" style="margin-top:8px;">
+                <button class="cm-zoom-btn" onclick="Breakout.zoom(0.8)"><iconify-icon icon="mdi:minus" noobserver></iconify-icon></button>
+                <span id="bk-zoom-level" style="flex:1;text-align:center;font-size:0.8rem;color:var(--text-secondary);font-weight:600;">100%</span>
+                <button class="cm-zoom-btn" onclick="Breakout.zoom(1.25)"><iconify-icon icon="mdi:plus" noobserver></iconify-icon></button>
+                <button class="cm-zoom-btn" onclick="Breakout.zoom(null)" style="font-size:0.65rem;font-weight:700;width:auto;padding:0 5px;">Reset</button>
+            </div>
+        </div>
+        <div class="cm-toolbar-section">
+            <div class="cm-toolbar-label">Color</div>
+            <div class="cm-color-row" style="margin-bottom:8px;">
+                <div class="cm-color-swatch active" id="bk-swatch-0" style="background:#ef4444" onclick="Breakout.setColor('#ef4444')"></div>
+                <div class="cm-color-swatch" id="bk-swatch-1" style="background:#f97316" onclick="Breakout.setColor('#f97316')"></div>
+                <div class="cm-color-swatch" id="bk-swatch-2" style="background:#10b981" onclick="Breakout.setColor('#10b981')"></div>
+                <div class="cm-color-swatch" id="bk-swatch-3" style="background:#3b82f6" onclick="Breakout.setColor('#3b82f6')"></div>
+                <div class="cm-color-swatch" id="bk-swatch-4" style="background:#8b5cf6" onclick="Breakout.setColor('#8b5cf6')"></div>
+                <div class="cm-color-swatch" id="bk-swatch-5" style="background:#000000;border:2px solid #666" onclick="Breakout.setColor('#000000')"></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <input type="range" class="cm-width-slider" id="bk-width-slider" min="1" max="20" value="4" oninput="Breakout.setWidth(this.value)">
+                <span id="bk-width-val" style="font-size:0.78rem;color:var(--text-secondary);min-width:20px;">4</span>
+            </div>
+            <button class="sub-btn" style="margin-top:8px;color:#dc2626;border-color:rgba(220,38,38,0.3);" onclick="Breakout.clearInk()">
+                <iconify-icon icon="mdi:trash-can" noobserver></iconify-icon> Clear Ink
+            </button>
+        </div>
+        <div class="cm-toolbar-section">
+            <div class="cm-toolbar-label">Add Notes</div>
+            <div class="cm-tool-grid">
+                <button class="cm-tool-btn" onclick="Breakout.addNote('notice')" style="background:#fef3c7;color:#92400e;border-color:#d97706;">
+                    <iconify-icon icon="mdi:eye" noobserver></iconify-icon> Notice
+                </button>
+                <button class="cm-tool-btn" onclick="Breakout.addNote('wonder')" style="background:#bae6fd;color:#075985;border-color:#0284c7;">
+                    <iconify-icon icon="mdi:help-circle" noobserver></iconify-icon> Wonder
+                </button>
+                <button class="cm-tool-btn" onclick="Breakout.addNote('idea')" style="background:#bbf7d0;color:#166534;border-color:#10b981;">
+                    <iconify-icon icon="mdi:lightbulb" noobserver></iconify-icon> Idea
+                </button>
+                <button class="cm-tool-btn" onclick="Breakout.addNote('meta')">
+                    <iconify-icon icon="mdi:note-text" noobserver></iconify-icon> Note
+                </button>
+            </div>
+        </div>
+        <!-- Room color & members -->
+        <div class="cm-toolbar-section">
+            <div class="cm-toolbar-label">Room Color</div>
+            <div class="cm-color-row" style="margin-bottom:8px;">
+                <div class="cm-color-swatch" style="background:#ef4444" onclick="Breakout.setRoomColor('#ef4444')"></div>
+                <div class="cm-color-swatch" style="background:#f97316" onclick="Breakout.setRoomColor('#f97316')"></div>
+                <div class="cm-color-swatch" style="background:#eab308" onclick="Breakout.setRoomColor('#eab308')"></div>
+                <div class="cm-color-swatch" style="background:#10b981" onclick="Breakout.setRoomColor('#10b981')"></div>
+                <div class="cm-color-swatch" style="background:#3b82f6" onclick="Breakout.setRoomColor('#3b82f6')"></div>
+                <div class="cm-color-swatch" style="background:#8b5cf6" onclick="Breakout.setRoomColor('#8b5cf6')"></div>
+            </div>
+            <div class="cm-toolbar-label">Members</div>
+            <div id="breakout-participants" style="max-height:180px;overflow-y:auto;"></div>
         </div>
     </div>
 </div>
@@ -2355,6 +2607,7 @@ window.Render = {
                     } else {
                         if(i.zoneType === 'consensus') { wrapper.style.border = '1px solid #0075de'; }
                         else if(i.zoneType === 'exit') { wrapper.style.border = '2px solid #0075de'; wrapper.style.background = '#f9fdff'; }
+                        else if(i.zoneType === 'breakout') { wrapper.style.border = `2px solid ${i.roomColor||'#8b5cf6'}`; }
                         else { wrapper.style.border = '1px dashed rgba(0,0,0,0.15)'; wrapper.style.background = 'rgba(255,255,255,0.6)'; }
                         if (iHead) iHead.style.background = '';
                         if (label) {
@@ -2365,24 +2618,33 @@ window.Render = {
                     }
                 }
                 
-                // FIX: Update note type styling when it changes
                 if(i.type === 'note' && !i.src && !el.classList.contains('consensus-child')) {
-                     const head = TYPES[i.sub] || TYPES.meta;
-                     const w = el.querySelector('.jiggle-wrapper');
-                     const h = el.querySelector('.i-head');
-                     const icon = el.querySelector('.icon-span');
-                     const auth = el.querySelector('.auth-span');
+                    const head = TYPES[i.sub] || TYPES.meta;
+                    const w = el.querySelector('.jiggle-wrapper');
+                    const h = el.querySelector('.i-head');
+                    const icon = el.querySelector('.icon-span');
+                    const auth = el.querySelector('.auth-span');
 
-                     if(w && head) {
-                         w.style.background = head.col;
-                         w.style.borderColor = head.bor;
-                     }
-                     if(h && head) {
-                         h.style.background = head.bor + '33'; 
-                         h.style.color = head.bor;
-                     }
-                     if(icon && head) icon.innerText = head.icon;
-                     if(auth && head) auth.innerText = i.author || head.lbl;
+                    if(w && head) {
+                        w.style.background = head.col;
+                        w.style.borderColor = head.bor;
+                    }
+                    if(h && head) {
+                        h.style.background = head.bor + '33'; 
+                        h.style.color = head.bor;
+                    }
+                    if(icon && head) icon.innerText = head.icon;
+                    if(auth && head) auth.innerText = i.author || head.lbl;
+                }
+                // Update consensus zone SVG ink
+                if(i.type === 'zone' && i.zoneType === 'consensus') {
+                    const svg = el.querySelector('.consensus-zone-svg');
+                    if(svg) svg.innerHTML = (i.ink || []).map(s => `<path d="${InkManager.pointsToPath(s.points)}" stroke="${s.color}" stroke-width="${s.width}" fill="none" stroke-linecap="round"/>`).join('');
+                }
+                // Update breakout board thumbnail
+                if(i.type === 'zone' && i.zoneType === 'breakout') {
+                    const thumb = el.querySelector('.breakout-thumb');
+                    if(thumb) Breakout.renderThumb(i, thumb);
                 }
             }
             
@@ -2469,12 +2731,37 @@ window.Render = {
         State.items.forEach(i => {
             ctx.fillStyle = i.type === 'zone' ? 'rgba(0,117,222,0.08)' : (TYPES[i.sub] ? TYPES[i.sub].bor : '#a39e98');
             if (i.type === 'zone') {
-                ctx.strokeStyle = i.color || 'rgba(0,0,0,0.15)';
+                ctx.strokeStyle = i.color || (i.zoneType === 'breakout' ? (i.roomColor || '#8b5cf6') : 'rgba(0,0,0,0.15)');
                 ctx.lineWidth = 1;
                 ctx.strokeRect(mapX(i.x), mapY(i.y), i.w * scale, i.h * scale);
+                // Draw consensus ink strokes in the minimap
+                if(i.zoneType === 'consensus' && i.ink && i.ink.length > 0) {
+                    i.ink.forEach(s => {
+                        if(!s.points || s.points.length < 2) return;
+                        ctx.strokeStyle = s.color;
+                        ctx.lineWidth = Math.max(0.5, parseFloat(s.width) * scale);
+                        ctx.lineCap = 'round';
+                        ctx.beginPath();
+                        ctx.moveTo(mapX(i.x + s.points[0].x), mapY(i.y + s.points[0].y));
+                        s.points.slice(1).forEach(p => ctx.lineTo(mapX(i.x + p.x), mapY(i.y + p.y)));
+                        ctx.stroke();
+                    });
+                }
             } else {
                 ctx.fillRect(mapX(i.x), mapY(i.y), i.w * scale, i.h * scale);
             }
+        });
+
+        // Draw main board ink on minimap
+        State.ink.forEach(s => {
+            if(!s.points || s.points.length < 2) return;
+            ctx.strokeStyle = s.color;
+            ctx.lineWidth = Math.max(0.5, parseFloat(s.width) * scale * 0.5);
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(mapX(s.points[0].x), mapY(s.points[0].y));
+            s.points.slice(1).forEach(p => ctx.lineTo(mapX(p.x), mapY(p.y)));
+            ctx.stroke();
         });
 
         // Draw Viewport
@@ -2509,6 +2796,9 @@ window.Render = {
         } else if (d.zoneType === 'consensus') {
             btnText = "Start Modeling";
             btnAction = `Consensus.start('${d.id}')`;
+        } else if (d.zoneType === 'breakout') {
+            btnText = "🚀 Launch";
+            btnAction = `Breakout.open('${d.id}')`;
         }
 
         let btnHtml = `<span id="zbtn-${d.id}" class="${btnClass}" onpointerdown="event.stopPropagation()" onclick="${btnAction}">${btnText}</span>`;
@@ -2527,9 +2817,8 @@ window.Render = {
             if(d.zoneType === 'cer') inner = `<div class="cer-grid"><div class="cer-col">CLAIM</div><div class="cer-col">EVIDENCE</div><div class="cer-col">REASONING</div></div>`;
             else if(d.zoneType === 'consensus') {
                 const inkContent = (d.ink || []).map(s => `<path d="${InkManager.pointsToPath(s.points)}" stroke="${s.color}" stroke-width="${s.width}" fill="none" stroke-linecap="round"/>`).join('');
-                inner = `<svg style="width:100%; height:100%; pointer-events:none;">${inkContent}</svg>`;
-            }
-                if (d.zoneType === 'exit') {
+                inner = `<svg class="consensus-zone-svg" style="width:100%; height:100%; pointer-events:none;">${inkContent}</svg>`;
+            } else if (d.zoneType === 'exit') {
                     // Support both exitMode (teacher-created) and mode (legacy/network) property names
                     const exitMode = d.exitMode || d.mode;
                 const modeIcon = { short: '📝', smiley: '⭐', mc: '🔘', multi: '☑️', lw: '🧠' }[exitMode] || '🚪';
@@ -2539,8 +2828,9 @@ window.Render = {
                 </div>
                 <div style="padding:10px 15px; font-size:0.875rem; color: rgba(0,0,0,0.95); font-weight:500; line-height:1.4;">${sanitizeHTML(d.prompt)}</div>
                 <div style="flex:1; position:relative"></div>`;
-            }
-            else inner = `<div style="padding:20px;text-align:center;color: var(--text-muted);pointer-events:none;display:flex;align-items:center;justify-content:center;height:100%;font-size:0.875rem;">Drop notes here</div>`;
+            } else if (d.zoneType === 'breakout') {
+                inner = `<canvas class="breakout-thumb" style="width:100%;height:100%;display:block;"></canvas>`;
+            } else inner = `<div style="padding:20px;text-align:center;color: var(--text-muted);pointer-events:none;display:flex;align-items:center;justify-content:center;height:100%;font-size:0.875rem;">Drop notes here</div>`;
 
             inner += `<div id="zr-${d.id}" class="zone-res-box"></div>`;
             el.innerHTML = `<div class="zone-label">${sanitizeHTML(d.title)}</div>` + el.innerHTML;
@@ -2551,9 +2841,10 @@ window.Render = {
         }
 
         const head = TYPES[d.sub] || TYPES.meta;
-        const title = d.type==='zone' ? (d.zoneType==='cer'?'CER Builder':(d.zoneType==='consensus'?'Consensus Model':(d.zoneType==='exit'?'Exit Ticket':'Zone'))) : (d.type==='poll'?'Poll':(d.type==='spin'?'Spinner':(d.type==='graph'?'Live Graph':(d.author || head.lbl))));
+        const title = d.type==='zone' ? (d.zoneType==='cer'?'CER Builder':(d.zoneType==='consensus'?'Consensus Model':(d.zoneType==='exit'?'Exit Ticket':(d.zoneType==='breakout'?'Breakout Board':'Zone')))) : (d.type==='poll'?'Poll':(d.type==='spin'?'Spinner':(d.type==='graph'?'Live Graph':(d.author || head.lbl))));
         
         if(d.type === 'note' || d.type === 'spin') { btnHtml = ''; resBtn = ''; }
+        if(d.zoneType === 'breakout') { resBtn = ''; }
 
         el.innerHTML += `
             <div class="jiggle-wrapper">
@@ -2584,6 +2875,7 @@ window.Render = {
             w.style.border = '1px dashed rgba(0,0,0,0.15)';
             if(d.zoneType === 'consensus') { w.classList.add('consensus-bg'); w.style.border = '1px solid #0075de'; } 
             else if(d.zoneType === 'exit') { w.style.border = '2px solid #0075de'; w.style.background = '#f9fdff'; }
+            else if(d.zoneType === 'breakout') { w.classList.add('breakout-bg'); w.style.border = `2px solid ${d.roomColor || '#8b5cf6'}`; }
             else { w.style.background = 'rgba(255,255,255,0.6)'; }
             if (d.color) {
                 // color+'1a' = ~10% opacity bg, color+'28' = ~15% header, color+'60' = ~38% border
@@ -2652,6 +2944,10 @@ window.Actions = {
         }
         if(type==='cer') { it.type='zone'; it.zoneType='cer'; it.title="Argument Builder (CER)"; it.w=600; it.h=400; it.children=[]; }
         if(type==='consensus') { it.type='zone'; it.zoneType='consensus'; it.title="Consensus Model"; it.w=600; it.h=600; it.children=[]; it.ink = []; }
+        if(type==='breakout') {
+            it.type='zone'; it.zoneType='breakout'; it.title="Breakout Board"; it.w=320; it.h=240;
+            it.roomColor='#8b5cf6'; it.participants=[]; it.subItems=[]; it.subInk=[];
+        }
         if(type==='poll') { it.q="Question?"; it.opts=[{lbl:'Yes',v:0},{lbl:'No',v:0}]; }
         if(type==='spin') { it.ang=0; it.opts=['A','B','C','D']; it.w=200; it.h=220; }
         if(type==='graph') { it.title="Class Data"; it.data=[]; it.w=300; it.h=200; }
@@ -4173,10 +4469,12 @@ window.Consensus = {
 
         $('consensus-zone-name').innerText = zone.title;
         $('consensus-overlay').style.display = 'flex';
+        Consensus.setTool('pan');
         Consensus.renderItems();
         Consensus.renderInk();
         Consensus.loop();
         Consensus.renderParticipants();
+        Consensus.updateZoomLabel();
         
         Network.broadcast({ type: 'CONSENSUS_START', zoneId: zoneId, ink: State.consensusMode.ink, items: State.consensusMode.items });
         UI.closeAllMenus();
@@ -4206,6 +4504,7 @@ window.Consensus = {
     loop: () => {
         if (!State.consensusMode.active) return;
         Consensus.renderSync();
+        Consensus.renderTempInk();
         Consensus._animationFrame = requestAnimationFrame(Consensus.loop);
     },
     
@@ -4213,6 +4512,19 @@ window.Consensus = {
         const view = State.consensusMode.view;
         const t = `scale(${view.z}) translate(${view.x}px, ${view.y}px)`;
         $('consensus-world').style.transform = t;
+    },
+
+    renderTempInk: () => {
+        const svg = $('cm-temp-ink');
+        if (!svg) return;
+        if (Consensus.drag && Consensus.drag.mode === 'draw' && Consensus.currentPath.length > 1) {
+            const d = InkManager.pointsToPath(Consensus.currentPath);
+            const view = State.consensusMode.view;
+            const t = `scale(${view.z}) translate(${view.x}px, ${view.y}px)`;
+            svg.innerHTML = `<g transform="${t}"><path d="${d}" stroke="${State.consensusMode.color}" stroke-width="${State.consensusMode.width}" fill="none" stroke-linecap="round" opacity="${State.consensusMode.tool === 'highlight' ? 0.4 : 1}"/></g>`;
+        } else {
+            svg.innerHTML = '';
+        }
     },
 
     renderItems: () => {
@@ -4254,7 +4566,40 @@ window.Consensus = {
 
     renderInk: () => {
         const svg = $('consensus-ink-layer');
-        svg.innerHTML = State.consensusMode.ink.map(s => `<path d="${InkManager.pointsToPath(s.points)}" stroke="${s.color}" stroke-width="${s.width}" fill="none" stroke-linecap="round"/>`).join('');
+        // Keep defs (first child), replace only path elements
+        const defs = svg.querySelector('defs');
+        svg.innerHTML = '';
+        if (defs) svg.appendChild(defs);
+        State.consensusMode.ink.forEach(s => {
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', InkManager.pointsToPath(s.points));
+            path.setAttribute('stroke', s.color);
+            path.setAttribute('stroke-width', s.width);
+            path.setAttribute('fill', 'none');
+            path.setAttribute('stroke-linecap', 'round');
+            if (s.highlight) path.setAttribute('opacity', '0.4');
+            if (s.arrow) {
+                // Create per-stroke colored marker
+                const markerId = `cm-arrow-${s.color.replace('#','')}`;
+                if (!svg.querySelector(`#${markerId}`)) {
+                    const defs2 = svg.querySelector('defs') || (() => { const d = document.createElementNS('http://www.w3.org/2000/svg','defs'); svg.insertBefore(d, svg.firstChild); return d; })();
+                    const marker = document.createElementNS('http://www.w3.org/2000/svg','marker');
+                    marker.setAttribute('id', markerId);
+                    marker.setAttribute('markerWidth', '10');
+                    marker.setAttribute('markerHeight', '7');
+                    marker.setAttribute('refX', '9');
+                    marker.setAttribute('refY', '3.5');
+                    marker.setAttribute('orient', 'auto');
+                    const poly = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+                    poly.setAttribute('points', '0 0, 10 3.5, 0 7');
+                    poly.setAttribute('fill', s.color);
+                    marker.appendChild(poly);
+                    defs2.appendChild(marker);
+                }
+                path.setAttribute('marker-end', `url(#${markerId})`);
+            }
+            svg.appendChild(path);
+        });
     },
 
     handleInk: (ink) => {
@@ -4263,24 +4608,74 @@ window.Consensus = {
         Network.broadcast({ type: 'CONSENSUS_INK', ink: ink });
     },
 
-    setTool: (tool, color) => {
+    setTool: (tool) => {
         State.consensusMode.tool = tool;
-        if (color) State.consensusMode.color = color;
-        
         const main = $('consensus-main');
-        main.className = `cm-${tool}`;
-        
-        document.querySelectorAll('#cm-desktop-view .sub-btn, #cm-desktop-view .color-btn').forEach(b => b.classList.remove('active'));
-        if (event && event.currentTarget.closest('#cm-desktop-view')) event.currentTarget.classList.add('active');
-        
+        main.className = tool === 'pan' ? 'cm-pan' : (tool === 'draw' || tool === 'highlight' || tool === 'arrow' || tool === 'eraser' ? 'cm-draw' : '');
+
+        // Update desktop buttons
+        document.querySelectorAll('#cm-desktop-view .cm-tool-btn').forEach(b => b.classList.remove('active'));
+        const map = { pan:'cm-btn-pan', select:'cm-btn-select', draw:'cm-btn-pen', highlight:'cm-btn-highlighter', arrow:'cm-btn-arrow', eraser:'cm-btn-eraser' };
+        if (map[tool]) { const btn = $(map[tool]); if(btn) btn.classList.add('active'); }
+
+        // Mobile buttons
         document.querySelectorAll('#cm-mobile-toolbar .cm-dock-btn').forEach(b => b.classList.remove('active'));
-        if (tool === 'pan') $('cm-mt-pan').classList.add('active');
-        if (tool === 'select') $('cm-mt-select').classList.add('active');
-        if (tool === 'draw' || tool === 'eraser') $('cm-mt-draw').classList.add('active');
+        if (tool === 'pan') $('cm-mt-pan')?.classList.add('active');
+        if (tool === 'select') $('cm-mt-select')?.classList.add('active');
+        if (['draw','highlight','arrow','eraser'].includes(tool)) $('cm-mt-draw')?.classList.add('active');
+        document.querySelectorAll('#cm-mobile-view .cm-tool-btn').forEach(b => b.classList.remove('active'));
+        const mmap = { draw:'cm-mt-pen', highlight:'cm-mt-highlight', arrow:'cm-mt-arrow', eraser:'cm-mt-eraser' };
+        if (mmap[tool]) { const mb = $(mmap[tool]); if(mb) mb.classList.add('active'); }
 
         if (tool === 'pan' || tool === 'select') {
             document.querySelectorAll('#cm-mobile-view .drawer').forEach(d => d.classList.remove('open'));
         }
+    },
+
+    setColor: (color) => {
+        State.consensusMode.color = color;
+        // Update swatch active state
+        document.querySelectorAll('[id^="cm-swatch-"]').forEach(s => s.classList.remove('active'));
+        const swatches = document.querySelectorAll('#cm-desktop-view .cm-color-swatch, #cm-drawer-draw .cm-color-swatch');
+        swatches.forEach(s => {
+            if(s.style.background === color || s.title?.toLowerCase().includes(color.slice(1))) {
+                s.classList.add('active');
+            }
+        });
+        // Auto-select pen tool if not already drawing
+        if (!['draw','highlight','arrow'].includes(State.consensusMode.tool)) {
+            Consensus.setTool('draw');
+        }
+    },
+
+    setWidth: (w) => {
+        State.consensusMode.width = parseInt(w);
+        const val = $('cm-width-val'); if(val) val.textContent = w;
+    },
+
+    zoom: (factor) => {
+        const view = State.consensusMode.view;
+        if (factor === null) {
+            // Reset to 100%
+            view.z = 1; view.x = 0; view.y = 0;
+        } else {
+            const oz = view.z;
+            const nz = Math.max(0.1, Math.min(oz * factor, 8));
+            const rect = $('consensus-main').getBoundingClientRect();
+            const cx = rect.width / 2;
+            const cy = rect.height / 2;
+            view.x = (cx / nz) - (cx / oz - view.x);
+            view.y = (cy / nz) - (cy / oz - view.y);
+            view.z = nz;
+        }
+        Consensus.updateZoomLabel();
+        Network.broadcast({type: 'CONSENSUS_VIEW_SYNC', view: view});
+    },
+
+    updateZoomLabel: () => {
+        const z = Math.round(State.consensusMode.view.z * 100);
+        const lbl = $('cm-zoom-level'); if(lbl) lbl.textContent = `${z}%`;
+        const rstBtn = $('cm-zoom-reset'); if(rstBtn) rstBtn.textContent = `${z}%`;
     },
 
     toggleMobileDrawer: (id) => {
@@ -4288,7 +4683,7 @@ window.Consensus = {
             if (d.id === `cm-drawer-${id}`) d.classList.toggle('open');
             else d.classList.remove('open');
         });
-        if (id === 'draw') Consensus.setTool('draw', State.consensusMode.color);
+        if (id === 'draw') Consensus.setTool('draw');
     },
 
     clearInk: () => {
@@ -4321,7 +4716,7 @@ window.Consensus = {
             if (item) {
                 Consensus.drag = { mode: 'move', item, sx: coords.x, sy: coords.y, ix: item.x, iy: item.y };
             }
-        } else if (tool === 'draw') {
+        } else if (tool === 'draw' || tool === 'highlight' || tool === 'arrow') {
             Consensus.drag = { mode: 'draw' };
             Consensus.currentPath = [coords];
         } else if (tool === 'pan' || (e.button === 1 && !e.touches)) {
@@ -4343,6 +4738,7 @@ window.Consensus = {
         if (Consensus.drag.mode === 'pan') {
             view.x = Consensus.drag.vx + (evt.clientX - Consensus.drag.sx) / view.z;
             view.y = Consensus.drag.vy + (evt.clientY - Consensus.drag.sy) / view.z;
+            Consensus.updateZoomLabel();
             Network.broadcast({type: 'CONSENSUS_VIEW_SYNC', view: view});
         } else if (Consensus.drag.mode === 'move') {
             const item = Consensus.drag.item;
@@ -4366,10 +4762,17 @@ window.Consensus = {
     inputEnd: (e) => {
         if (!Consensus.drag) return;
         if (Consensus.drag.mode === 'draw' && Consensus.currentPath.length > 1) {
-            const newInk = { id: genId(), points: Consensus.currentPath, color: State.consensusMode.color, width: State.consensusMode.width };
+            const tool = State.consensusMode.tool;
+            const newInk = { 
+                id: genId(), points: [...Consensus.currentPath], 
+                color: State.consensusMode.color, width: State.consensusMode.width,
+                highlight: tool === 'highlight',
+                arrow: tool === 'arrow'
+            };
             Consensus.handleInk(newInk);
         }
         Consensus.drag = null;
+        if ($('cm-temp-ink')) $('cm-temp-ink').innerHTML = '';
     },
     
     handleWheel: (e) => {
@@ -4377,7 +4780,7 @@ window.Consensus = {
         const view = State.consensusMode.view;
         const s = Math.exp(-e.deltaY * 0.001);
         const oz = view.z;
-        view.z = Math.max(0.1, Math.min(oz * s, 5));
+        view.z = Math.max(0.1, Math.min(oz * s, 8));
         
         const rect = $('consensus-main').getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
@@ -4385,7 +4788,344 @@ window.Consensus = {
         
         view.x = (mouseX / view.z) - (mouseX / oz - view.x);
         view.y = (mouseY / view.z) - (mouseY / oz - view.y);
+        Consensus.updateZoomLabel();
         Network.broadcast({type: 'CONSENSUS_VIEW_SYNC', view: view});
+    }
+};
+
+/* --- BREAKOUT BOARD MANAGER --- */
+window.Breakout = {
+    drag: null,
+    currentPath: [],
+    _frame: null,
+    _zoneId: null,
+    _state: { view: { x:0, y:0, z:1 }, tool:'pan', color:'#ef4444', width:4 },
+
+    _getZone: () => State.items.find(i => i.id === Breakout._zoneId),
+
+    open: (zoneId) => {
+        const zone = State.items.find(i => i.id === zoneId);
+        if (!zone) return;
+        Breakout._zoneId = zoneId;
+        Breakout._state = { view: { x:0, y:0, z:1 }, tool:'pan', color:'#ef4444', width:4 };
+
+        $('breakout-board-name').textContent = zone.title;
+        $('breakout-color-dot').style.background = zone.roomColor || '#8b5cf6';
+        $('breakout-overlay').style.display = 'flex';
+        Breakout.setTool('pan');
+        Breakout.renderItems();
+        Breakout.renderInk();
+        Breakout.renderParticipants();
+        Breakout.updateZoomLabel();
+
+        if (!Breakout._frame) Breakout._loop();
+        UI.closeAllMenus();
+    },
+
+    close: () => {
+        $('breakout-overlay').style.display = 'none';
+        if (Breakout._frame) { cancelAnimationFrame(Breakout._frame); Breakout._frame = null; }
+        $('breakout-items-layer').innerHTML = '';
+        // Update thumbnail on main board
+        const zone = Breakout._getZone();
+        if (zone) { StateManager.updateItem(zone.id, { subItems: zone.subItems, subInk: zone.subInk }, { silent: true }); Render.all(); }
+        Breakout._zoneId = null;
+    },
+
+    _loop: () => {
+        if (!Breakout._zoneId) return;
+        const view = Breakout._state.view;
+        $('breakout-world').style.transform = `scale(${view.z}) translate(${view.x}px,${view.y}px)`;
+        Breakout.renderTempInk();
+        Breakout._frame = requestAnimationFrame(Breakout._loop);
+    },
+
+    renderTempInk: () => {
+        const svg = $('bk-temp-ink'); if (!svg) return;
+        if (Breakout.drag?.mode === 'draw' && Breakout.currentPath.length > 1) {
+            const d = InkManager.pointsToPath(Breakout.currentPath);
+            const v = Breakout._state.view;
+            svg.innerHTML = `<g transform="scale(${v.z}) translate(${v.x}px,${v.y}px)"><path d="${d}" stroke="${Breakout._state.color}" stroke-width="${Breakout._state.width}" fill="none" stroke-linecap="round"/></g>`;
+        } else { svg.innerHTML = ''; }
+    },
+
+    renderItems: () => {
+        const layer = $('breakout-items-layer'); layer.innerHTML = '';
+        const zone = Breakout._getZone(); if (!zone) return;
+        (zone.subItems || []).forEach(item => {
+            const head = TYPES[item.sub] || TYPES.meta;
+            const el = document.createElement('div');
+            el.id = `bk-${item.id}`; el.className = 'item note';
+            el.style.cssText = `position:absolute;transform:translate(${item.x}px,${item.y}px);width:${item.w||180}px;height:${item.h||130}px;`;
+            el.innerHTML = `<div class="jiggle-wrapper" style="width:100%;height:100%;background:${head.col};border:2px solid ${head.bor};border-radius:8px;overflow:hidden;"><div class="i-head" style="background:${head.bor}33;color:${head.bor};padding:5px 8px;font-size:0.75rem;font-weight:700;display:flex;align-items:center;gap:5px;"><span>${head.icon}</span><span>${head.lbl}</span></div><textarea style="flex:1;width:100%;border:none;background:transparent;resize:none;padding:6px 8px;font-size:0.875rem;font-family:var(--font-ui);" placeholder="Add note..." oninput="Breakout._updateNoteText('${item.id}',this.value)"></textarea></div>`;
+            // Set textarea value programmatically to avoid XSS via innerHTML
+            el.querySelector('textarea').value = item.text || '';
+            el.addEventListener('mousedown', Breakout._itemMousedown);
+            el.addEventListener('touchstart', Breakout._itemMousedown, {passive:false});
+            layer.appendChild(el);
+        });
+    },
+
+    _itemMousedown: (e) => {
+        if (Breakout._state.tool !== 'select') return;
+        e.stopPropagation();
+        if (e.touches) e.preventDefault();
+        const evt = e.touches ? e.touches[0] : e;
+        const zone = Breakout._getZone(); if (!zone) return;
+        const el = e.currentTarget;
+        const id = el.id.replace('bk-','');
+        const item = (zone.subItems||[]).find(i => i.id === id);
+        if (item) {
+            const coords = Breakout._screenToWorld(evt);
+            Breakout.drag = { mode:'move-item', item, el, sx:coords.x, sy:coords.y, ix:item.x, iy:item.y };
+        }
+    },
+
+    _updateNoteText: (id, text) => {
+        const zone = Breakout._getZone(); if (!zone) return;
+        const item = (zone.subItems||[]).find(i => i.id === id);
+        if (item) item.text = text;
+    },
+
+    renderInk: () => {
+        const zone = Breakout._getZone(); if (!zone) return;
+        $('breakout-ink-layer').innerHTML = (zone.subInk||[]).map(s =>
+            `<path d="${InkManager.pointsToPath(s.points)}" stroke="${s.color}" stroke-width="${s.width}" fill="none" stroke-linecap="round"/>`
+        ).join('');
+    },
+
+    renderParticipants: () => {
+        const zone = Breakout._getZone(); if (!zone) return;
+        const container = $('breakout-participants'); if (!container) return;
+        const members = zone.participants || [];
+        $('breakout-member-count').textContent = `${members.length} member${members.length !== 1 ? 's' : ''}`;
+        container.innerHTML = Object.entries(State.students).map(([pid, s]) => {
+            if (pid === 'HOST' || s.name === 'Co-Host') return '';
+            const isIn = members.includes(pid);
+            return `<div class="bk-participant-row ${isIn?'active':''}" onclick="Breakout.toggleMember('${pid}')">
+                <input type="checkbox" ${isIn?'checked':''} style="pointer-events:none;accent-color:var(--accent);">
+                <span>${s.avatar}</span><span>${sanitizeHTML(s.name)}</span>
+            </div>`;
+        }).join('');
+    },
+
+    toggleMember: (pid) => {
+        const zone = Breakout._getZone(); if (!zone) return;
+        if (!zone.participants) zone.participants = [];
+        const idx = zone.participants.indexOf(pid);
+        if (idx > -1) zone.participants.splice(idx, 1); else zone.participants.push(pid);
+        StateManager.updateItem(zone.id, { participants: zone.participants }, { silent: true });
+        Breakout.renderParticipants();
+    },
+
+    setTool: (tool) => {
+        Breakout._state.tool = tool;
+        const main = $('breakout-main');
+        main.className = tool === 'pan' ? 'bk-pan' : (tool==='draw'||tool==='eraser' ? 'bk-draw' : '');
+        document.querySelectorAll('#breakout-sidebar .cm-tool-btn').forEach(b => b.classList.remove('active'));
+        const map = {pan:'bk-btn-pan',select:'bk-btn-select',draw:'bk-btn-pen',eraser:'bk-btn-eraser'};
+        if (map[tool]) { const btn=$(map[tool]); if(btn) btn.classList.add('active'); }
+    },
+
+    setColor: (color) => {
+        Breakout._state.color = color;
+        document.querySelectorAll('[id^="bk-swatch-"]').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('#breakout-sidebar .cm-color-swatch').forEach(s => {
+            if(s.style.background === color) s.classList.add('active');
+        });
+        if (Breakout._state.tool !== 'draw') Breakout.setTool('draw');
+    },
+
+    setWidth: (w) => {
+        Breakout._state.width = parseInt(w);
+        const val = $('bk-width-val'); if(val) val.textContent = w;
+    },
+
+    zoom: (factor) => {
+        const view = Breakout._state.view;
+        if (factor === null) { view.z=1; view.x=0; view.y=0; }
+        else {
+            const oz = view.z;
+            const nz = Math.max(0.1, Math.min(oz * factor, 8));
+            const rect = $('breakout-main').getBoundingClientRect();
+            view.x = (rect.width/2/nz) - (rect.width/2/oz - view.x);
+            view.y = (rect.height/2/nz) - (rect.height/2/oz - view.y);
+            view.z = nz;
+        }
+        Breakout.updateZoomLabel();
+    },
+
+    updateZoomLabel: () => {
+        const z = Math.round(Breakout._state.view.z * 100);
+        const lbl = $('bk-zoom-level'); if(lbl) lbl.textContent = `${z}%`;
+        const rb = $('bk-zoom-reset'); if(rb) rb.textContent = `${z}%`;
+    },
+
+    clearInk: () => {
+        UI.confirm("Clear all drawings in this breakout board?", "Clear Ink", () => {
+            const zone = Breakout._getZone(); if(!zone) return;
+            zone.subInk = [];
+            Breakout.renderInk();
+            Breakout._scheduleThumbUpdate();
+        }, null, '🗑️');
+    },
+
+    addNote: (sub) => {
+        const zone = Breakout._getZone(); if(!zone) return;
+        if(!zone.subItems) zone.subItems = [];
+        const view = Breakout._state.view;
+        const cx = $('breakout-main').offsetWidth / 2;
+        const cy = $('breakout-main').offsetHeight / 2;
+        const x = cx / view.z - view.x - 90;
+        const y = cy / view.z - view.y - 65;
+        const item = { id: genId(), sub, text:'', x, y, w:180, h:130 };
+        zone.subItems.push(item);
+        Breakout.renderItems();
+        Breakout._scheduleThumbUpdate();
+    },
+
+    setRoomColor: (color) => {
+        const zone = Breakout._getZone(); if(!zone) return;
+        zone.roomColor = color;
+        $('breakout-color-dot').style.background = color;
+        StateManager.updateItem(zone.id, { roomColor: color });
+    },
+
+    _screenToWorld: (evt) => {
+        const rect = $('breakout-main').getBoundingClientRect();
+        const v = Breakout._state.view;
+        return { x: (evt.clientX - rect.left) / v.z - v.x, y: (evt.clientY - rect.top) / v.z - v.y };
+    },
+
+    _thumbTimer: null,
+    _scheduleThumbUpdate: () => {
+        if (Breakout._thumbTimer) clearTimeout(Breakout._thumbTimer);
+        Breakout._thumbTimer = setTimeout(() => {
+            const zone = Breakout._getZone(); if (!zone) return;
+            const el = document.getElementById(zone.id);
+            const thumb = el?.querySelector('.breakout-thumb');
+            if (thumb) Breakout.renderThumb(zone, thumb);
+            Breakout._thumbTimer = null;
+        }, 500);
+    },
+
+    renderThumb: (zone, canvas) => {
+        if (!canvas || !canvas.getContext) return;
+        const items = zone.subItems || [];
+        const ink = zone.subInk || [];
+        if (items.length === 0 && ink.length === 0) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(139,92,246,0.06)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            return;
+        }
+        canvas.width = canvas.offsetWidth || 280;
+        canvas.height = canvas.offsetHeight || 180;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Compute bounds
+        let mnX=Infinity, mnY=Infinity, mxX=-Infinity, mxY=-Infinity;
+        items.forEach(i => { mnX=Math.min(mnX,i.x); mnY=Math.min(mnY,i.y); mxX=Math.max(mxX,i.x+i.w); mxY=Math.max(mxY,i.y+i.h); });
+        ink.forEach(s => s.points.forEach(p => { mnX=Math.min(mnX,p.x); mnY=Math.min(mnY,p.y); mxX=Math.max(mxX,p.x); mxY=Math.max(mxY,p.y); }));
+        if (!isFinite(mnX)) return;
+        const pad=20, ww=mxX-mnX+pad*2, wh=mxY-mnY+pad*2;
+        const sc = Math.min(canvas.width/ww, canvas.height/wh);
+        const ox = (canvas.width - ww*sc)/2, oy = (canvas.height - wh*sc)/2;
+        const tx = v => (v - mnX + pad) * sc + ox;
+        const ty = v => (v - mnY + pad) * sc + oy;
+        // Draw items
+        items.forEach(i => {
+            const head = TYPES[i.sub] || TYPES.meta;
+            ctx.fillStyle = head.col;
+            ctx.strokeStyle = head.bor;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.rect(tx(i.x), ty(i.y), i.w*sc, i.h*sc);
+            ctx.fill(); ctx.stroke();
+        });
+        // Draw ink
+        ink.forEach(s => {
+            if(!s.points||s.points.length<2) return;
+            ctx.strokeStyle = s.color; ctx.lineWidth = Math.max(1, parseFloat(s.width)*sc); ctx.lineCap='round';
+            ctx.beginPath(); ctx.moveTo(tx(s.points[0].x), ty(s.points[0].y));
+            s.points.slice(1).forEach(p => ctx.lineTo(tx(p.x), ty(p.y)));
+            ctx.stroke();
+        });
+    },
+
+    _onMain: (e) => {
+        if (e.target.closest('#breakout-sidebar') || e.target.closest('#breakout-items-layer')) return;
+        if (e.touches) e.preventDefault();
+        const evt = e.touches ? e.touches[0] : e;
+        if (!evt) return;
+        const tool = Breakout._state.tool;
+        const coords = Breakout._screenToWorld(evt);
+        if (tool === 'pan' || e.button === 1) {
+            Breakout.drag = { mode:'pan', sx:evt.clientX, sy:evt.clientY, vx:Breakout._state.view.x, vy:Breakout._state.view.y };
+        } else if (tool === 'draw') {
+            Breakout.drag = { mode:'draw' }; Breakout.currentPath = [coords];
+        } else if (tool === 'eraser') {
+            Breakout.drag = { mode:'eraser' };
+        }
+    },
+    _onMove: (e) => {
+        if (!Breakout.drag) return;
+        if (e.touches) e.preventDefault();
+        const evt = e.touches ? e.touches[0] : e; if (!evt) return;
+        const coords = Breakout._screenToWorld(evt);
+        const v = Breakout._state.view;
+        if (Breakout.drag.mode === 'pan') {
+            v.x = Breakout.drag.vx + (evt.clientX - Breakout.drag.sx) / v.z;
+            v.y = Breakout.drag.vy + (evt.clientY - Breakout.drag.sy) / v.z;
+        } else if (Breakout.drag.mode === 'draw') {
+            Breakout.currentPath.push(coords);
+        } else if (Breakout.drag.mode === 'move-item') {
+            const item = Breakout.drag.item;
+            item.x = Breakout.drag.ix + (coords.x - Breakout.drag.sx);
+            item.y = Breakout.drag.iy + (coords.y - Breakout.drag.sy);
+            Breakout.drag.el.style.transform = `translate(${item.x}px,${item.y}px)`;
+        } else if (Breakout.drag.mode === 'eraser') {
+            const zone = Breakout._getZone(); if (!zone) return;
+            const { changed, newInk } = InkManager.eraseAt(coords.x, coords.y, zone.subInk || []);
+            if (changed) { zone.subInk = newInk; Breakout.renderInk(); }
+        }
+    },
+    _onEnd: (e) => {
+        if (!Breakout.drag) return;
+        if (Breakout.drag.mode === 'draw' && Breakout.currentPath.length > 1) {
+            const zone = Breakout._getZone(); if (zone) {
+                if(!zone.subInk) zone.subInk = [];
+                zone.subInk.push({ id:genId(), points:[...Breakout.currentPath], color:Breakout._state.color, width:Breakout._state.width });
+                Breakout.renderInk();
+                Breakout._scheduleThumbUpdate();
+            }
+        }
+        if (Breakout.drag.mode === 'move-item') Breakout._scheduleThumbUpdate();
+        Breakout.drag = null;
+        if ($('bk-temp-ink')) $('bk-temp-ink').innerHTML = '';
+    },
+    _onWheel: (e) => {
+        e.preventDefault();
+        const v = Breakout._state.view;
+        const s = Math.exp(-e.deltaY * 0.001);
+        const oz = v.z;
+        v.z = Math.max(0.1, Math.min(oz * s, 8));
+        const rect = $('breakout-main').getBoundingClientRect();
+        v.x = ((e.clientX-rect.left) / v.z) - ((e.clientX-rect.left) / oz - v.x);
+        v.y = ((e.clientY-rect.top) / v.z) - ((e.clientY-rect.top) / oz - v.y);
+        Breakout.updateZoomLabel();
+    },
+
+    initEvents: () => {
+        const main = $('breakout-main');
+        main.addEventListener('mousedown', Breakout._onMain);
+        main.addEventListener('touchstart', Breakout._onMain, {passive:false});
+        window.addEventListener('mousemove', Breakout._onMove);
+        window.addEventListener('touchmove', Breakout._onMove, {passive:false});
+        window.addEventListener('mouseup', Breakout._onEnd);
+        window.addEventListener('touchend', Breakout._onEnd);
+        main.addEventListener('wheel', Breakout._onWheel, {passive:false});
     }
 };
 
@@ -4434,6 +5174,7 @@ window.Tab = function(n) {
 window.onload = () => {
     DB.init();
     Consensus.init();
+    Breakout.initEvents();
     const v = $('viewport');
     v.addEventListener('mousedown', InputController.start);
     v.addEventListener('wheel', InputController.wheel, {passive:false});

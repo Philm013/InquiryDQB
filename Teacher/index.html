@@ -805,7 +805,6 @@
         #breakout-world { position: absolute; top:0; left:0; transform-origin: 0 0; will-change: transform; }
         #breakout-items-layer { position: absolute; inset: 0; z-index: 2; }
         #breakout-ink-layer { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 1; }
-        #bk-temp-ink { z-index: 3; }
         #breakout-header-pill {
             position: absolute; top: 20px; left: 20px;
             display: flex; align-items: center; gap: 12px;
@@ -1362,6 +1361,7 @@
         <div id="breakout-world">
             <svg id="breakout-ink-layer" style="overflow:visible;position:absolute;inset:0;pointer-events:none;"></svg>
             <div id="breakout-items-layer"></div>
+            <svg id="bk-temp-ink" style="overflow:visible;position:absolute;inset:0;pointer-events:none;z-index:3;"></svg>
         </div>
 
         <div id="breakout-header-pill">
@@ -1376,6 +1376,7 @@
         <div id="breakout-toolbar" role="toolbar" aria-label="Breakout tools">
             <button class="tb-btn active" id="bk-dt-pan" onclick="Breakout.setTool('pan')">✋ Pan</button>
             <button class="tb-btn" id="bk-dt-select" onclick="Breakout.setTool('select')">⛝ Select</button>
+            <button class="tb-btn" id="bk-dt-delete" style="display:none; color:#dc2626;" onclick="Breakout.deleteSelected()" title="Delete selected item (Delete key)">🗑️ Delete</button>
             <button class="tb-btn" id="bk-dt-draw" onclick="Breakout.toggleDrawer('draw'); Breakout.setTool('draw')">✏️ Draw</button>
             <div class="sep" role="separator"></div>
             <button class="tb-btn" id="bk-dt-add" onclick="Breakout.toggleDrawer('add')">➕ Add</button>
@@ -1385,6 +1386,7 @@
         <div id="breakout-mobile-dock" role="toolbar" aria-label="Breakout tools">
             <button class="dock-btn active" id="bk-mt-pan" onclick="Breakout.setTool('pan')">✋</button>
             <button class="dock-btn" id="bk-mt-select" onclick="Breakout.setTool('select')">⛝</button>
+            <button class="dock-btn" id="bk-mt-delete" style="display:none;" onclick="Breakout.deleteSelected()" title="Delete selected item">🗑️</button>
             <button class="dock-btn" id="bk-mt-draw" onclick="Breakout.toggleDrawer('draw'); Breakout.setTool('draw')">✏️</button>
             <button class="dock-btn" id="bk-mt-add" onclick="Breakout.toggleDrawer('add')">➕</button>
             <button class="dock-btn" id="bk-mt-board" onclick="Breakout.toggleDrawer('board')">⚙️</button>
@@ -1392,12 +1394,13 @@
 
         <div id="breakout-drawer-draw" class="drawer" role="toolbar" aria-label="Breakout drawing tools">
             <div class="tool-row">
-                <div class="color-btn active" data-bk-color="#ef4444" style="background:#ef4444" onclick="Breakout.setColor('#ef4444')"></div>
+                <div class="color-btn" data-bk-color="#ef4444" style="background:#ef4444" onclick="Breakout.setColor('#ef4444')"></div>
                 <div class="color-btn" data-bk-color="#f97316" style="background:#f97316" onclick="Breakout.setColor('#f97316')"></div>
                 <div class="color-btn" data-bk-color="#10b981" style="background:#10b981" onclick="Breakout.setColor('#10b981')"></div>
                 <div class="color-btn" data-bk-color="#3b82f6" style="background:#3b82f6" onclick="Breakout.setColor('#3b82f6')"></div>
                 <div class="color-btn" data-bk-color="#8b5cf6" style="background:#8b5cf6" onclick="Breakout.setColor('#8b5cf6')"></div>
                 <div class="color-btn" data-bk-color="#000000" style="background:#000000; border-color:#6b7280" onclick="Breakout.setColor('#000000')"></div>
+                <div class="color-btn" data-bk-color="#ffffff" style="background:#ffffff; border-color:#6b7280" onclick="Breakout.setColor('#ffffff')"></div>
             </div>
             <div class="tool-row">
                 <input type="range" class="cm-width-slider" id="bk-width-slider" min="1" max="20" value="4" oninput="Breakout.setWidth(this.value)">
@@ -1446,7 +1449,6 @@
             </div>
         </div>
 
-        <svg id="bk-temp-ink" style="position:absolute;inset:0;pointer-events:none;overflow:visible;"></svg>
     </div>
 </div>
 
@@ -2501,8 +2503,8 @@ window.InkManager = {
     },
     pointsToPath: (pts) => { if(!pts || pts.length===0) return ""; let d=`M ${pts[0].x} ${pts[0].y}`; for(let i=1;i<pts.length;i++) d+=` L ${pts[i].x} ${pts[i].y}`; return d; },
     clear: () => { UI.confirm("Clear all drawings? This cannot be undone.", "Clear Drawings", () => { InkManager.selectedId = null; InkManager.hideInkToolbar(); StateManager.setInk([]); }, null, '🗑️'); },
-    eraseAt: (x, y, inkArray) => {
-        const thresh = 20 / State.view.z;
+    eraseAt: (x, y, inkArray, zoom) => {
+        const thresh = 20 / (zoom || State.view.z);
         const initLen = inkArray.length;
         const filteredInk = inkArray.filter(s => { return !s.points.some(p => Math.hypot(p.x - x, p.y - y) < thresh); });
         
@@ -3900,6 +3902,7 @@ window.InputController = {
     },
     keydown: (e) => {
         if(e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        if($('breakout-overlay')?.style.display === 'block') { Breakout._keydown(e); return; }
         if(e.key === 'Escape') { InkManager.deselectStroke(); }
         if(e.key === 'Backspace' || e.key === 'Delete') {
             if (InkManager.selectedId) { InkManager.deleteSelected(); }
@@ -4916,6 +4919,8 @@ window.Breakout = {
     _frame: null,
     _zoneId: null,
     _thumbTimer: null,
+    _history: [],
+    _historyIdx: -1,
     _state: { view: { x:0, y:0, z:1 }, tool:'pan', color:'#ef4444', width:4, selectedId:null, drawer:null },
 
     _getZone: () => State.items.find(i => i.id === Breakout._zoneId),
@@ -4926,6 +4931,8 @@ window.Breakout = {
         Breakout._zoneId = zoneId;
         Breakout.drag = null;
         Breakout.currentPath = [];
+        Breakout._history = [];
+        Breakout._historyIdx = -1;
         Breakout._state = { view: { x:0, y:0, z:1 }, tool:'pan', color:'#ef4444', width:4, selectedId:null, drawer:null };
 
         $('breakout-board-name').textContent = zone.title;
@@ -4939,6 +4946,7 @@ window.Breakout = {
         Breakout.renderInk();
         Breakout.renderParticipants();
         Breakout.updateZoomLabel();
+        Breakout._pushHistory();
 
         if (!Breakout._frame) Breakout._loop();
         UI.closeAllMenus();
@@ -4950,6 +4958,8 @@ window.Breakout = {
         Breakout._setSelected(null);
         Breakout.drag = null;
         Breakout.currentPath = [];
+        Breakout._history = [];
+        Breakout._historyIdx = -1;
         if (Breakout._frame) { cancelAnimationFrame(Breakout._frame); Breakout._frame = null; }
         $('breakout-items-layer').innerHTML = '';
         if ($('bk-temp-ink')) $('bk-temp-ink').innerHTML = '';
@@ -4974,7 +4984,7 @@ window.Breakout = {
     },
 
     _syncUi: () => {
-        const { tool, drawer } = Breakout._state;
+        const { tool, drawer, selectedId } = Breakout._state;
         const btn = id => $(id);
         [
             'bk-dt-pan','bk-dt-select','bk-dt-draw','bk-dt-add','bk-dt-board',
@@ -4985,6 +4995,9 @@ window.Breakout = {
         ['bk-dt-draw','bk-mt-draw'].forEach(id => btn(id)?.classList.toggle('active', tool === 'draw' || tool === 'eraser' || drawer === 'draw'));
         ['bk-dt-add','bk-mt-add'].forEach(id => btn(id)?.classList.toggle('active', drawer === 'add'));
         ['bk-dt-board','bk-mt-board'].forEach(id => btn(id)?.classList.toggle('active', drawer === 'board'));
+        const showDel = !!(tool === 'select' && selectedId);
+        const delDt = $('bk-dt-delete'); if (delDt) delDt.style.display = showDel ? '' : 'none';
+        const delMt = $('bk-mt-delete'); if (delMt) delMt.style.display = showDel ? '' : 'none';
     },
 
     _syncRoomColorSelection: (color) => {
@@ -4998,6 +5011,7 @@ window.Breakout = {
         document.querySelectorAll('#breakout-items-layer .item').forEach(el => {
             el.classList.toggle('selected', !!id && el.id === `bk-${id}`);
         });
+        Breakout._syncUi();
     },
 
     _loop: () => {
@@ -5012,8 +5026,7 @@ window.Breakout = {
         const svg = $('bk-temp-ink'); if (!svg) return;
         if (Breakout.drag?.mode === 'draw' && Breakout.currentPath.length > 1) {
             const d = InkManager.pointsToPath(Breakout.currentPath);
-            const v = Breakout._state.view;
-            svg.innerHTML = `<g transform="scale(${v.z}) translate(${v.x}px,${v.y}px)"><path d="${d}" stroke="${Breakout._state.color}" stroke-width="${Breakout._state.width}" fill="none" stroke-linecap="round"/></g>`;
+            svg.innerHTML = `<path d="${d}" stroke="${Breakout._state.color}" stroke-width="${Breakout._state.width}" fill="none" stroke-linecap="round"/>`;
         } else { svg.innerHTML = ''; }
     },
 
@@ -5161,8 +5174,62 @@ window.Breakout = {
             const zone = Breakout._getZone(); if(!zone) return;
             zone.subInk = [];
             Breakout.renderInk();
+            Breakout._pushHistory();
             Breakout._scheduleThumbUpdate();
         }, null, '🗑️');
+    },
+
+    deleteSelected: () => {
+        const zone = Breakout._getZone(); if (!zone) return;
+        const id = Breakout._state.selectedId; if (!id) return;
+        zone.subItems = (zone.subItems || []).filter(i => i.id !== id);
+        Breakout._setSelected(null);
+        Breakout.renderItems();
+        Breakout._pushHistory();
+        Breakout._scheduleThumbUpdate();
+    },
+
+    _pushHistory: () => {
+        const zone = Breakout._getZone(); if (!zone) return;
+        Breakout._history = Breakout._history.slice(0, Breakout._historyIdx + 1);
+        Breakout._history.push({
+            subItems: JSON.parse(JSON.stringify(zone.subItems || [])),
+            subInk: JSON.parse(JSON.stringify(zone.subInk || []))
+        });
+        if (Breakout._history.length > 50) { Breakout._history.shift(); }
+        Breakout._historyIdx = Breakout._history.length - 1;
+    },
+
+    _applyHistory: () => {
+        const zone = Breakout._getZone(); if (!zone) return;
+        const snap = Breakout._history[Breakout._historyIdx]; if (!snap) return;
+        zone.subItems = JSON.parse(JSON.stringify(snap.subItems));
+        zone.subInk = JSON.parse(JSON.stringify(snap.subInk));
+        Breakout._setSelected(null);
+        Breakout.renderItems();
+        Breakout.renderInk();
+        Breakout._scheduleThumbUpdate();
+    },
+
+    undo: () => {
+        if (Breakout._historyIdx <= 0) return;
+        Breakout._historyIdx--;
+        Breakout._applyHistory();
+    },
+
+    redo: () => {
+        if (Breakout._historyIdx >= Breakout._history.length - 1) return;
+        Breakout._historyIdx++;
+        Breakout._applyHistory();
+    },
+
+    _keydown: (e) => {
+        if (e.key === 'Escape') { Breakout._setSelected(null); }
+        else if ((e.key === 'Delete' || e.key === 'Backspace') && Breakout._state.selectedId) {
+            e.preventDefault(); Breakout.deleteSelected();
+        }
+        else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'z') { e.preventDefault(); Breakout.undo(); }
+        else if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); Breakout.redo(); }
     },
 
     addNote: (sub) => {
@@ -5176,6 +5243,7 @@ window.Breakout = {
         const item = { id: genId(), sub, text:'', x, y, w:180, h:130 };
         zone.subItems.push(item);
         Breakout.renderItems();
+        Breakout._pushHistory();
         Breakout._setSelected(item.id);
         Breakout.setTool('select');
         Breakout._scheduleThumbUpdate();
@@ -5340,8 +5408,8 @@ window.Breakout = {
             Breakout.drag.el.style.height = `${item.h}px`;
         } else if (Breakout.drag.mode === 'eraser') {
             const zone = Breakout._getZone(); if (!zone) return;
-            const { changed, newInk } = InkManager.eraseAt(coords.x, coords.y, zone.subInk || []);
-            if (changed) { zone.subInk = newInk; Breakout.renderInk(); }
+            const { changed, newInk } = InkManager.eraseAt(coords.x, coords.y, zone.subInk || [], Breakout._state.view.z);
+            if (changed) { zone.subInk = newInk; Breakout.renderInk(); Breakout.drag._erasedSomething = true; }
         }
     },
     _onEnd: () => {
@@ -5355,10 +5423,12 @@ window.Breakout = {
                 if(!zone.subInk) zone.subInk = [];
                 zone.subInk.push({ id:genId(), points:[...Breakout.currentPath], color:Breakout._state.color, width:Breakout._state.width });
                 Breakout.renderInk();
+                Breakout._pushHistory();
                 Breakout._scheduleThumbUpdate();
             }
         }
-        if (Breakout.drag.mode === 'move-item' || Breakout.drag.mode === 'resize-item' || Breakout.drag.mode === 'eraser') Breakout._scheduleThumbUpdate();
+        if (Breakout.drag.mode === 'eraser' && Breakout.drag._erasedSomething) { Breakout._pushHistory(); Breakout._scheduleThumbUpdate(); }
+        if (Breakout.drag.mode === 'move-item' || Breakout.drag.mode === 'resize-item') { Breakout._pushHistory(); Breakout._scheduleThumbUpdate(); }
         Breakout.drag = null;
         if ($('bk-temp-ink')) $('bk-temp-ink').innerHTML = '';
     },

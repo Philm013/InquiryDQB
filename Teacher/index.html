@@ -1158,7 +1158,13 @@
     <div id="consensus-main">
         <div id="consensus-world">
             <div id="consensus-items-layer"></div>
-            <svg id="consensus-ink-layer" style="overflow:visible"></svg>
+            <svg id="consensus-ink-layer" style="overflow:visible">
+                <defs>
+                    <marker id="cm-arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="currentColor"/>
+                    </marker>
+                </defs>
+            </svg>
         </div>
         <!-- Floating zoom controls -->
         <div style="position:absolute; bottom:16px; right:16px; display:flex; flex-direction:column; gap:4px; z-index:10;">
@@ -4560,11 +4566,40 @@ window.Consensus = {
 
     renderInk: () => {
         const svg = $('consensus-ink-layer');
-        svg.innerHTML = State.consensusMode.ink.map(s => {
-            const opacity = s.highlight ? ' opacity="0.4"' : '';
-            const markerEnd = s.arrow ? ` marker-end="url(#cm-arrow)"` : '';
-            return `<path d="${InkManager.pointsToPath(s.points)}" stroke="${s.color}" stroke-width="${s.width}" fill="none" stroke-linecap="round"${opacity}${markerEnd}/>`;
-        }).join('');
+        // Keep defs (first child), replace only path elements
+        const defs = svg.querySelector('defs');
+        svg.innerHTML = '';
+        if (defs) svg.appendChild(defs);
+        State.consensusMode.ink.forEach(s => {
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', InkManager.pointsToPath(s.points));
+            path.setAttribute('stroke', s.color);
+            path.setAttribute('stroke-width', s.width);
+            path.setAttribute('fill', 'none');
+            path.setAttribute('stroke-linecap', 'round');
+            if (s.highlight) path.setAttribute('opacity', '0.4');
+            if (s.arrow) {
+                // Create per-stroke colored marker
+                const markerId = `cm-arrow-${s.color.replace('#','')}`;
+                if (!svg.querySelector(`#${markerId}`)) {
+                    const defs2 = svg.querySelector('defs') || (() => { const d = document.createElementNS('http://www.w3.org/2000/svg','defs'); svg.insertBefore(d, svg.firstChild); return d; })();
+                    const marker = document.createElementNS('http://www.w3.org/2000/svg','marker');
+                    marker.setAttribute('id', markerId);
+                    marker.setAttribute('markerWidth', '10');
+                    marker.setAttribute('markerHeight', '7');
+                    marker.setAttribute('refX', '9');
+                    marker.setAttribute('refY', '3.5');
+                    marker.setAttribute('orient', 'auto');
+                    const poly = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+                    poly.setAttribute('points', '0 0, 10 3.5, 0 7');
+                    poly.setAttribute('fill', s.color);
+                    marker.appendChild(poly);
+                    defs2.appendChild(marker);
+                }
+                path.setAttribute('marker-end', `url(#${markerId})`);
+            }
+            svg.appendChild(path);
+        });
     },
 
     handleInk: (ink) => {
@@ -4822,7 +4857,9 @@ window.Breakout = {
             const el = document.createElement('div');
             el.id = `bk-${item.id}`; el.className = 'item note';
             el.style.cssText = `position:absolute;transform:translate(${item.x}px,${item.y}px);width:${item.w||180}px;height:${item.h||130}px;`;
-            el.innerHTML = `<div class="jiggle-wrapper" style="width:100%;height:100%;background:${head.col};border:2px solid ${head.bor};border-radius:8px;overflow:hidden;"><div class="i-head" style="background:${head.bor}33;color:${head.bor};padding:5px 8px;font-size:0.75rem;font-weight:700;display:flex;align-items:center;gap:5px;"><span>${head.icon}</span><span>${head.lbl}</span></div><textarea style="flex:1;width:100%;border:none;background:transparent;resize:none;padding:6px 8px;font-size:0.875rem;font-family:var(--font-ui);" placeholder="Add note..." oninput="Breakout._updateNoteText('${item.id}',this.value)">${item.text||''}</textarea></div>`;
+            el.innerHTML = `<div class="jiggle-wrapper" style="width:100%;height:100%;background:${head.col};border:2px solid ${head.bor};border-radius:8px;overflow:hidden;"><div class="i-head" style="background:${head.bor}33;color:${head.bor};padding:5px 8px;font-size:0.75rem;font-weight:700;display:flex;align-items:center;gap:5px;"><span>${head.icon}</span><span>${head.lbl}</span></div><textarea style="flex:1;width:100%;border:none;background:transparent;resize:none;padding:6px 8px;font-size:0.875rem;font-family:var(--font-ui);" placeholder="Add note..." oninput="Breakout._updateNoteText('${item.id}',this.value)"></textarea></div>`;
+            // Set textarea value programmatically to avoid XSS via innerHTML
+            el.querySelector('textarea').value = item.text || '';
             el.addEventListener('mousedown', Breakout._itemMousedown);
             el.addEventListener('touchstart', Breakout._itemMousedown, {passive:false});
             layer.appendChild(el);

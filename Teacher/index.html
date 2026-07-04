@@ -5428,7 +5428,16 @@ window.Breakout = {
             }
         }
         if (Breakout.drag.mode === 'eraser' && Breakout.drag._erasedSomething) { Breakout._pushHistory(); Breakout._scheduleThumbUpdate(); }
-        if (Breakout.drag.mode === 'move-item' || Breakout.drag.mode === 'resize-item') { Breakout._pushHistory(); Breakout._scheduleThumbUpdate(); }
+        if (Breakout.drag.mode === 'move-item') {
+            const d = Breakout.drag;
+            if (d.item.x !== d.ix || d.item.y !== d.iy) Breakout._pushHistory();
+            Breakout._scheduleThumbUpdate();
+        }
+        if (Breakout.drag.mode === 'resize-item') {
+            const d = Breakout.drag;
+            if (d.item.w !== d.iw || d.item.h !== d.ih) Breakout._pushHistory();
+            Breakout._scheduleThumbUpdate();
+        }
         Breakout.drag = null;
         if ($('bk-temp-ink')) $('bk-temp-ink').innerHTML = '';
     },

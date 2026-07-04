@@ -839,8 +839,9 @@
         }
         #breakout-drawer-draw,
         #breakout-drawer-add,
-        #breakout-drawer-board { z-index: 219; }
-        #breakout-drawer-board { width: 340px; max-height: min(60vh, 420px); overflow-y: auto; }
+        #breakout-drawer-board,
+        #breakout-drawer-exit { z-index: 219; }
+        #breakout-drawer-board, #breakout-drawer-exit { width: 340px; max-height: min(60vh, 420px); overflow-y: auto; }
         #breakout-room-colors { margin-bottom: 10px; }
         #breakout-participants { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
         @media (min-width: 769px) {
@@ -1381,6 +1382,9 @@
             <div class="sep" role="separator"></div>
             <button class="tb-btn" id="bk-dt-add" onclick="Breakout.toggleDrawer('add')">➕ Add</button>
             <button class="tb-btn" id="bk-dt-board" onclick="Breakout.toggleDrawer('board')">⚙️ Room</button>
+            <div class="sep" role="separator"></div>
+            <button class="tb-btn" aria-label="Undo" onclick="Breakout.undo()">↩️</button>
+            <button class="tb-btn" aria-label="Redo" onclick="Breakout.redo()">↪️</button>
         </div>
 
         <div id="breakout-mobile-dock" role="toolbar" aria-label="Breakout tools">
@@ -1390,6 +1394,8 @@
             <button class="dock-btn" id="bk-mt-draw" onclick="Breakout.toggleDrawer('draw'); Breakout.setTool('draw')">✏️</button>
             <button class="dock-btn" id="bk-mt-add" onclick="Breakout.toggleDrawer('add')">➕</button>
             <button class="dock-btn" id="bk-mt-board" onclick="Breakout.toggleDrawer('board')">⚙️</button>
+            <button class="dock-btn" aria-label="Undo" onclick="Breakout.undo()">↩️</button>
+            <button class="dock-btn" aria-label="Redo" onclick="Breakout.redo()">↪️</button>
         </div>
 
         <div id="breakout-drawer-draw" class="drawer" role="toolbar" aria-label="Breakout drawing tools">
@@ -1407,22 +1413,53 @@
                 <span id="bk-width-val" style="font-size:0.78rem;color:var(--text-secondary);min-width:20px;">4</span>
             </div>
             <div class="tool-row">
+                <button class="sub-btn" id="bk-sketch-mode-btn" onclick="Breakout.toggleSketchMode()" title="Sketch Mode: each stroke becomes a selectable item">🖊️ Sketch Items: OFF</button>
+            </div>
+            <div class="tool-row">
                 <button class="sub-btn" onclick="Breakout.setTool('draw')">✏️ Pen</button>
                 <button class="sub-btn" onclick="Breakout.setTool('eraser')">🧹 Eraser</button>
+                <button class="sub-btn" onclick="Breakout.setTool('laser')">🔦 Laser</button>
+                <button class="sub-btn" style="color:#dc2626;border-color:rgba(220,38,38,0.3);" onclick="Breakout.clearInk()">🗑️ Clear All</button>
             </div>
             <div class="tool-row" style="border-top: var(--border); margin-top:4px; padding-top:8px">
-                <button class="sub-btn" style="color:#dc2626;border-color:rgba(220,38,38,0.3);" onclick="Breakout.clearInk()">🗑️ Clear Ink</button>
+                <button class="sub-btn" style="background:#f2f9ff; color:var(--accent); border-color:rgba(0,117,222,0.3);" onclick="Breakout.pinInkAsItems()">📌 Pin Ink as Items</button>
             </div>
         </div>
 
         <div id="breakout-drawer-add" class="drawer">
             <div class="tool-row">
-                <button class="sub-btn" style="background:#fef3c7; color:#92400e" onclick="Breakout.addNote('notice')">👁️ Notice</button>
-                <button class="sub-btn" style="background:#bae6fd; color:#075985" onclick="Breakout.addNote('wonder')">❓ Wonder</button>
-                <button class="sub-btn" style="background:#bbf7d0; color:#166534" onclick="Breakout.addNote('idea')">💡 Idea</button>
+                <button class="sub-btn" style="background:#fef3c7; color:#92400e" onclick="Breakout.createItem('note','notice')">👁️ Notice</button>
+                <button class="sub-btn" style="background:#bae6fd; color:#075985" onclick="Breakout.createItem('note','wonder')">❓ Wonder</button>
+                <button class="sub-btn" style="background:#bbf7d0; color:#166534" onclick="Breakout.createItem('note','idea')">💡 Idea</button>
             </div>
             <div class="tool-row">
-                <button class="sub-btn" onclick="Breakout.addNote('meta')">📝 Note</button>
+                <button class="sub-btn" onclick="Breakout.createItem('zone')">🔳 Zone</button>
+                <button class="sub-btn" onclick="Breakout.createItem('cer')">🏛️ CER</button>
+                <button class="sub-btn" onclick="Breakout.createItem('consensus')">📐 Consensus</button>
+            </div>
+            <div class="tool-row">
+                <button class="sub-btn" onclick="Breakout.createItem('poll')">📊 Poll</button>
+                <button class="sub-btn" onclick="Breakout.createItem('graph')">📈 Graph</button>
+                <button class="sub-btn" onclick="Breakout.createItem('spin')">🎡 Spin</button>
+            </div>
+            <div class="tool-row" style="border-top: var(--border); margin-top:5px; padding-top:5px">
+                <button class="sub-btn" onclick="Breakout.showTemplates()">📄 Templates</button>
+                <button class="sub-btn" style="background: var(--accent); color:white; border-color: var(--accent);" onclick="Breakout.toggleDrawer('exit')">🚪 Exit Ticket</button>
+            </div>
+        </div>
+
+        <div id="breakout-drawer-exit" class="drawer" style="width: 340px;">
+            <div style="width:100%; text-align:center; color: var(--text-muted); font-size:0.72rem; margin-bottom:8px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">ADD EXIT TICKET WIDGET</div>
+            <div class="tool-row">
+                <button class="sub-btn" onclick="Breakout.createExit('short')">📝 Short Answer</button>
+                <button class="sub-btn" onclick="Breakout.createExit('smiley')">🙂 Rating</button>
+            </div>
+            <div class="tool-row">
+                <button class="sub-btn" onclick="Breakout.createExit('mc')">🔘 Multiple Choice</button>
+                <button class="sub-btn" onclick="Breakout.createExit('multi')">☑️ Multi-Select</button>
+            </div>
+            <div class="tool-row">
+                <button class="sub-btn" onclick="Breakout.createExit('lw')">🧠 Learn / Wonder</button>
             </div>
         </div>
 
@@ -2068,10 +2105,10 @@ window.UI = {
                 { name: "Four Corners", items: [{type:'zone',title:'Strongly Agree',x:0,y:0,w:300,h:250},{type:'zone',title:'Agree',x:340,y:0,w:300,h:250},{type:'zone',title:'Disagree',x:0,y:290,w:300,h:250},{type:'zone',title:'Strongly Disagree',x:340,y:290,w:300,h:250}] },
                 { name: "Compass Points", items: [{type:'zone',title:'North (Need to Know)',x:340,y:0,w:300,h:200},{type:'zone',title:'West (Worrisome)',x:0,y:240,w:300,h:200},{type:'zone',title:'East (Excited)',x:680,y:240,w:300,h:200},{type:'zone',title:'South (Stance/Steps)',x:340,y:480,w:300,h:200}] }
             ];
-            list.innerHTML = sysTpls.map((t,i) => `<button class="btn-s" onclick='UI.loadTemplate(${JSON.stringify(t)})'>${t.name}</button>`).join('');
+            list.innerHTML = sysTpls.map((t,i) => `<button class="btn-s" onclick='(Breakout._zoneId ? Breakout : UI).loadTemplate(${JSON.stringify(t)})'>${t.name}</button>`).join('');
         } else {
             const userTpls = await DB.getAll('templates');
-            list.innerHTML = userTpls.length ? userTpls.map(t => `<button class="btn-s" onclick='UI.loadTemplate(${JSON.stringify(t)})'>${t.name}</button>`).join('') : '<div style="text-align:center; color: var(--text-muted); padding: 20px 0;">No saved templates</div>';
+            list.innerHTML = userTpls.length ? userTpls.map(t => `<button class="btn-s" onclick='(Breakout._zoneId ? Breakout : UI).loadTemplate(${JSON.stringify(t)})'>${t.name}</button>`).join('') : '<div style="text-align:center; color: var(--text-muted); padding: 20px 0;">No saved templates</div>';
         }
     },
     loadTemplate: (t) => {
@@ -3040,6 +3077,7 @@ window.Actions = {
         UI.toggleDrawer(null);
     },
     submitExitCreate: (modeOverride, promptOverride, optsOverride) => {
+        if (Breakout._pendingExit) { Breakout._submitExitCreate(); return; }
         const mode = modeOverride !== undefined ? modeOverride : UI._exitCreateMode;
         if (!mode) return;
 
@@ -4921,7 +4959,8 @@ window.Breakout = {
     _thumbTimer: null,
     _history: [],
     _historyIdx: -1,
-    _state: { view: { x:0, y:0, z:1 }, tool:'pan', color:'#ef4444', width:4, selectedId:null, drawer:null },
+    _state: { view: { x:0, y:0, z:1 }, tool:'pan', color:'#ef4444', width:4, selectedId:null, drawer:null, sketchMode:false },
+    _pendingExit: false,
 
     _getZone: () => State.items.find(i => i.id === Breakout._zoneId),
 
@@ -4933,7 +4972,8 @@ window.Breakout = {
         Breakout.currentPath = [];
         Breakout._history = [];
         Breakout._historyIdx = -1;
-        Breakout._state = { view: { x:0, y:0, z:1 }, tool:'pan', color:'#ef4444', width:4, selectedId:null, drawer:null };
+        Breakout._state = { view: { x:0, y:0, z:1 }, tool:'pan', color:'#ef4444', width:4, selectedId:null, drawer:null, sketchMode:false };
+        Breakout._pendingExit = false;
 
         $('breakout-board-name').textContent = zone.title;
         $('breakout-color-dot').style.background = zone.roomColor || '#8b5cf6';
@@ -4960,6 +5000,9 @@ window.Breakout = {
         Breakout.currentPath = [];
         Breakout._history = [];
         Breakout._historyIdx = -1;
+        Breakout._pendingExit = false;
+        const sketchBtn = $('bk-sketch-mode-btn');
+        if (sketchBtn) { sketchBtn.textContent = '🖊️ Sketch Items: OFF'; sketchBtn.style.background = ''; sketchBtn.style.color = ''; sketchBtn.style.borderColor = ''; }
         if (Breakout._frame) { cancelAnimationFrame(Breakout._frame); Breakout._frame = null; }
         $('breakout-items-layer').innerHTML = '';
         if ($('bk-temp-ink')) $('bk-temp-ink').innerHTML = '';
@@ -4969,14 +5012,14 @@ window.Breakout = {
     },
 
     _closeDrawers: () => {
-        document.querySelectorAll('#breakout-drawer-draw, #breakout-drawer-add, #breakout-drawer-board').forEach(d => d.classList.remove('open'));
+        document.querySelectorAll('#breakout-drawer-draw, #breakout-drawer-add, #breakout-drawer-board, #breakout-drawer-exit').forEach(d => d.classList.remove('open'));
         Breakout._state.drawer = null;
         Breakout._syncUi();
     },
 
     toggleDrawer: (id) => {
         const next = Breakout._state.drawer === id ? null : id;
-        document.querySelectorAll('#breakout-drawer-draw, #breakout-drawer-add, #breakout-drawer-board').forEach(d => {
+        document.querySelectorAll('#breakout-drawer-draw, #breakout-drawer-add, #breakout-drawer-board, #breakout-drawer-exit').forEach(d => {
             d.classList.toggle('open', next && d.id === `breakout-drawer-${next}`);
         });
         Breakout._state.drawer = next;
@@ -4993,7 +5036,7 @@ window.Breakout = {
         ['bk-dt-pan','bk-mt-pan'].forEach(id => btn(id)?.classList.toggle('active', tool === 'pan'));
         ['bk-dt-select','bk-mt-select'].forEach(id => btn(id)?.classList.toggle('active', tool === 'select'));
         ['bk-dt-draw','bk-mt-draw'].forEach(id => btn(id)?.classList.toggle('active', tool === 'draw' || tool === 'eraser' || drawer === 'draw'));
-        ['bk-dt-add','bk-mt-add'].forEach(id => btn(id)?.classList.toggle('active', drawer === 'add'));
+        ['bk-dt-add','bk-mt-add'].forEach(id => btn(id)?.classList.toggle('active', drawer === 'add' || drawer === 'exit'));
         ['bk-dt-board','bk-mt-board'].forEach(id => btn(id)?.classList.toggle('active', drawer === 'board'));
         const showDel = !!(tool === 'select' && selectedId);
         const delDt = $('bk-dt-delete'); if (delDt) delDt.style.display = showDel ? '' : 'none';
@@ -5034,35 +5077,131 @@ window.Breakout = {
         const layer = $('breakout-items-layer'); layer.innerHTML = '';
         const zone = Breakout._getZone(); if (!zone) return;
         (zone.subItems || []).forEach(item => {
-            const head = TYPES[item.sub] || TYPES.meta;
-            const el = document.createElement('div');
-            el.id = `bk-${item.id}`;
-            el.className = `item note${Breakout._state.selectedId === item.id ? ' selected' : ''}`;
-            el.style.cssText = `position:absolute;transform:translate(${item.x}px,${item.y}px);width:${item.w||180}px;height:${item.h||130}px;`;
-            el.innerHTML = `
-                <div class="jiggle-wrapper">
-                    <div class="i-head">
-                        <div style="display:flex;gap:5px;align-items:center">
-                            <span class="icon-span">${head.icon}</span>
-                            <span class="auth-span">${sanitizeHTML(head.lbl)}</span>
-                        </div>
-                    </div>
-                    <div class="i-body">
-                        <textarea class="note-in" placeholder="Empty note..." oninput="Breakout._updateNoteText('${item.id}',this.value)"></textarea>
-                    </div>
-                    <div class="resize-h" role="button" aria-label="Resize note"></div>
-                </div>`;
-            const wrapper = el.querySelector('.jiggle-wrapper');
-            wrapper.style.background = head.col;
-            wrapper.style.borderColor = head.bor;
-            const iHead = el.querySelector('.i-head');
-            iHead.style.background = head.bor + '33';
-            iHead.style.color = head.bor;
-            el.querySelector('textarea').value = item.text || '';
-            el.addEventListener('mousedown', Breakout._itemMousedown);
-            el.addEventListener('touchstart', Breakout._itemMousedown, {passive:false});
+            const el = Breakout.createItemEl(item);
             layer.appendChild(el);
         });
+    },
+
+    createItemEl: (item) => {
+        const el = document.createElement('div');
+        el.id = `bk-${item.id}`;
+        const itemType = item.type || 'note';
+        el.className = `item ${itemType}${Breakout._state.selectedId === item.id ? ' selected' : ''}`;
+        el.style.cssText = `position:absolute;transform:translate(${item.x}px,${item.y}px);width:${item.w||180}px;height:${item.h||130}px;`;
+
+        const head = TYPES[item.sub] || TYPES.meta;
+        let inner = '';
+        let iconHtml = '';
+        let titleHtml = '';
+
+        if (itemType === 'note') {
+            if (item.sub === 'sketch' || item.src) {
+                inner = `<div style="display:flex;flex-direction:column;height:100%;overflow:hidden;">
+                    <img src="${item.src}" draggable="false" style="flex:1;width:100%;object-fit:contain;background:#f6f5f4">
+                    <textarea class="caption-in" placeholder="Caption...">${sanitizeHTML(item.text||'')}</textarea>
+                </div>`;
+            } else {
+                inner = `<textarea class="note-in" placeholder="Empty note...">${sanitizeHTML(item.text||'')}</textarea>`;
+            }
+            iconHtml = head.icon;
+            titleHtml = sanitizeHTML(head.lbl);
+        } else if (itemType === 'zone') {
+            el.innerHTML = `<div class="zone-label">${sanitizeHTML(item.title||'Zone')}</div>`;
+            if (item.zoneType === 'cer') {
+                inner = `<div class="cer-grid"><div class="cer-col">CLAIM</div><div class="cer-col">EVIDENCE</div><div class="cer-col">REASONING</div></div>`;
+                iconHtml = ''; titleHtml = 'CER Builder';
+            } else if (item.zoneType === 'consensus') {
+                const inkContent = (item.ink || []).map(s => `<path d="${InkManager.pointsToPath(s.points)}" stroke="${s.color}" stroke-width="${s.width}" fill="none" stroke-linecap="round"/>`).join('');
+                inner = `<svg class="consensus-zone-svg" style="width:100%;height:100%;pointer-events:none;">${inkContent}</svg>`;
+                iconHtml = ''; titleHtml = 'Consensus Model';
+            } else if (item.zoneType === 'exit') {
+                const exitMode = item.exitMode || item.mode;
+                const modeIcon = { short: '📝', smiley: '⭐', mc: '🔘', multi: '☑️', lw: '🧠' }[exitMode] || '🚪';
+                inner = `<div style="padding:12px 15px;border-bottom:1px solid rgba(0,0,0,0.08);background:#f2f9ff;display:flex;align-items:center;gap:8px;">
+                    <span style="font-size:1.1rem">${modeIcon}</span>
+                    <span style="font-weight:600;color:#097fe8;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.5px;">${(exitMode||'exit').toUpperCase()}</span>
+                </div>
+                <div style="padding:10px 15px;font-size:0.875rem;color:rgba(0,0,0,0.95);font-weight:500;line-height:1.4;">${sanitizeHTML(item.prompt||'')}</div>
+                <div style="flex:1;position:relative"></div>`;
+                iconHtml = ''; titleHtml = 'Exit Ticket';
+            } else {
+                inner = `<div style="padding:20px;text-align:center;color:var(--text-muted);pointer-events:none;display:flex;align-items:center;justify-content:center;height:100%;font-size:0.875rem;">Drop notes here</div>`;
+                iconHtml = ''; titleHtml = sanitizeHTML(item.title||'Zone');
+            }
+            inner += `<div id="zr-${item.id}" class="zone-res-box"></div>`;
+        } else if (itemType === 'poll') {
+            const tot = (item.opts||[]).reduce((a,b)=>a+b.v, 0);
+            inner = `<div class="poll-q" style="padding:8px;font-weight:bold">${sanitizeHTML(item.q||'')}</div>
+                <div class="poll-opts">${(item.opts||[]).map(o => `<div style="margin:5px;background:rgba(0,0,0,0.05);border-radius:4px;position:relative;height:24px"><div style="position:absolute;height:100%;background:#93c5fd;border-radius:4px;width:${tot?(o.v/tot)*100:0}%"></div><div style="position:absolute;inset:0;display:flex;justify-content:space-between;padding:0 8px;align-items:center;font-size:0.8rem;font-weight:600"><span>${sanitizeHTML(o.lbl)}</span><span>${o.v}</span></div></div>`).join('')}</div>`;
+            iconHtml = '📊'; titleHtml = 'Poll';
+        } else if (itemType === 'graph') {
+            const max = Math.max(...(item.data||[0]), 10);
+            inner = `<div class="graph-bars" style="display:flex;align-items:flex-end;height:100%;padding:10px;gap:5px">${(item.data||[]).map(v => `<div style="flex:1;background:#0075de;border-radius:4px 4px 0 0;height:${(v/max)*100}%;position:relative;min-height:1px"><div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:0.7rem;font-weight:600">${v}</div></div>`).join('')}</div>`;
+            iconHtml = '📈'; titleHtml = sanitizeHTML(item.title||'Graph');
+        } else if (itemType === 'spin') {
+            const colors = ['#fecaca','#fed7aa','#fde68a','#bbf7d0','#bae6fd','#c7d2fe'];
+            const opts = item.opts||['A','B','C','D'];
+            const slice = 360/opts.length;
+            const slices = opts.map((o,i) => {
+                const a1=(i*slice)*Math.PI/180, a2=((i+1)*slice)*Math.PI/180;
+                const x1=50+50*Math.cos(a1), y1=50+50*Math.sin(a1), x2=50+50*Math.cos(a2), y2=50+50*Math.sin(a2);
+                return `<path d="M50,50 L${x1},${y1} A50,50 0 0,1 ${x2},${y2} Z" fill="${colors[i%6]}" stroke="white" stroke-width="1"/>`;
+            }).join('') + `<polygon points="50,10 45,-5 55,-5" fill="#333"/>`;
+            inner = `<div style="padding:10px;display:flex;flex-direction:column;align-items:center"><svg class="spin-svg" viewBox="0 0 100 100" width="120" height="120" style="transform:rotate(${item.ang||0}deg)">${slices}</svg><button class="btn-s" style="margin-top:8px;padding:4px 8px;font-size:0.8rem" onpointerdown="event.stopPropagation()" onclick="Breakout._spinItem('${item.id}')">SPIN</button></div>`;
+            iconHtml = '🎡'; titleHtml = 'Spinner';
+        }
+
+        el.innerHTML += `
+            <div class="jiggle-wrapper">
+                <div class="i-head">
+                    <div style="display:flex;gap:5px;align-items:center">
+                        <span class="icon-span">${iconHtml}</span>
+                        <span class="auth-span">${titleHtml}</span>
+                    </div>
+                </div>
+                <div class="i-body">${inner}</div>
+                <div class="resize-h" role="button" aria-label="Resize item"></div>
+            </div>`;
+
+        const w = el.querySelector('.jiggle-wrapper');
+        if (itemType === 'note' && item.sub !== 'sketch' && !item.src) {
+            w.style.background = head.col;
+            w.style.borderColor = head.bor;
+            const h = el.querySelector('.i-head');
+            if (h) { h.style.background = head.bor + '33'; h.style.color = head.bor; }
+        } else if (itemType === 'zone') {
+            w.style.border = '1px dashed rgba(0,0,0,0.15)';
+            if (item.zoneType === 'consensus') { w.classList.add('consensus-bg'); w.style.border = '1px solid #0075de'; }
+            else if (item.zoneType === 'exit') { w.style.border = '2px solid #0075de'; w.style.background = '#f9fdff'; }
+            else { w.style.background = 'rgba(255,255,255,0.6)'; }
+            if (item.color) {
+                w.style.border = `3px solid ${item.color}`;
+                w.style.background = item.color + '1a';
+                const iHead = el.querySelector('.i-head');
+                if (iHead) iHead.style.background = item.color + '28';
+            }
+        }
+
+        const ta = el.querySelector('textarea');
+        if (ta) {
+            ta.oninput = ev => {
+                if (item._timeout) clearTimeout(item._timeout);
+                item._timeout = setTimeout(() => { item.text = ev.target.value; Breakout._scheduleThumbUpdate(); }, 500);
+            };
+        }
+
+        el.addEventListener('mousedown', Breakout._itemMousedown);
+        el.addEventListener('touchstart', Breakout._itemMousedown, {passive:false});
+        return el;
+    },
+
+    _spinItem: (id) => {
+        const zone = Breakout._getZone(); if (!zone) return;
+        const item = (zone.subItems||[]).find(i => i.id === id); if (!item) return;
+        item.ang = (item.ang || 0) + Math.floor(Math.random() * 1080 + 720);
+        const el = document.getElementById(`bk-${id}`);
+        const svg = el?.querySelector('.spin-svg');
+        if (svg) { svg.style.transform = `rotate(${item.ang}deg)`; svg.style.transition = 'transform 3s cubic-bezier(0.2,0.8,0.2,1)'; }
     },
 
     _itemMousedown: (e) => {
@@ -5130,7 +5269,7 @@ window.Breakout = {
     setTool: (tool) => {
         Breakout._state.tool = tool;
         const main = $('breakout-main');
-        main.className = tool === 'pan' ? 'bk-pan' : (tool==='draw'||tool==='eraser' ? 'bk-draw' : '');
+        main.className = tool === 'pan' ? 'bk-pan' : (tool==='draw'||tool==='eraser'||tool==='laser' ? 'bk-draw' : '');
         if (tool === 'pan' || tool === 'select') Breakout._closeDrawers();
         Breakout._syncUi();
     },
@@ -5232,21 +5371,197 @@ window.Breakout = {
         else if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); Breakout.redo(); }
     },
 
-    addNote: (sub) => {
+    addNote: (sub) => { Breakout.createItem('note', sub); },
+
+    createItem: (type, sub) => {
         const zone = Breakout._getZone(); if(!zone) return;
         if(!zone.subItems) zone.subItems = [];
         const view = Breakout._state.view;
-        const cx = $('breakout-main').offsetWidth / 2;
-        const cy = $('breakout-main').offsetHeight / 2;
-        const x = cx / view.z - view.x - 90;
-        const y = cy / view.z - view.y - 65;
-        const item = { id: genId(), sub, text:'', x, y, w:180, h:130 };
-        zone.subItems.push(item);
+        const bkW = $('breakout-main').offsetWidth;
+        const bkH = $('breakout-main').offsetHeight;
+        const cx = bkW / 2 / view.z - view.x;
+        const cy = bkH / 2 / view.z - view.y;
+        let it = { id: genId() };
+
+        if (type === 'note') {
+            it.type = 'note'; it.sub = sub || 'meta'; it.text = '';
+            it.w = 180; it.h = 130;
+            it.x = cx - it.w / 2; it.y = cy - it.h / 2;
+        } else if (type === 'zone') {
+            it.w = 300; it.h = 300;
+            it.x = cx - it.w / 2; it.y = cy - it.h / 2;
+            UI.prompt("Zone Name:", "New Zone", "Create Zone", (name) => {
+                if (!name) return;
+                it.type = 'zone'; it.title = name;
+                zone.subItems.push(it);
+                Breakout.renderItems(); Breakout._pushHistory();
+                Breakout._setSelected(it.id); Breakout.setTool('select');
+                Breakout._scheduleThumbUpdate();
+            }, null, '🔳');
+            return;
+        } else if (type === 'cer') {
+            it.type = 'zone'; it.zoneType = 'cer'; it.title = "Argument Builder (CER)";
+            it.w = 600; it.h = 400;
+            it.x = cx - it.w / 2; it.y = cy - it.h / 2;
+        } else if (type === 'consensus') {
+            it.type = 'zone'; it.zoneType = 'consensus'; it.title = "Consensus Model";
+            it.w = 600; it.h = 600; it.ink = [];
+            it.x = cx - it.w / 2; it.y = cy - it.h / 2;
+        } else if (type === 'poll') {
+            it.type = 'poll'; it.q = "Question?"; it.opts = [{lbl:'Yes',v:0},{lbl:'No',v:0}];
+            it.w = 240; it.h = 160;
+            it.x = cx - it.w / 2; it.y = cy - it.h / 2;
+        } else if (type === 'graph') {
+            it.type = 'graph'; it.title = "Class Data"; it.data = [];
+            it.w = 300; it.h = 200;
+            it.x = cx - it.w / 2; it.y = cy - it.h / 2;
+        } else if (type === 'spin') {
+            it.type = 'spin'; it.ang = 0; it.opts = ['A','B','C','D'];
+            it.w = 200; it.h = 220;
+            it.x = cx - it.w / 2; it.y = cy - it.h / 2;
+        } else {
+            return;
+        }
+
+        zone.subItems.push(it);
         Breakout.renderItems();
         Breakout._pushHistory();
-        Breakout._setSelected(item.id);
+        Breakout._setSelected(it.id);
         Breakout.setTool('select');
         Breakout._scheduleThumbUpdate();
+    },
+
+    createExit: (mode) => {
+        if (mode === 'lw') {
+            // lw mode doesn't need a prompt, create directly
+            const zone = Breakout._getZone(); if (!zone) return;
+            if (!zone.subItems) zone.subItems = [];
+            const view = Breakout._state.view;
+            const cx = $('breakout-main').offsetWidth / 2 / view.z - view.x;
+            const cy = $('breakout-main').offsetHeight / 2 / view.z - view.y;
+            const it = { id: genId(), type: 'zone', zoneType: 'exit', exitMode: 'lw',
+                title: 'Exit Ticket', prompt: "List one thing you Learned and one thing you Wonder.",
+                opts: null, w: 400, h: 300 };
+            it.x = cx - it.w / 2; it.y = cy - it.h / 2;
+            zone.subItems.push(it);
+            Breakout._closeDrawers();
+            Breakout.renderItems();
+            Breakout._pushHistory();
+            Breakout._setSelected(it.id);
+            Breakout.setTool('select');
+            Breakout._scheduleThumbUpdate();
+            return;
+        }
+        Breakout._pendingExit = true;
+        Actions.createExit(mode);
+    },
+
+    _submitExitCreate: () => {
+        const mode = UI._exitCreateMode; if (!mode) return;
+        const zone = Breakout._getZone(); if (!zone) return;
+        const promptTxt = $('exit-create-q').value.trim();
+        if (!promptTxt && mode !== 'lw') { UI.toast("⚠️ Please enter a question"); return; }
+        let opts = null;
+        if (mode === 'mc' || mode === 'multi') {
+            const optsStr = $('exit-create-opts').value.trim();
+            opts = optsStr ? optsStr.split('\n').map(s => s.trim()).filter(Boolean) : null;
+            if (!opts || opts.length < 2) { UI.toast("⚠️ Add at least 2 options"); return; }
+        }
+        const view = Breakout._state.view;
+        const cx = $('breakout-main').offsetWidth / 2 / view.z - view.x;
+        const cy = $('breakout-main').offsetHeight / 2 / view.z - view.y;
+        if (!zone.subItems) zone.subItems = [];
+        const it = { id: genId(), type: 'zone', zoneType: 'exit', exitMode: mode,
+            title: 'Exit Ticket', prompt: mode === 'lw' ? "List one thing you Learned and one thing you Wonder." : promptTxt,
+            opts: opts, w: 400, h: 300 };
+        it.x = cx - it.w / 2; it.y = cy - it.h / 2;
+        zone.subItems.push(it);
+        Breakout._pendingExit = false;
+        UI._exitCreateMode = null;
+        $('modal-exit-create').style.display = 'none';
+        Breakout.renderItems();
+        Breakout._pushHistory();
+        Breakout._setSelected(it.id);
+        Breakout.setTool('select');
+        Breakout._scheduleThumbUpdate();
+    },
+
+    showTemplates: () => {
+        UI.renderTplList('system');
+        $('modal-templates').style.display = 'flex';
+        Breakout._closeDrawers();
+    },
+
+    loadTemplate: (t) => {
+        const zone = Breakout._getZone(); if (!zone) return;
+        if (!zone.subItems) zone.subItems = [];
+        const view = Breakout._state.view;
+        const cx = $('breakout-main').offsetWidth / 2 / view.z - view.x;
+        const cy = $('breakout-main').offsetHeight / 2 / view.z - view.y;
+        const allX = t.items.flatMap(i => [i.x, i.x + (i.w || 200)]);
+        const allY = t.items.flatMap(i => [i.y, i.y + (i.h || 150)]);
+        const tplCx = (Math.min(...allX) + Math.max(...allX)) / 2;
+        const tplCy = (Math.min(...allY) + Math.max(...allY)) / 2;
+        const offX = cx - tplCx;
+        const offY = cy - tplCy;
+        t.items.forEach(i => {
+            const item = { ...i, id: genId(), x: i.x + offX, y: i.y + offY };
+            if (item.type === 'zone' && !item.zoneType) item.title = item.title || 'Zone';
+            zone.subItems.push(item);
+        });
+        $('modal-templates').style.display = 'none';
+        Breakout.renderItems();
+        Breakout._pushHistory();
+        Breakout._scheduleThumbUpdate();
+    },
+
+    toggleSketchMode: () => {
+        Breakout._state.sketchMode = !Breakout._state.sketchMode;
+        const btn = $('bk-sketch-mode-btn');
+        if (btn) {
+            btn.textContent = `🖊️ Sketch Items: ${Breakout._state.sketchMode ? 'ON' : 'OFF'}`;
+            btn.style.background = Breakout._state.sketchMode ? 'var(--accent)' : '';
+            btn.style.color = Breakout._state.sketchMode ? 'white' : '';
+            btn.style.borderColor = Breakout._state.sketchMode ? 'var(--accent)' : '';
+        }
+        if (Breakout._state.sketchMode && Breakout._state.tool !== 'draw') Breakout.setTool('draw');
+    },
+
+    _strokeToItem: (points, color, width) => {
+        if (!points || points.length < 2) return null;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
+        const margin = 16;
+        const bx = minX - margin, by = minY - margin;
+        const bw = Math.max(80, maxX - minX + margin * 2);
+        const contentH = Math.max(60, maxY - minY + margin * 2);
+        const canvas = document.createElement('canvas');
+        canvas.width = bw; canvas.height = contentH;
+        const ctx = canvas.getContext('2d');
+        ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.beginPath();
+        points.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x - bx, p.y - by); else ctx.lineTo(p.x - bx, p.y - by); });
+        ctx.stroke();
+        const src = canvas.toDataURL();
+        const uiChrome = 66;
+        return { id: genId(), type: 'note', sub: 'sketch', src, text: '', x: bx, y: by, w: bw, h: Math.max(140, contentH + uiChrome) };
+    },
+
+    pinInkAsItems: () => {
+        const zone = Breakout._getZone(); if (!zone) return;
+        const ink = zone.subInk || [];
+        if (ink.length === 0) { UI.toast("No ink to pin"); return; }
+        const newItems = ink.map(s => Breakout._strokeToItem(s.points, s.color, s.width)).filter(Boolean);
+        if (newItems.length > 0) {
+            zone.subInk = [];
+            if (!zone.subItems) zone.subItems = [];
+            zone.subItems.push(...newItems);
+            Breakout.renderItems();
+            Breakout.renderInk();
+            Breakout._pushHistory();
+            Breakout._scheduleThumbUpdate();
+            UI.toast(`📌 Pinned ${newItems.length} drawing${newItems.length > 1 ? 's' : ''} as items`);
+        }
     },
 
     setRoomColor: (color) => {
@@ -5318,13 +5633,23 @@ window.Breakout = {
         const tx = v => (v - mnX + pad) * sc + ox;
         const ty = v => (v - mnY + pad) * sc + oy;
         items.forEach(i => {
-            const head = TYPES[i.sub] || TYPES.meta;
-            ctx.fillStyle = head.col;
-            ctx.strokeStyle = head.bor;
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.rect(tx(i.x), ty(i.y), i.w*sc, i.h*sc);
-            ctx.fill(); ctx.stroke();
+            const itemType = i.type || 'note';
+            if (itemType === 'zone') {
+                ctx.fillStyle = 'rgba(0,117,222,0.08)';
+                ctx.strokeStyle = i.color || 'rgba(0,0,0,0.15)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.rect(tx(i.x), ty(i.y), i.w*sc, i.h*sc);
+                ctx.fill(); ctx.stroke();
+            } else {
+                const head = TYPES[i.sub] || TYPES.meta;
+                ctx.fillStyle = (itemType === 'poll') ? '#bfdbfe' : (itemType === 'graph') ? '#bfdbfe' : (itemType === 'spin') ? '#c7d2fe' : head.col;
+                ctx.strokeStyle = (itemType === 'note') ? head.bor : '#64748b';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.rect(tx(i.x), ty(i.y), i.w*sc, i.h*sc);
+                ctx.fill(); ctx.stroke();
+            }
         });
         ink.forEach(s => {
             if(!s.points||s.points.length<2) return;
@@ -5336,7 +5661,7 @@ window.Breakout = {
     },
 
     _onMain: (e) => {
-        if (e.target.closest('#breakout-toolbar, #breakout-mobile-dock, #breakout-drawer-draw, #breakout-drawer-add, #breakout-drawer-board, #breakout-header-pill, button, input, textarea, select')) return;
+        if (e.target.closest('#breakout-toolbar, #breakout-mobile-dock, #breakout-drawer-draw, #breakout-drawer-add, #breakout-drawer-board, #breakout-drawer-exit, #breakout-header-pill, button, input, textarea, select')) return;
         if (e.touches?.length === 2) {
             e.preventDefault();
             const mid = Breakout._getTouchMidpoint(e.touches);
@@ -5364,6 +5689,8 @@ window.Breakout = {
             Breakout.drag = { mode:'draw' }; Breakout.currentPath = [coords];
         } else if (tool === 'eraser') {
             Breakout.drag = { mode:'eraser' };
+        } else if (tool === 'laser') {
+            Breakout.drag = { mode:'laser' };
         }
     },
     _onMove: (e) => {
@@ -5410,6 +5737,14 @@ window.Breakout = {
             const zone = Breakout._getZone(); if (!zone) return;
             const { changed, newInk } = InkManager.eraseAt(coords.x, coords.y, zone.subInk || [], Breakout._state.view.z);
             if (changed) { zone.subInk = newInk; Breakout.renderInk(); Breakout.drag._erasedSomething = true; }
+        } else if (Breakout.drag.mode === 'laser') {
+            const rect = $('breakout-main').getBoundingClientRect();
+            const x = evt.clientX - rect.left;
+            const y = evt.clientY - rect.top;
+            const dot = document.createElement('div');
+            dot.style.cssText = `position:absolute;left:${x}px;top:${y}px;width:10px;height:10px;background:red;border-radius:50%;pointer-events:none;z-index:9999;opacity:0.8;box-shadow:0 0 5px red;transform:translate(-50%,-50%)`;
+            $('breakout-main').appendChild(dot);
+            setTimeout(() => dot.remove(), 500);
         }
     },
     _onEnd: () => {
@@ -5420,9 +5755,18 @@ window.Breakout = {
         }
         if (Breakout.drag.mode === 'draw' && Breakout.currentPath.length > 1) {
             const zone = Breakout._getZone(); if (zone) {
-                if(!zone.subInk) zone.subInk = [];
-                zone.subInk.push({ id:genId(), points:[...Breakout.currentPath], color:Breakout._state.color, width:Breakout._state.width });
-                Breakout.renderInk();
+                if (Breakout._state.sketchMode) {
+                    const it = Breakout._strokeToItem(Breakout.currentPath, Breakout._state.color, Breakout._state.width);
+                    if (it) {
+                        if (!zone.subItems) zone.subItems = [];
+                        zone.subItems.push(it);
+                        Breakout.renderItems();
+                    }
+                } else {
+                    if(!zone.subInk) zone.subInk = [];
+                    zone.subInk.push({ id:genId(), points:[...Breakout.currentPath], color:Breakout._state.color, width:Breakout._state.width });
+                    Breakout.renderInk();
+                }
                 Breakout._pushHistory();
                 Breakout._scheduleThumbUpdate();
             }

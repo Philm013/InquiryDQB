@@ -1,0 +1,8 @@
+{
+  "name": "inquirydqb-tools",
+  "private": true,
+  "description": "Build and test tooling for InquiryDQB (not deployed)",
+  "type": "module",
+  "scripts": { "icons": "node build-icons.mjs" },
+  "devDependencies": { "lucide-static": "^1.63.0" }
+}

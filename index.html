@@ -1,357 +1,232 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- SEO and Social Sharing Meta Tags -->
-<meta name="description" content="A serverless digital question board for the classroom. InquiryDQB uses peer-to-peer connections for instant, private, and zero-overhead student engagement. No accounts or logins required.">
-<meta name="keywords" content="digital question board, ngss, 7i6serverless classroom tool, peer-to-peer education, no-signup whiteboard, privacy-focused classroom app, student inquiry, low overhead edtech">
-
-<!-- Canonical URL -->
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https: wss: http: ws:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>InquiryDQB · Free digital question board for classrooms</title>
+<meta name="description" content="A free, private digital question board for the classroom. Students join with a code (no accounts), share notices, wonders and ideas from any device, and you organise their thinking live. Runs in the browser, peer-to-peer.">
+<meta name="keywords" content="digital question board, driving question board, NGSS, classroom inquiry tool, peer-to-peer classroom app, no sign-up whiteboard, student privacy, exit tickets, live poll">
 <link rel="canonical" href="https://inquirydqb.io/">
+<meta name="theme-color" content="#2563eb">
+<meta name="color-scheme" content="light dark">
 
-<!-- Open Graph / Facebook -->
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
 <meta property="og:type" content="website">
+<meta property="og:site_name" content="InquiryDQB">
 <meta property="og:url" content="https://inquirydqb.io/">
-<meta property="og:title" content="InquiryDQB | The Serverless Digital Board for Classrooms">
-<meta property="og:description" content="Run a real-time digital question board with zero server overhead. InquiryDQB connects teachers and students directly for ultimate privacy and simplicity.">
+<meta property="og:title" content="InquiryDQB · The private digital question board for classrooms">
+<meta property="og:description" content="Students join with a code and share notices, wonders and ideas from any device. No accounts, no installs, and no student data stored on servers.">
 <meta property="og:image" content="https://inquirydqb.io/inquirydqb-share-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="InquiryDQB question board with colour-coded student notes">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="InquiryDQB · The private digital question board for classrooms">
+<meta name="twitter:description" content="Students join with a code and share notices, wonders and ideas from any device. No accounts, no installs, and no student data stored on servers.">
+<meta name="twitter:image" content="https://inquirydqb.io/inquirydqb-share-image.png">
 
-<!-- Twitter -->
-<meta property="twitter:card" content="summary_large_image">
-<meta property="twitter:url" content="https://inquirydqb.io/">
-<meta property="twitter:title" content="InquiryDQB | The Serverless Digital Board for Classrooms">
-<meta property="twitter:description" content="Run a real-time digital question board with zero server overhead. InquiryDQB connects teachers and students directly for ultimate privacy and simplicity.">
-<meta property="twitter:image" content="https://inquirydqb.io/inquirydqb-share-image.png">
-
-<!-- Structured Data (Schema) -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  "name": "InquiryDQB",
-  "applicationCategory": "EducationalApplication",
-  "operatingSystem": "Web",
-  "abstract": "A serverless, peer-to-peer digital question board for classroom inquiry. Enables real-time collaboration with no accounts, logins, or data stored on central servers, ensuring student privacy.",
-  "offers": {
-    "@type": "Offer",
-    "price": "0",
-    "priceCurrency": "USD"
-  },
-  "author": {
-    "@type": "Organization",
-    "name": "InquiryDQB"
-  }
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "InquiryDQB",
+      "url": "https://inquirydqb.io/",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Any (web browser)",
+      "isAccessibleForFree": true,
+      "image": "https://inquirydqb.io/inquirydqb-share-image.png",
+      "description": "A free, peer-to-peer digital question board for classroom inquiry. No accounts or sign-ups; boards stay in the teacher's browser.",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "license": "https://opensource.org/licenses/MIT"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "Do students need accounts or email addresses?", "acceptedAnswer": { "@type": "Answer", "text": "No. Students type a first name or nickname and the class code. Nothing about them is stored on a server." } },
+        { "@type": "Question", "name": "What happens if my internet drops or I close the tab?", "acceptedAnswer": { "@type": "Answer", "text": "Your board is saved on your device automatically. Students see a reconnecting banner and notes they write in the meantime are delivered as soon as you are back. Reopen the board and the class code stays the same." } },
+        { "@type": "Question", "name": "Can students see each other's notes?", "acceptedAnswer": { "@type": "Answer", "text": "Only what you choose to show. Students see their own notes and the activity you launch, such as the notes to vote on. They never receive the whole board." } },
+        { "@type": "Question", "name": "Why can't some students connect?", "acceptedAnswer": { "@type": "Answer", "text": "Most school networks work fine. If a student is stuck on Connecting, check the code, make sure your board tab is open, and try another network or a phone hotspot: some filters block peer-to-peer (WebRTC) traffic. Schools can also run their own connection service." } },
+        { "@type": "Question", "name": "Can a co-teacher help run the board?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Share, then Add a co-host gives a second device a private code that mirrors and edits the same board." } },
+        { "@type": "Question", "name": "Is it free? Can I host it myself?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. InquiryDQB is free and open source. It is a static website, so you can host it anywhere and point it at your own connection service." } }
+      ]
+    }
+  ]
 }
 </script>
-    <title>InquiryDQB | Welcome</title>
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --accent: #6366f1;
-            --accent-dark: #4f46e5;
-            --accent-light: rgba(99,102,241,0.10);
-            --bg: #f8fafc;
-            --card-bg: #ffffff;
-            --text: #1e293b;
-            --text-light: #64748b;
-            --border: 1px solid rgba(0,0,0,0.07);
-            --font-ui: 'Nunito', sans-serif;
-            --shadow: 0 4px 20px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
-            --shadow-lg: 0 20px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
-        }
 
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --accent: #818cf8;
-                --accent-dark: #6366f1;
-                --accent-light: rgba(129,140,248,0.12);
-                --bg: #0f172a;
-                --card-bg: #1e293b;
-                --text: #f1f5f9;
-                --text-light: #94a3b8;
-                --border: 1px solid rgba(255,255,255,0.07);
-                --shadow: 0 4px 20px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.2);
-                --shadow-lg: 0 20px 40px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3);
-            }
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            font-family: var(--font-ui);
-            background: var(--bg);
-            background-image: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, transparent 50%), 
-                              radial-gradient(ellipse at 80% 10%, rgba(139,92,246,0.08) 0%, transparent 55%);
-            color: var(--text);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-            transition: background-color 0.3s, color 0.3s;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 900px;
-            text-align: center;
-            padding: 40px 20px;
-        }
-.hero-logo {
-    max-width: 240px;
-    margin-bottom: 20px;
-    animation: fadeInDown 0.5s ease-out;
-}
-        .hero-title {
-            font-size: 3.5rem;
-            font-weight: 900;
-            color: var(--accent);
-            margin: 0;
-            letter-spacing: -1px;
-            animation: fadeInDown 0.5s ease-out;
-
-          
-        }
-
-        .hero-subtitle {
-            font-size: 1.25rem;
-            color: var(--text-light);
-            margin: 10px 0 40px 0;
-            max-width: 600px;
-            margin-left: auto;
-            margin-right: auto;
-            animation: fadeInDown 0.5s 0.2s ease-out backwards;
-        }
-
-        .role-selector {
-            display: flex;
-            gap: 30px;
-            justify-content: center;
-            margin-bottom: 80px;
-            flex-wrap: wrap;
-            animation: fadeInUp 0.5s 0.4s ease-out backwards;
-        }
-
-        .role-card {
-            background: var(--card-bg);
-            border-radius: 24px;
-            padding: 40px;
-            width: 300px;
-            box-shadow: var(--shadow);
-            text-decoration: none;
-            color: var(--text);
-            transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s;
-            border: 2px solid transparent;
-        }
-
-        .role-card:hover {
-            transform: translateY(-10px);
-            box-shadow: var(--shadow-lg);
-            border-color: var(--accent);
-        }
-
-        .role-icon {
-            font-size: 4rem;
-            line-height: 1;
-            margin-bottom: 16px;
-        }
-
-        .role-card h2 {
-            font-size: 1.75rem;
-            margin: 0 0 8px 0;
-            color: var(--text);
-        }
-
-        .role-card p {
-            color: var(--text-light);
-            margin: 0;
-        }
-
-        .section-header {
-            font-size: 2rem;
-            font-weight: 800;
-            margin-bottom: 20px;
-            color: #334155;
-        }
-  .features-section {
-    margin-bottom: 80px;
-    animation: fadeInUp 0.5s 0.5s ease-out backwards;
-}
-.features-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 30px;
-    text-align: left;
-}
-.feature-card {
-    background: var(--card-bg);
-    border: var(--border);
-    padding: 24px;
-    border-radius: 20px;
-    box-shadow: var(--shadow);
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-.feature-card:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-lg);
-}
-.feature-icon {
-    font-size: 2.5rem;
-    margin-bottom: 12px;
-}
-.feature-card h3 {
-    font-size: 1.25rem;
-    margin: 0 0 8px 0;
-    color: var(--text);
-}
-.feature-card p {
-    color: var(--text-light);
-    margin: 0;
-    line-height: 1.6;
-}
-
-        .video-placeholder {
-            background: #e2e8f0;
-            border-radius: 24px;
-            width: 100%;
-            aspect-ratio: 16 / 9;
-            margin: 0 auto 60px auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: var(--shadow);
-            position: relative;
-            overflow: hidden;
-            cursor: pointer;
-            animation: fadeInUp 0.5s 0.6s ease-out backwards;
-        }
-
-        .video-placeholder::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(45deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        
-        .video-placeholder:hover::before {
-            opacity: 1;
-        }
-
-        .play-button {
-            width: 100px;
-            height: 100px;
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
-            z-index: 2;
-        }
-        
-        .video-placeholder:hover .play-button {
-            transform: scale(1.1);
-        }
-
-        .play-button svg {
-            width: 40px;
-            height: 40px;
-            fill: var(--accent);
-            margin-left: 5px;
-        }
-
-        footer {
-            margin-top: auto;
-            padding: 20px;
-            color: var(--text-light);
-            font-size: 0.9rem;
-        }
-        
-        @media (max-width: 680px) {
-            .hero-title {
-                font-size: 2.5rem;
-            }
-            .hero-subtitle {
-                font-size: 1rem;
-            }
-            .role-card {
-                width: 100%;
-                max-width: 320px;
-            }
-            .container {
-                padding: 20px 10px;
-            }
-        }
-        
-        @keyframes fadeInDown {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-    </style>
+<script src="shared/boot.js"></script>
+<link rel="preload" href="assets/board.webp" as="image" type="image/webp" fetchpriority="high">
+<link rel="stylesheet" href="shared/ui.css">
+<link rel="stylesheet" href="landing.css">
 </head>
 <body>
-    <div class="container">
-       <img src="./InquiryDQB.png" alt="Logo for InquiryDQB" class="hero-logo">
-<h1 class="hero-title">A Digital Question Board That Respects Your Privacy</h1>
-<p class="hero-subtitle">Engage your classroom with a real-time inquiry board that runs entirely in your browser. No accounts, no servers, zero overhead.</p>
-        <div class="role-selector">
-            <a href="./Teacher/" class="role-card">
-                <div class="role-icon">👩‍🏫</div>
-                <h2>I'm a Teacher</h2>
-                <p>Launch a session, create activities, and guide student learning.</p>
-            </a>
-            <a href="./Student/" class="role-card">
-                <div class="role-icon">🧑‍🎓</div>
-                <h2>I'm a Student</h2>
-                <p>Join your class, contribute ideas, and collaborate with peers.</p>
-            </a>
-        </div>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true"><symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></symbol><symbol id="i-qr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></symbol><symbol id="i-note" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 9a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 15 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><path d="M15 3v5a1 1 0 0 0 1 1h5"/></symbol><symbol id="i-zone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></symbol><symbol id="i-consensus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"/><rect x="3" y="14" width="7" height="7" rx="1"/><circle cx="17.5" cy="17.5" r="3.5"/></symbol><symbol id="i-poll" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21v-6"/><path d="M12 21V3"/><path d="M19 21V9"/></symbol><symbol id="i-vote" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 12 2 2 4-4"/><path d="M5 7c0-1.1.9-2 2-2h10a2 2 0 0 1 2 2v12H5V7Z"/><path d="M22 19H2"/></symbol><symbol id="i-ticket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></symbol><symbol id="i-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"/><path d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"/></symbol><symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol><symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol><symbol id="i-wifi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></symbol><symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></symbol><symbol id="i-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></symbol><symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></symbol><symbol id="i-chev-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol><symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5H19V11"/><path d="M19 5L5 19"/></symbol><symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></symbol><symbol id="i-github" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></symbol></svg>
+<a class="skip" href="#main">Skip to content</a>
 
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="icons/icon.svg" alt="" width="34" height="34">InquiryDQB</a>
+    <nav class="nav" aria-label="Page sections">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="head-cta">
+      <a class="btn btn-ghost" href="#join">Join a class</a>
+      <a class="btn btn-primary" href="Teacher/">Teacher console</a>
+    </div>
+  </div>
+</header>
 
-<!-- ADD THIS NEW SECTION -->
-<div class="features-section">
-    <h2 class="section-header">Simple, Private, and Powerful</h2>
-    <div class="features-grid">
-        <div class="feature-card">
-            <div class="feature-icon">⚡</div>
-            <h3>Instant Setup</h3>
-            <p>No sign-ups, no software, no student accounts. Launch a session and connect your class in seconds.</p>
+<main id="main">
+  <!-- ============ hero ============ -->
+  <div class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow"><svg class="i" aria-hidden="true"><use href="#i-sparkles"/></svg>Free · No accounts · No installs</span>
+        <h1>The digital question board that <em>respects your students’ privacy</em></h1>
+        <p class="lede">Students join with a class code and share notices, wonders and ideas from any device. You sort, vote and build understanding together on an infinite canvas, all running right in the browser.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary btn-xl" href="Teacher/">Start a board <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          <a class="btn btn-secondary btn-xl" href="#how">See how it works</a>
         </div>
-        <div class="feature-card">
-            <div class="feature-icon">🛡️</div>
-            <h3>Privacy First</h3>
-            <p>Built with peer-to-peer technology. No student data is ever collected or stored on a central server.</p>
+        <form class="join-card" id="join" action="Student/" method="get" novalidate>
+          <label for="join-code">Student? Enter your class code</label>
+          <div class="join-row">
+            <input class="input" id="join-code" name="join" placeholder="ABC-123" inputmode="text" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="40" enterkeyhint="go" aria-describedby="join-err">
+            <button class="btn btn-primary" type="submit">Join class</button>
+          </div>
+          <div class="error" id="join-err" role="alert" hidden></div>
+          <p class="fine">Your teacher’s screen shows the code and a QR code.</p>
+        </form>
+      </div>
+
+      <div class="stage" aria-label="InquiryDQB on a laptop and a phone">
+        <div class="frame">
+          <div class="frame-bar"><i></i><i></i><i></i><span>inquirydqb.io/Teacher</span></div>
+          <img src="assets/board.webp" width="1600" height="1000" alt="Teacher board with three zones (I notice, I wonder, Ideas to test) filled with colour-coded student notes" fetchpriority="high">
         </div>
-        <div class="feature-card">
-            <div class="feature-icon">☁️</div>
-            <h3>Zero Overhead</h3>
-            <p>Runs directly in the browser with no backend to manage. It's the simplest way to bring inquiry to your classroom.</p>
-        </div>
+        <div class="phone"><img src="assets/student-open.webp" width="520" height="1125" alt="Student phone showing buttons to add a notice, wonder, idea, test or sketch" loading="eager"></div>
+      </div>
     </div>
-</div>
-        <h2 class="section-header">See It In Action</h2>
-        <div class="video-placeholder" onclick="alert('Demo video coming soon!')">
-            <div class="play-button">
-                <svg viewBox="0 0 24 24"><path d="M8,5.14V19.14L19,12.14L8,5.14Z" /></svg>
-            </div>
-        </div>
+  </div>
+
+  <!-- ============ how it works ============ -->
+  <section id="how" class="alt" aria-labelledby="how-h">
+    <div class="wrap">
+      <div class="sec-head"><div class="kicker">How it works</div><h2 id="how-h">From blank board to class discussion in minutes</h2><p>No setup, no rosters, no student logins.</p></div>
+      <div class="steps">
+        <article class="step">
+          <div class="n" aria-hidden="true">1</div>
+          <h3>Open a board and share the code</h3>
+          <p>Start blank or from a template like See-Think-Wonder. A short code and QR code appear for your class.</p>
+          <div class="art mid"><div class="code-art"><div class="lbl">Class code</div><div class="code">K7Q-2XR</div><svg class="i" style="width:44px;height:44px;color:var(--text-2)" aria-hidden="true"><use href="#i-qr"/></svg></div></div>
+        </article>
+        <article class="step">
+          <div class="n" aria-hidden="true">2</div>
+          <h3>Students join from any device</h3>
+          <p>They type the code or scan the QR on a phone, tablet or Chromebook. Pick an avatar and a first name, and they’re in.</p>
+          <div class="art"><div class="phone-sm"><img src="assets/student-join.webp" width="520" height="1125" loading="lazy" alt="Student join screen with a class code field"></div></div>
+        </article>
+        <article class="step">
+          <div class="n" aria-hidden="true">3</div>
+          <h3>Collect, sort and discuss</h3>
+          <p>Notes appear live. Group them into zones, then launch a vote, a ranking or a discussion and see results instantly.</p>
+          <div class="art"><div class="phone-sm"><img src="assets/student-vote.webp" width="520" height="1125" loading="lazy" alt="Student choosing a note to vote for"></div></div>
+        </article>
+      </div>
     </div>
-    
-    <footer>
-        <p>&copy; 2024 InquiryDQB. All rights reserved.</p>
-    </footer>
+  </section>
+
+  <!-- ============ features ============ -->
+  <section id="features" aria-labelledby="feat-h">
+    <div class="wrap">
+      <div class="sec-head"><div class="kicker">Features</div><h2 id="feat-h">Everything for inquiry-based lessons</h2><p>Built around notice, wonder and argue, and designed to work as well on a phone as on a projector.</p></div>
+      <div class="features">
+        <article class="feat tone-a"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-note"/></svg></div><h3>Purposeful sticky notes</h3><p>Colour-coded Notice, Wonder, Idea and Test notes, plus quick sketches students draw with a finger or mouse.</p></article>
+        <article class="feat tone-b"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-zone"/></svg></div><h3>Zones and CER builder</h3><p>Group notes into zones, or open a Claim · Evidence · Reasoning builder so students construct arguments together.</p></article>
+        <article class="feat tone-c"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-poll"/></svg></div><h3>Polls and live graphs</h3><p>Ask a question or collect numbers from the class and watch the chart build in real time.</p></article>
+        <article class="feat tone-d"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-vote"/></svg></div><h3>Vote, rank and discuss</h3><p>Turn any set of notes into a vote, a ranking or a focused discussion with feedback, questions and connections.</p></article>
+        <article class="feat tone-e"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-ticket"/></svg></div><h3>Exit tickets</h3><p>Short answer, rating, multiple choice, multi-select, or “I learned / I wonder”. Responses land on your board.</p></article>
+        <article class="feat tone-b"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-consensus"/></svg></div><h3>Shared class model</h3><p>Build one model together on a shared canvas. Students follow your view and can be invited to draw.</p></article>
+        <article class="feat tone-a"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-rocket"/></svg></div><h3>Breakout rooms</h3><p>Give a group its own private board, then bring their thinking back to the whole class.</p></article>
+        <article class="feat tone-c"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg></div><h3>Classroom control</h3><p>Approve notes before they appear, pause a student, hide names, run a timer or invite a co-host on a second device.</p></article>
+        <article class="feat tone-d"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-save"/></svg></div><h3>Yours to keep</h3><p>Boards are saved on your device. Export as a file, a picture or a printable outline, and add it to your home screen like an app.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ privacy ============ -->
+  <section id="privacy" class="alt" aria-labelledby="priv-h">
+    <div class="wrap">
+      <div class="sec-head"><div class="kicker">Privacy by design</div><h2 id="priv-h">Student data stays out of the cloud</h2><p>There’s no InquiryDQB server or database, so there’s nothing to sign up for and nothing to leak.</p></div>
+      <div class="privacy">
+        <article class="priv"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-users"/></svg></div><h3>No accounts, no tracking</h3><p>No emails, passwords or analytics. Students choose a first name or nickname that only their teacher sees.</p></article>
+        <article class="priv"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg></div><h3>Direct, encrypted connections</h3><p>Notes travel from each student’s device to the teacher’s over encrypted WebRTC connections. Nothing is stored along the way.</p></article>
+        <article class="priv"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-save"/></svg></div><h3>Your board stays on your device</h3><p>Boards live in your browser’s own storage and students keep their notes on their device. Export or delete them whenever you like.</p></article>
+      </div>
+      <div class="caveat"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg><p><b>One honest detail:</b> to introduce devices to each other, InquiryDQB uses free public services by default: the PeerJS connection service and a Google STUN server see technical details such as IP addresses and the random class code, and if a direct link is impossible, encrypted traffic can be relayed through PeerJS’s TURN servers. None of them can read notes, names or boards. Schools can run their own; see <a href="https://github.com/Philm013/InquiryDQB/blob/main/docs/SELF_HOSTING.md">Hosting InquiryDQB yourself</a>.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ requirements ============ -->
+  <section aria-labelledby="req-h">
+    <div class="wrap">
+      <div class="sec-head"><div class="kicker">Works where you teach</div><h2 id="req-h">What you need</h2></div>
+      <div class="reqs">
+        <article class="req"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-monitor"/></svg></div><div><h3>For the teacher</h3><p>A laptop, Chromebook or tablet with a current Chrome, Edge, Safari or Firefox. Keep the board tab open during the lesson.</p></div></article>
+        <article class="req"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-phone"/></svg></div><div><h3>For students</h3><p>Any phone, tablet or computer with a modern browser. Students can scan the QR code or just type the class code.</p></div></article>
+        <article class="req"><div class="ico"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg></div><div><h3>Network</h3><p>Everyone needs internet access, and peer-to-peer (WebRTC) traffic can’t be blocked by the school filter. Most networks are fine.</p></div></article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ faq ============ -->
+  <section id="faq" class="alt" aria-labelledby="faq-h">
+    <div class="wrap">
+      <div class="sec-head"><div class="kicker">FAQ</div><h2 id="faq-h">Good questions</h2></div>
+      <div class="faq">
+        <details><summary>Do students need accounts or email addresses?<svg class="i" aria-hidden="true"><use href="#i-chev-down"/></svg></summary><div>No. Students type a first name or nickname and the class code. Nothing about them is stored on a server.</div></details>
+        <details><summary>What happens if my internet drops or I close the tab?<svg class="i" aria-hidden="true"><use href="#i-chev-down"/></svg></summary><div>Your board is saved on your device automatically. Students see a “Reconnecting” banner, and notes they write in the meantime are delivered as soon as you’re back. Reopen the board and the class code stays the same until you choose a new one.</div></details>
+        <details><summary>Can students see each other’s notes?<svg class="i" aria-hidden="true"><use href="#i-chev-down"/></svg></summary><div>Only what you choose to show. Students see their own notes and the activity you launch, such as the notes to vote on. They never receive the whole board.</div></details>
+        <details><summary>Why can’t some students connect?<svg class="i" aria-hidden="true"><use href="#i-chev-down"/></svg></summary><div>Most school networks work fine. If a student is stuck on “Connecting…”, check the code, make sure your board tab is open, and try another network or a phone hotspot: some filters block peer-to-peer (WebRTC) traffic. Schools can also run their own connection service.</div></details>
+        <details><summary>Can a co-teacher help run the board?<svg class="i" aria-hidden="true"><use href="#i-chev-down"/></svg></summary><div>Yes. In <b>Share</b>, choose <b>Add a co-host</b> to give a second device a private code. It mirrors and can edit the same board.</div></details>
+        <details><summary>Is it free? Can I host it myself?<svg class="i" aria-hidden="true"><use href="#i-chev-down"/></svg></summary><div>Yes. InquiryDQB is free and open source. It’s a static website, so you can host it anywhere and point it at your own connection service. See the <a href="https://github.com/Philm013/InquiryDQB#readme">README</a> for details.</div></details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ closing call to action ============ -->
+  <section aria-labelledby="cta-h">
+    <div class="wrap">
+      <div class="cta-band">
+        <h2 id="cta-h">Ready for your next inquiry lesson?</h2>
+        <p>Open a board, share the code and watch your students’ questions appear.</p>
+        <a class="btn btn-xl" href="Teacher/">Start a board <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap foot-row">
+    <div>© <span id="year">2026</span> InquiryDQB · Open source under the MIT licence</div>
+    <nav class="foot-links" aria-label="Footer">
+      <a href="Teacher/">Teacher console</a>
+      <a href="#join">Join a class</a>
+      <a href="https://github.com/Philm013/InquiryDQB" rel="noopener"><svg class="i" aria-hidden="true"><use href="#i-github"/></svg>GitHub</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="shared/net.js"></script>
+<script src="landing.js"></script>
 </body>
 </html>

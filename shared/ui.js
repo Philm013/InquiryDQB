@@ -372,7 +372,7 @@
         if (it.header) { var hd = document.createElement('div'); hd.className = 'menu-head'; hd.textContent = it.header; m.appendChild(hd); return; }
         var b = document.createElement('button'); b.type = 'button'; b.className = 'menu-item' + (it.danger ? ' danger' : ''); b.setAttribute('role', 'menuitem');
         if (it.disabled) b.disabled = true;
-        b.innerHTML = (it.icon ? icon(it.icon) : '') + '<span>' + esc(it.label) + '</span>' + (it.kbd ? '<span class="kbd">' + esc(it.kbd) + '</span>' : '') + (it.checked ? '<span class="chk">' + icon('check', 'sm') + '</span>' : '');
+        b.innerHTML = (it.icon ? icon(it.icon) : '') + '<span>' + esc(it.label) + '</span>' + (it.kbd ? '<span class="kbd">' + esc(kbd(it.kbd)) + '</span>' : '') + (it.checked ? '<span class="chk">' + icon('check', 'sm') + '</span>' : '');
         b.addEventListener('click', function () { if (!it.keepOpen) inst.close(); if (it.onClick) it.onClick(); });
         m.appendChild(b);
       });
@@ -420,6 +420,12 @@
     }
     return { open: open, close: closeCurrent, isOpen: function () { return !!current; } };
   })();
+
+  /* Shortcut labels are written with Mac symbols; show Ctrl/Shift spellings elsewhere. */
+  var isMac = /Mac|iPhone|iPad|iPod/.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || '');
+  function kbd(label) {
+    return isMac ? label : String(label).replace(/⇧⌘/g, 'Ctrl+Shift+').replace(/⌘/g, 'Ctrl+').replace(/⇧\s*=/g, 'Shift =').replace(/⇧/g, 'Shift+');
+  }
 
   /* ---------------------------------------------------------------------- */
   /* Toasts                                                                  */
@@ -471,7 +477,7 @@
   global.DQBUI = {
     esc: esc, safeId: safeId, safeColor: safeColor, safeImg: safeImg, clampStr: clampStr, num: num, genId: genId,
     debounce: debounce, throttle: throttle, isMobile: isMobile, icon: icon, h: h, haptic: haptic,
-    loadScript: loadScript, copyText: copyText, announce: announce,
+    loadScript: loadScript, copyText: copyText, announce: announce, kbd: kbd, isMac: isMac,
     Theme: Theme, Hist: Hist, Overlay: Overlay, Dialog: Dialog, Menu: Menu, Toast: Toast
   };
 })(window);

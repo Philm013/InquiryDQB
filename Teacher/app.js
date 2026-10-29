@@ -2287,8 +2287,10 @@ window.InputController = {
         if (e.deltaMode === 1) { dx *= 16; dy *= 16; } else if (e.deltaMode === 2) { dx *= window.innerHeight; dy *= window.innerHeight; }
         const zoomMode = (localStorage.getItem('dqb_wheel') || 'pan') === 'zoom';
         if (e.ctrlKey || e.metaKey || zoomMode) {
-            const k = e.ctrlKey ? 0.012 : 0.0016;   // trackpad pinch arrives as ctrl+wheel with small deltas
-            InputController.zoom(Math.exp(-dy * k), e.clientX, e.clientY);
+            // trackpad pinch arrives as a stream of ctrl+wheel events with small deltas; a mouse wheel sends one big step per click
+            const pinch = e.ctrlKey && e.deltaMode === 0 && Math.abs(dy) < 50;
+            const f = pinch ? Math.exp(-dy * 0.012) : Math.exp(-Math.max(-120, Math.min(120, dy)) * 0.0018);
+            InputController.zoom(f, e.clientX, e.clientY);
         } else {
             if (e.shiftKey && !dx) { dx = dy; dy = 0; }
             StateManager.updateView({ x: State.view.x - dx / State.view.z, y: State.view.y - dy / State.view.z });
@@ -3270,8 +3272,8 @@ window.Consensus = {
         const svg = $('cm-temp-ink'); if (!svg) return;
         const cm = State.consensusMode;
         if (Consensus.drag && Consensus.drag.mode === 'draw' && Consensus.currentPath.length > 1) {
-            const t = `scale(${cm.view.z}) translate(${cm.view.x}px, ${cm.view.y}px)`;
-            svg.innerHTML = `<g transform="${t}" style="transform-origin:0 0"><path d="${InkManager.pointsToPath(Consensus.currentPath)}" stroke="${safeColor(cm.color) || '#000'}" stroke-width="${cm.brush === 'highlight' ? cm.width * 3 : cm.width}" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="${cm.brush === 'highlight' ? 0.4 : 1}"/></g>`;
+            const t = `scale(${cm.view.z}) translate(${cm.view.x} ${cm.view.y})`;      // SVG attribute syntax: no units
+            svg.innerHTML = `<g transform="${t}"><path d="${InkManager.pointsToPath(Consensus.currentPath)}" stroke="${safeColor(cm.color) || '#000'}" stroke-width="${cm.brush === 'highlight' ? cm.width * 3 : cm.width}" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="${cm.brush === 'highlight' ? 0.4 : 1}"/></g>`;
         } else svg.innerHTML = '';
     },
     renderItems: () => {

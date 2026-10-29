@@ -66,6 +66,33 @@ test('manifests are valid and every icon, script and style they or the service w
   }
 });
 
+test('a strict Content-Security-Policy is in place: no inline scripts, and injected markup cannot run code', async () => {
+  for (const page of ['index.html', 'Teacher/index.html', 'Student/index.html']) {
+    const html = fs.readFileSync(path.join(ROOT, page), 'utf8');
+    const csp = (html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/) || [])[1] || '';
+    assert.match(csp, /script-src 'self'(;|$)/, `${page}: scripts may only come from this site (no 'unsafe-inline', no 'unsafe-eval')`);
+    assert.doesNotMatch(csp, /unsafe-eval/, `${page}: no eval`);
+    assert.match(csp, /object-src 'none'/, `${page}: no plugins`);
+    const inline = [...html.matchAll(/<script(?![^>]*\bsrc=)(?![^>]*type="application\/ld\+json")[^>]*>/g)].length;
+    assert.equal(inline, 0, `${page}: no inline <script> blocks`);
+    assert.doesNotMatch(html, /\son(click|error|load|mouseover|focus|change|submit)\s*=/i, `${page}: no inline event-handler attributes`);
+  }
+  // even if escaping ever failed, the browser itself refuses to run injected handlers and scripts
+  const c = await env.context('desktop');
+  const p = await c.newPage();                                                          // (not recorded: the violations below are expected)
+  await p.goto(env.origin + '/Student/');
+  await p.waitForSelector('body[data-ready="1"]');
+  const violations = await p.evaluate(() => new Promise((resolve) => {
+    const seen = [];
+    document.addEventListener('securitypolicyviolation', (e) => seen.push(e.violatedDirective));
+    document.body.insertAdjacentHTML('beforeend', '<img src="x" onerror="window.__ran=1"><iframe srcdoc="<script>parent.__ran=2<\/script>"></iframe>');
+    const s = document.createElement('script'); s.textContent = 'window.__ran = 3'; document.body.appendChild(s);
+    setTimeout(() => resolve({ ran: window.__ran, seen }), 600);
+  }));
+  assert.equal(violations.ran, undefined, 'no injected code ran');
+  assert.ok(violations.seen.length >= 2, `the browser reported the blocked attempts (${violations.seen.join(', ')})`);
+});
+
 test('after one visit the teacher console and student app start without a network', async () => {
   const ctx = await env.context('desktop');
   const p = await ctx.newPage();

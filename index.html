@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https: wss: http: ws:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>InquiryDQB · Free digital question board for classrooms</title>
 <meta name="description" content="A free, private digital question board for the classroom. Students join with a code (no accounts), share notices, wonders and ideas from any device, and you organise their thinking live. Runs in the browser, peer-to-peer.">
@@ -59,7 +60,7 @@
 }
 </script>
 
-<script>try{var t=localStorage.getItem('dqb_theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<script src="shared/boot.js"></script>
 <link rel="preload" href="assets/board.webp" as="image" type="image/webp" fetchpriority="high">
 <link rel="stylesheet" href="shared/ui.css">
 <link rel="stylesheet" href="landing.css">

@@ -45,6 +45,10 @@ For a fixed deployment, define `window.DQB_PEER_OPTS` in a small script that loa
 
 PeerJS's defaults are Google's public STUN server and PeerJS's public TURN relays. Replacing `iceServers` as above (for example with an empty list for same-network classrooms, or your own coturn server) keeps those out of the picture.
 
+### A note on the Content-Security-Policy
+
+The pages ship with a strict CSP (`<meta http-equiv="Content-Security-Policy">`): scripts only from the same origin. If you serve InquiryDQB behind your own web server you can also send it as an HTTP header, and add `frame-ancestors 'none'` there (a `<meta>` tag cannot set that one). `connect-src` already permits any https/wss PeerServer; tighten it to your own host if you prefer.
+
 ## 3. Network requirements
 
 - Outbound **HTTPS/WSS** to the PeerServer (the public one is `0.peerjs.com:443`).

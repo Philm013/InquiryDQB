@@ -12,7 +12,7 @@ const AXE = require.resolve('axe-core/axe.min.js');
 let env, code;
 
 async function violations(page) {
-  await page.addScriptTag({ path: AXE });
+  await page.addScriptTag({ path: AXE });             // contexts below use bypassCSP: axe is injected as an inline script
   return page.evaluate(async () => {
     const res = await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'] }, resultTypes: ['violations'] });
     return res.violations.map((v) => `${v.id} (${v.impact}) ×${v.nodes.length}: ${v.help} → ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(' | ')}`);
@@ -31,7 +31,7 @@ after(async () => { await env.close(); });
 for (const scheme of ['light', 'dark']) {
   test(`landing page (${scheme})`, async () => {
     for (const device of ['desktop', 'phone']) {
-      const p = await env.open(device, null, { colorScheme: scheme });
+      const p = await env.open(device, null, { colorScheme: scheme, bypassCSP: true });
       await p.goto(env.origin + '/');
       await p.waitForTimeout(400);
       await clean(p, `landing ${device} ${scheme}`);
@@ -40,7 +40,7 @@ for (const scheme of ['light', 'dark']) {
 
   test(`teacher console (${scheme})`, async () => {
     for (const device of ['desktop', 'phone']) {
-      const c = await env.context(device, { colorScheme: scheme });
+      const c = await env.context(device, { colorScheme: scheme, bypassCSP: true });
       const p = await c.newPage();
       await p.goto(env.origin + '/Teacher/');
       await clean(p, `teacher home ${device} ${scheme}`);
@@ -72,7 +72,7 @@ for (const scheme of ['light', 'dark']) {
   });
 
   test(`student app (${scheme})`, async () => {
-    const c = await env.context('phone', { colorScheme: scheme });
+    const c = await env.context('phone', { colorScheme: scheme, bypassCSP: true });
     const s = await c.newPage();
     await s.goto(env.origin + '/Student/?join=' + code);
     await s.waitForSelector('body[data-ready="1"]');

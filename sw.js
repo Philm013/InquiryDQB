@@ -9,7 +9,7 @@ const SHELL = [
   './', 'index.html', 'landing.css', 'landing.js',
   'Teacher/', 'Teacher/index.html', 'Teacher/app.css', 'Teacher/app.js', 'Teacher/shell.js', 'Teacher/shell-sheets.js', 'Teacher/shell-home.js', 'Teacher/manifest.webmanifest',
   'Student/', 'Student/index.html', 'Student/app.css', 'Student/app.js', 'Student/manifest.webmanifest',
-  'shared/ui.css', 'shared/ui.js', 'shared/net.js', 'shared/icons.js',
+  'shared/ui.css', 'shared/ui.js', 'shared/net.js', 'shared/icons.js', 'shared/boot.js', 'shared/sw-register.js',
   'vendor/peerjs.min.js', 'vendor/qrcode.min.js', 'vendor/confetti.min.js',
   'fonts/fonts.css', 'fonts/inter-latin.woff2', 'fonts/inter-latin-ext.woff2', 'fonts/patrick-hand-latin.woff2', 'fonts/patrick-hand-latin-ext.woff2',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'favicon.ico'

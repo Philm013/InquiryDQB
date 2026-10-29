@@ -1,0 +1,19 @@
+{
+  "name": "inquirydqb",
+  "version": "2.0.0",
+  "private": true,
+  "description": "InquiryDQB: a peer-to-peer digital question board for classrooms (static site, no build step).",
+  "license": "MIT",
+  "scripts": {
+    "start": "node tools/serve.cjs",
+    "test": "node --test --test-force-exit --test-concurrency=2 \"tests/*.test.js\"",
+    "icons": "npm --prefix tools install && npm --prefix tools run icons"
+  },
+  "devDependencies": {
+    "peer": "^1.0.2",
+    "playwright": "^1.63.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

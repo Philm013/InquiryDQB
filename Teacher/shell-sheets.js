@@ -146,6 +146,7 @@
         <div class="field"><label>Appearance</label><div class="seg" id="set-theme" role="group" aria-label="Theme">${[['auto', 'monitor', 'Auto'], ['light', 'sun', 'Light'], ['dark', 'moon', 'Dark']].map(([v, i, l]) => `<button type="button" data-v="${v}" aria-pressed="${theme === v}">${ic(i, 'sm')}${l}</button>`).join('')}</div></div>
         ${isMobile() ? '' : `<div class="field"><label>Mouse wheel</label><div class="seg" id="set-wheel" role="group" aria-label="Mouse wheel behaviour"><button type="button" data-v="pan" aria-pressed="${wheel === 'pan'}">Scroll to pan</button><button type="button" data-v="zoom" aria-pressed="${wheel === 'zoom'}">Scroll to zoom</button></div><div class="hint">Pinch on a trackpad or hold Ctrl or ⌘ to zoom either way.</div></div>
         <div class="field"><label>Minimap</label><div class="row" style="gap:8px"><div class="seg grow" id="set-mm-size" role="group" aria-label="Minimap size">${[[160, 'Small'], [200, 'Medium'], [260, 'Large']].map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${s.mmSize === v}">${l}</button>`).join('')}</div><select class="select" id="set-mm-pos" style="width:auto" aria-label="Minimap position"><option value="br">Bottom right</option><option value="bl">Bottom left</option><option value="tr">Top right</option><option value="tl">Top left</option></select></div></div>`}
+        <div class="field"><label>Moving things</label><div class="rule-row"><div class="grow"><div class="t">Snap to guides</div><div class="s">Items line up with their neighbours as you drag.${isMobile() ? '' : ' Hold Alt to move freely.'}</div></div><button type="button" class="switch" role="switch" id="set-snap" aria-checked="${SnapSystem.enabled()}" aria-label="Snap to guides"></button></div></div>
         <div class="field"><label>Connection service</label>${po && po.host ? `<div class="help-box">Using a custom server: <b>${esc(po.host)}</b>:${esc(po.port)}<button type="button" class="btn btn-secondary btn-sm" id="set-peer-reset" style="margin-top:8px">Use the default service</button></div>` : `<div class="hint">Using the free public PeerJS service. Schools can run their own PeerServer and pass <code>?peerHost=…</code> in the page address.</div>`}</div>
         <div class="field"><label>This device</label><div class="hint">Boards are saved in this browser only. Clearing site data removes them — use <b>Download board file</b> to keep a backup.</div></div>`;
       const ov = Overlay.open({ title: 'Settings', content: wrap, size: 'md', footer: [{ label: 'Done', kind: 'primary' }] });
@@ -156,6 +157,7 @@
         else if (grp === 'set-wheel') localStorage.setItem('dqb_wheel', v);
         else if (grp === 'set-mm-size') { s.mmSize = +v; Shell.setMinimap(true); }
       });
+      on(wrap.querySelector('#set-snap'), 'click', e => { const b = e.currentTarget, v = b.getAttribute('aria-checked') !== 'true'; b.setAttribute('aria-checked', String(v)); try { localStorage.setItem('dqb_snap', v ? '1' : '0'); } catch (err) { /* ignore */ } });
       const pos = wrap.querySelector('#set-mm-pos'); if (pos) { pos.value = s.mmPos; on(pos, 'change', () => { s.mmPos = pos.value; Shell.setMinimap(true); }); }
       on(wrap.querySelector('#set-peer-reset'), 'click', () => { try { localStorage.removeItem('dqb_peer'); } catch (e) { /* ignore */ } Toast.success('Reload the page to use the default service'); });
     }
@@ -309,7 +311,7 @@
   };
   Shell.Shortcuts = {
     open() {
-      const rows = [['Select', 'V'], ['Hand (pan)', 'H or hold Space'], ['Draw', 'P'], ['Eraser', 'E'], ['Laser pointer', 'L'], ['New note', 'N or double-click'], ['Add menu', 'A'], ['Delete', '⌫ / Delete'], ['Undo / redo', '⌘Z / ⇧⌘Z'], ['Duplicate', '⌘D'], ['Select all', '⌘A'], ['Group / ungroup', '⌘G / ⇧⌘G'], ['Nudge selection', 'Arrow keys (⇧ = bigger)'], ['Zoom in / out', '+ / −'], ['Zoom 100%', '0'], ['Fit to screen', '⇧1'], ['Minimap', 'M'], ['This list', '?']];
+      const rows = [['Select', 'V'], ['Hand (pan)', 'H or hold Space'], ['Draw', 'P'], ['Eraser', 'E'], ['Laser pointer', 'L'], ['New note', 'N or double-click'], ['Add menu', 'A'], ['Delete', '⌫ / Delete'], ['Undo / redo', '⌘Z / ⇧⌘Z'], ['Duplicate', '⌘D'], ['Select all', '⌘A'], ['Group / ungroup', '⌘G / ⇧⌘G'], ['Nudge selection', 'Arrow keys (⇧ = bigger)'], ['Move without snapping', 'hold Alt'], ['Zoom in / out', '+ / −'], ['Zoom 100%', '0'], ['Fit to screen', '⇧1'], ['Minimap', 'M'], ['This list', '?']];
       Overlay.open({ title: 'Keyboard shortcuts', size: 'md', content: `<div class="shortcut-grid">${rows.map(([a, k]) => `<div>${esc(a)}</div><div>${k.split(' or ').map(x => `<span class="kbd">${esc(DQBUI.kbd(x))}</span>`).join(' or ')}</div>`).join('')}</div>`, footer: [{ label: 'Close', kind: 'primary' }] });
     }
   };

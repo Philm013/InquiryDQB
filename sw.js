@@ -6,7 +6,7 @@
    Bump CACHE_VERSION whenever the shell files change shape (it also forces a clean-up of old caches). */
 const CACHE_VERSION = 'dqb-v2.0.0';
 const SHELL = [
-  './', 'index.html',
+  './', 'index.html', 'landing.css', 'landing.js',
   'Teacher/', 'Teacher/index.html', 'Teacher/app.css', 'Teacher/app.js', 'Teacher/shell.js', 'Teacher/shell-sheets.js', 'Teacher/shell-home.js', 'Teacher/manifest.webmanifest',
   'Student/', 'Student/index.html', 'Student/app.css', 'Student/app.js', 'Student/manifest.webmanifest',
   'shared/ui.css', 'shared/ui.js', 'shared/net.js', 'shared/icons.js',
@@ -32,7 +32,7 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
-const isStatic = (url) => /\/(fonts|icons|vendor)\//.test(url.pathname) || /\.(woff2?|png|svg|ico)$/.test(url.pathname);
+const isStatic = (url) => /\/(fonts|icons|vendor)\//.test(url.pathname) || /\.(woff2?|png|webp|svg|ico)$/.test(url.pathname);
 
 async function networkFirst(request, timeoutMs) {
   const cache = await caches.open(CACHE_VERSION);

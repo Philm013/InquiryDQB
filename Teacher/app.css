@@ -382,7 +382,7 @@ svg { overflow: visible; }
   .name-input { width: 100%; font-size: 1rem; height: 40px; }
   .ws-title { max-width: none; flex: 1; }
   .save-status { display: none; }
-  .conn-chip { height: 32px; padding: 0 10px; }
+  .conn-chip { height: 40px; padding: 0 14px; }
   #conn-label { max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
   #btn-share { min-width: 40px; height: 40px; padding: 0 10px; }
   #rail, #viewbar { display: none !important; }

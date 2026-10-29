@@ -264,6 +264,14 @@
       Array.prototype.forEach.call(handleEls, function (n) { n.addEventListener('pointerdown', down); n.addEventListener('pointermove', move); n.addEventListener('pointerup', up); n.addEventListener('pointercancel', up); });
     }
 
+    // Escape closes the top layer even when focus has wandered out of it (for example onto <body> after a click on the backdrop edge)
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || e.defaultPrevented || !stack.length) return;
+      var top = stack[stack.length - 1];
+      if (top.opts && top.opts.dismissible === false) return;
+      e.preventDefault(); close(top, undefined, true);
+    });
+
     return {
       open: open,
       top: function () { return stack[stack.length - 1] || null; },
@@ -398,7 +406,7 @@
 
       function onDown(e) { if (!m.contains(e.target)) inst.close(); }
       function onKey(e) {
-        if (e.key === 'Escape') { e.preventDefault(); inst.close(); if (a && a.focus) a.focus(); }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); inst.close(); if (a && a.focus) a.focus(); }
         else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault();
           var list = Array.prototype.slice.call(m.querySelectorAll('.menu-item:not([disabled])')); if (!list.length) return;

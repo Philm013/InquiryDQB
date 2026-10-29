@@ -2,7 +2,8 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://inquirydqb.io/</loc>
-    <lastmod>2025-12-01</lastmod> <!-- Update with the date you make changes -->
-    <priority>1.00</priority>
+    <lastmod>2026-10-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
   </url>
 </urlset>

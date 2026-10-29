@@ -2150,7 +2150,9 @@ window.InputController = {
         v.addEventListener('dblclick', InputController.dblclick);
         window.addEventListener('keydown', InputController.keydown);
         window.addEventListener('keyup', InputController.keyup);
-        window.addEventListener('blur', () => { State.spaceDown = false; });
+        window.addEventListener('blur', () => { State.spaceDown = false; SnapSystem.suspended = false; });
+        window.addEventListener('keydown', e => { if (e.key === 'Alt') SnapSystem.suspended = true; });
+        window.addEventListener('keyup', e => { if (e.key === 'Alt') SnapSystem.suspended = false; });
         window.addEventListener('contextmenu', e => { if (!e.target.closest('input, textarea')) e.preventDefault(); });
     },
     down: (e) => {
@@ -2367,10 +2369,14 @@ window.SnapSystem = {
     threshold: 10,
     activeGuides: [],
 
+    suspended: false,                                            // true while Alt is held: move freely
+    enabled: () => { try { return localStorage.getItem('dqb_snap') !== '0'; } catch (e) { return true; } },
+
     getSnap: (item, newX, newY) => {
         const threshold = SnapSystem.threshold / State.view.z;
         let finalX = newX, finalY = newY;
         SnapSystem.activeGuides = [];
+        if (SnapSystem.suspended || !SnapSystem.enabled()) return { x: newX, y: newY };
 
         const itemBounds = {
             left: newX, right: newX + item.w, top: newY, bottom: newY + item.h,

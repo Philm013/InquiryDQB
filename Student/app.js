@@ -49,7 +49,7 @@
       return new Promise(resolve => {
         // profile: localStorage first (always available), IndexedDB for notes
         try { const p = JSON.parse(localStorage.getItem('dqb_profile') || 'null'); if (p) Object.assign(State.me, p); } catch (e) { /* ignore */ }
-        if (!State.me.sid) { State.me.sid = DQBUI.genId() + DQBUI.genId(); Store.saveProfile(); }
+        if (!State.me.sid) { State.me.sid = Net.genCode(16); Store.saveProfile(); }          // crypto-random: it identifies this student to the teacher
         let req;
         try { req = indexedDB.open('DQB_Student', 2); } catch (e) { resolve(); return; }
         req.onupgradeneeded = e => {

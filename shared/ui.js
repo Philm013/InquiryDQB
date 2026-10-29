@@ -92,10 +92,34 @@
   }
 
   /* ---------------------------------------------------------------------- */
+  /* Hist: one history entry per open sheet / page so the back gesture closes them */
+  /* ---------------------------------------------------------------------- */
+  var Hist = (function () {
+    var stack = [], ignore = 0;
+    function push(entry) {
+      try { global.history.pushState({ dqb: stack.length + 1 }, ''); } catch (e) { entry.noHist = true; }
+      stack.push(entry);
+    }
+    /** Called when a sheet/page closes by itself (button, programmatic) rather than via the back button. */
+    function remove(entry) {
+      var i = stack.lastIndexOf(entry);
+      if (i < 0 || entry.noHist) { if (i > -1) stack.splice(i, 1); return; }
+      if (i === stack.length - 1) { stack.pop(); ignore++; try { global.history.back(); } catch (e) { ignore--; } }
+      else entry.dead = true;                       // not on top: leave the browser entry, ignore it later
+    }
+    global.addEventListener('popstate', function () {
+      if (ignore > 0) { ignore--; return; }
+      var e = stack.pop();
+      if (e && !e.dead && e.onPop) e.onPop();
+    });
+    return { push: push, remove: remove, depth: function () { return stack.length; } };
+  })();
+
+  /* ---------------------------------------------------------------------- */
   /* Overlay: stack of sheets / modals                                       */
   /* ---------------------------------------------------------------------- */
   var Overlay = (function () {
-    var stack = [], uid = 0, ignorePops = 0, lockCount = 0;
+    var stack = [], uid = 0, lockCount = 0;
     var FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
     function focusables(root) { return Array.prototype.filter.call(root.querySelectorAll(FOCUSABLE), function (el) { return el.offsetWidth || el.offsetHeight || el === document.activeElement; }); }
@@ -174,9 +198,7 @@
       stack.push(self); lock(true); syncInert();
 
       // history entry so the phone back gesture closes the sheet instead of leaving the app
-      if (opts.history !== false && global.history && global.history.pushState) {
-        try { global.history.pushState({ dqbOverlay: id }, ''); self._hist = true; } catch (e) { /* ignore */ }
-      }
+      if (opts.history !== false) { self._h = { onPop: function () { close(self, undefined, true, true); } }; Hist.push(self._h); }
 
       // dismiss
       backdrop.addEventListener('pointerdown', function () { if (opts.dismissible !== false) close(self, undefined, true); });
@@ -204,12 +226,12 @@
       return self;
     }
 
-    function close(o, result, fromUser) {
+    function close(o, result, fromUser, viaPop) {
       if (o.closed) return;
       o.closed = true; o.result = result;
       var i = stack.indexOf(o); if (i > -1) stack.splice(i, 1);
       lock(false); syncInert();
-      if (o._hist && !o._popped) { ignorePops++; try { global.history.back(); } catch (e) { ignorePops--; } }
+      if (o._h && !viaPop) Hist.remove(o._h);
       var done = function () {
         if (o.el.parentNode) o.el.remove();
         var r = o._restore; if (r && r.focus && document.contains(r) && !stack.length) { try { r.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
@@ -241,12 +263,6 @@
       }
       Array.prototype.forEach.call(handleEls, function (n) { n.addEventListener('pointerdown', down); n.addEventListener('pointermove', move); n.addEventListener('pointerup', up); n.addEventListener('pointercancel', up); });
     }
-
-    global.addEventListener('popstate', function () {
-      if (ignorePops > 0) { ignorePops--; return; }
-      var top = stack[stack.length - 1];
-      if (top && top._hist) { top._popped = true; close(top, undefined, true); }
-    });
 
     return {
       open: open,
@@ -422,7 +438,7 @@
       var key = (o.type || '') + msg; var now = Date.now();
       if (recent[key] && now - recent[key] < 900) return null; recent[key] = now;
       var h = ensure();
-      while (h.children.length >= 3) h.firstChild.remove();
+      while (h.children.length >= 2) h.firstChild.remove();
       var t = document.createElement('div'); t.className = 'toast ' + (o.type || '');
       var ic = o.icon || ({ success: 'ok', error: 'x-circle', warn: 'warn', info: 'info' }[o.type]);
       t.innerHTML = (ic ? icon(ic) : '') + '<span>' + esc(msg) + '</span>';
@@ -431,10 +447,13 @@
         b.addEventListener('click', function () { try { o.action.onClick(); } finally { dismiss(); } });
         t.appendChild(b);
       }
+      // a newer message pushes older ones out quickly so toasts never pile up over the content
+      Array.prototype.forEach.call(h.children, function (c) { if (c._dismiss && !c._sticky) { clearTimeout(c._timer); c._timer = setTimeout(c._dismiss, 1200); } });
       h.appendChild(t);
       var dismiss = function () { if (t.classList.contains('out')) return; t.classList.add('out'); setTimeout(function () { t.remove(); }, 200); };
       var dur = o.duration == null ? (o.action ? 6000 : (o.type === 'error' ? 4500 : 2800)) : o.duration;
-      if (dur > 0) setTimeout(dismiss, dur);
+      t._dismiss = dismiss; t._sticky = !!o.action;
+      if (dur > 0) t._timer = setTimeout(dismiss, dur);
       return { dismiss: dismiss };
     }
     return {
@@ -453,6 +472,6 @@
     esc: esc, safeId: safeId, safeColor: safeColor, safeImg: safeImg, clampStr: clampStr, num: num, genId: genId,
     debounce: debounce, throttle: throttle, isMobile: isMobile, icon: icon, h: h, haptic: haptic,
     loadScript: loadScript, copyText: copyText, announce: announce,
-    Theme: Theme, Overlay: Overlay, Dialog: Dialog, Menu: Menu, Toast: Toast
+    Theme: Theme, Hist: Hist, Overlay: Overlay, Dialog: Dialog, Menu: Menu, Toast: Toast
   };
 })(window);

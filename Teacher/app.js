@@ -2534,7 +2534,8 @@ window.Network = {
 
     _teardown: () => {
         clearTimeout(Network._reconnectT); Network._reconnectT = null;
-        if (Network.peer) { try { Network.peer.destroy(); } catch (e) { /* ignore */ } Network.peer = null; }
+        const old = Network.peer; Network.peer = null;          // detach first: the old peer's close/disconnect events must not trigger a rebuild
+        if (old) { old._intentional = true; try { old.destroy(); } catch (e) { /* ignore */ } }
     },
 
     /** Starts (or restarts) hosting under a short join code. Pass regen=true for a brand-new code. */
@@ -2591,7 +2592,8 @@ window.Network = {
         if (!ok) return false;
         Object.values(State.students).forEach(s => { SafeSend(s.conn, { type: 'KICKED', reason: 'code-reset' }); });
         State.students = {}; State.blocked = {}; Roster();
-        Network.host(true);
+        Network.setStatus('connecting');
+        setTimeout(() => Network.host(true), 400);          // let the notice reach students before the old session is torn down
         return true;
     },
     _startHeartbeat: () => {
@@ -2679,7 +2681,7 @@ window.Network = {
 
     /* ---------- activities ---------- */
     transitionTo: (type, targetId, payload) => {
-        targetId = targetId || null; payload = payload || null;
+        targetId = targetId || null; payload = payload ? { ...payload, rid: genId() } : null;   // rid: lets students answer again when an item is re-run
         State.votes = {};                       // one response per student per activity
         const updates = State.items.map(i => ({ id: i.id, props: { isOpen: false } }));
         StateManager.updateItems(updates, { silent: true });
@@ -2959,6 +2961,10 @@ window.Network = {
             timer: { running: t.running, remainingMs: t.running ? Math.max(0, t.endsAt - Date.now()) : t.remainingMs, totalMs: t.totalMs }
         });
         if (State.students[pid].color) SafeSend(conn, { type: 'SET_COLOR', color: State.students[pid].color });
+        if (State.consensusMode.active) {
+            SafeSend(conn, Consensus.startMsg()); SafeSend(conn, Consensus.viewMsg());
+            if (State.consensusMode.participants.includes(pid)) SafeSend(conn, { type: 'CONSENSUS_PERMS', canDraw: true });
+        }
         Roster(); Consensus.renderParticipants();
         if (window.Shell) Shell.Panel.flashJoined(State.students[pid]);
         else UI.toast(`${name} joined`);
@@ -3192,8 +3198,9 @@ window.Consensus = {
     _viewChanged: () => {
         if (window.Shell) Shell.syncZoom();
         const now = performance.now();
-        if (now - Consensus._lastView > 120) { Consensus._lastView = now; Network.broadcast({ type: 'CONSENSUS_VIEW_SYNC', view: State.consensusMode.view }); }
-        clearTimeout(Consensus._vt); Consensus._vt = setTimeout(() => Network.broadcast({ type: 'CONSENSUS_VIEW_SYNC', view: State.consensusMode.view }), 160);
+        const send = () => { if (State.consensusMode.active) Network.broadcast(Consensus.viewMsg()); };
+        if (now - Consensus._lastView > 120) { Consensus._lastView = now; send(); }
+        clearTimeout(Consensus._vt); Consensus._vt = setTimeout(send, 160);
     },
 
     start: (zoneId) => {
@@ -3214,8 +3221,18 @@ window.Consensus = {
         Consensus.renderItems(); Consensus.renderInk(); Consensus.loop(); Consensus.renderParticipants();
         Consensus.setTool('pan');
         Consensus.fitInitial();
-        Network.broadcast({ type: 'CONSENSUS_START', zoneId, ink: cm.ink, items: cm.items.map(i => ({ id: i.id, type: i.type, sub: i.sub, text: clampStr(i.text, 500), src: i.src ? safeImg(i.src, 1500000) : undefined, x: i.x, y: i.y, w: i.w, h: i.h })), title: zone.title });
+        Network.broadcast(Consensus.startMsg());
+        Consensus._viewChanged();
         if (window.Shell && DQBUI.isMobile() === false) Shell.Panel.open();
+    },
+    /** What a student needs to join the shared model (also sent to students who join or reconnect mid-session). */
+    startMsg: () => {
+        const cm = State.consensusMode;
+        return { type: 'CONSENSUS_START', zoneId: cm.zoneId, ink: cm.ink, items: cm.items.map(i => ({ id: i.id, type: i.type, sub: i.sub, text: clampStr(i.text, 500), src: i.src ? safeImg(i.src, 1500000) : undefined, x: i.x, y: i.y, w: i.w, h: i.h })), title: cm.title };
+    },
+    viewMsg: () => {
+        const cm = State.consensusMode, r = $('consensus-main').getBoundingClientRect();
+        return { type: 'CONSENSUS_VIEW_SYNC', view: { x: cm.view.x, y: cm.view.y, z: cm.view.z }, size: { w: Math.round(r.width), h: Math.round(r.height) } };
     },
     fitInitial: () => {
         // centre the model's content in the canvas

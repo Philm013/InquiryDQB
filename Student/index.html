@@ -1,1203 +1,157 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="theme-color" content="#ffffff">
-    <title>InquiryDQB | Student</title>
-    <meta name="robots" content="noindex, nofollow">
-    
-    <!-- PeerJS -->
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    <!-- QR Scanner -->
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Patrick+Hand&display=swap" rel="stylesheet">
-    
-    <style>
-        :root {
-            /* Accent */
-            --accent: #2563eb;
-            --accent-dark: #1d4ed8;
-            --accent-light: rgba(37,99,235,0.10);
-
-            /* Surfaces */
-            --bg: #f8fafc;
-            --warm-bg: #f1f5f9;
-            --card-bg: #ffffff;
-            --panel: #f8fafc;
-
-            /* Text */
-            --text: #0f172a;
-            --text-secondary: #475569;
-            --text-muted: #94a3b8;
-            --text-light: #64748b;
-
-            /* Borders */
-            --border: 1px solid rgba(0,0,0,0.08);
-            --border-color: rgba(0,0,0,0.08);
-
-            /* Shadows */
-            --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-            --shadow: 0 4px 16px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
-            --shadow-deep: 0 8px 32px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06);
-            --shadow-modal: 0 20px 60px rgba(0,0,0,0.16), 0 4px 16px rgba(0,0,0,0.08);
-
-            /* Radius */
-            --radius: 10px;
-            --radius-lg: 14px;
-            --radius-xl: 18px;
-
-            /* Fonts */
-            --font-ui: 'Inter', -apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif;
-            --font-hand: 'Patrick Hand', cursive;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --accent: #3b82f6;
-                --accent-dark: #2563eb;
-                --accent-light: rgba(59,130,246,0.15);
-
-                --bg: #0f172a;
-                --warm-bg: #1e293b;
-                --card-bg: #1e293b;
-                --panel: #1e293b;
-
-                --text: #f1f5f9;
-                --text-secondary: #94a3b8;
-                --text-muted: #475569;
-                --text-light: #94a3b8;
-
-                --border: 1px solid rgba(255,255,255,0.08);
-                --border-color: rgba(255,255,255,0.08);
-
-                --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
-                --shadow: 0 4px 16px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.2);
-                --shadow-deep: 0 8px 32px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.25);
-                --shadow-modal: 0 20px 60px rgba(0,0,0,0.55), 0 4px 16px rgba(0,0,0,0.35);
-            }
-        }
-
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
-        *:focus:not(:focus-visible) { outline: none; }
-        *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
-        input, textarea { user-select: text; }
-        body { 
-            margin: 0; font-family: var(--font-ui); background: var(--bg); color: var(--text);
-            height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
-            touch-action: none;
-        }
-
-        /* --- SCREEN MANAGEMENT --- */
-        .screen { 
-            flex: 1; display: none; flex-direction: column; 
-            width: 100%; max-width: 600px; margin: 0 auto;
-            position: relative; overflow-y: auto; overflow-x: hidden;
-            touch-action: pan-y;
-        }
-        .screen.active { display: flex; animation: fadeIn 0.3s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* --- UI ELEMENTS --- */
-        .card { 
-            background: var(--card-bg); border-radius: var(--radius-lg); padding: 24px; 
-            border: var(--border); box-shadow: var(--shadow); margin: 16px;
-            display: flex; flex-direction: column; align-items: center; text-align: center;
-        }
-        
-        .btn { 
-            width: 100%; padding: 14px 16px; border-radius: var(--radius); border: 1px solid transparent; 
-            background: var(--accent); color: white; font-weight: 700; font-size: 1rem;
-            font-family: var(--font-ui); cursor: pointer; transition: background 0.15s, transform 0.1s, box-shadow 0.15s; 
-            box-shadow: 0 2px 10px rgba(37,99,235,0.28);
-            margin-bottom: 12px; letter-spacing: 0.01em;
-        }
-        .btn:hover { background: var(--accent-dark); box-shadow: 0 4px 16px rgba(37,99,235,0.35); }
-        .btn:active { transform: scale(0.98); box-shadow: none; }
-        .btn-s { 
-            background: var(--warm-bg); color: var(--text); box-shadow: none; 
-            border: var(--border); font-weight: 600; 
-        }
-        .btn-s:hover { background: rgba(0,0,0,0.07); }
-        @media (prefers-color-scheme: dark) {
-            .btn-s { background: rgba(255,255,255,0.07); }
-            .btn-s:hover { background: rgba(255,255,255,0.12); }
-        }
-        .btn-icon { background: transparent; color: var(--text-light); box-shadow: none; padding: 8px; font-size: 1.5rem; width: auto; border: none; }
-
-        input, textarea { 
-            width: 100%; padding: 12px 14px; border: var(--border); border-radius: var(--radius); 
-            font-size: 1rem; font-family: inherit; margin-bottom: 16px; 
-            transition: 0.15s; background: var(--card-bg); color: var(--text);
-        }
-        input:focus, textarea:focus { 
-            border-color: var(--accent); outline: none; 
-            box-shadow: 0 0 0 3px var(--accent-light); 
-        }
-
-        /* --- SETUP SCREEN --- */
-        #scr-setup { 
-            justify-content: center; background: var(--bg);
-            background-image: radial-gradient(ellipse at 70% 20%, rgba(37,99,235,0.07) 0%, transparent 60%),
-                              radial-gradient(ellipse at 10% 90%, rgba(99,102,241,0.06) 0%, transparent 55%);
-        }
-        .hero-title { 
-            font-size: 2.1rem; color: var(--accent); margin-bottom: 8px; 
-            font-weight: 800; letter-spacing: -0.04em; 
-        }
-        .av-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 20px; width: 100%; }
-        .av-item { 
-            font-size: 1.65rem; padding: 10px; background: var(--card-bg); 
-            border-radius: var(--radius); cursor: pointer; border: var(--border); 
-            transition: 0.15s; display: flex; align-items: center; justify-content: center;
-        }
-        .av-item:hover { transform: scale(1.06); border-color: rgba(0,0,0,0.16); }
-        .av-item.sel { 
-            border-color: var(--accent); background: var(--accent-light); 
-            transform: scale(1.1); 
-            box-shadow: 0 0 0 2px white, 0 0 0 4px var(--accent); 
-        }
-        @media (prefers-color-scheme: dark) {
-            .av-item.sel { box-shadow: 0 0 0 2px #0f172a, 0 0 0 4px var(--accent); }
-        }
-
-        /* --- LOBBY HEADER --- */
-        .lobby-header {
-            padding: 14px 20px; background: var(--card-bg); border-bottom: var(--border);
-            display: flex; justify-content: space-between; align-items: center;
-            position: sticky; top: 0; z-index: 20; 
-            box-shadow: 0 1px 8px rgba(0,0,0,0.06);
-            backdrop-filter: blur(8px);
-        }
-        .user-badge { 
-            display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1rem;
-            padding: 4px 12px; border-radius: 9999px; transition: 0.2s; border: 2px solid transparent;
-        }
-        .status-pill {
-            font-size: 0.7rem; padding: 4px 11px; border-radius: 9999px; 
-            background: var(--warm-bg); color: var(--text-secondary); 
-            font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-        }
-        .status-pill.online { background: #f0fdf4; color: #166534; }
-        .status-pill.error { background: #fef2f2; color: #991b1b; }
-        @media (prefers-color-scheme: dark) {
-            .status-pill.online { background: rgba(20,83,45,0.4); color: #4ade80; }
-            .status-pill.error { background: rgba(127,29,29,0.4); color: #fca5a5; }
-        }
-
-        /* --- ACTION ZONE --- */
-        #action-container { padding: 16px; flex-shrink: 0; }
-        .active-zone-card { 
-            background: var(--accent-light); border: 1.5px dashed var(--accent); 
-            border-radius: var(--radius-lg); padding: 20px; text-align: center; margin-bottom: 10px;
-        }
-        .zone-badge { 
-            background: var(--accent); color: white; padding: 4px 12px; border-radius: 9999px; 
-            font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; 
-            display: inline-block; margin-bottom: 8px;
-        }
-
-        /* --- ACTIVITIES --- */
-        .vote-item {
-            background: var(--card-bg); padding: 14px 16px; border-radius: var(--radius); 
-            border: var(--border); margin-bottom: 8px; cursor: pointer; text-align: left; 
-            transition: 0.15s; display: flex; align-items: center; gap: 12px;
-        }
-        .vote-item:hover { border-color: var(--accent); background: var(--accent-light); }
-        .vote-item.selected { 
-            background: var(--accent-light); border-color: var(--accent); 
-            color: var(--accent-dark); font-weight: 600; 
-            box-shadow: 0 0 0 2px var(--accent-light); 
-        }
-
-        .sort-item {
-            background: var(--card-bg); padding: 12px; border-radius: var(--radius); 
-            border: var(--border); display: flex; align-items: center; 
-            gap: 10px; margin-bottom: 8px; transition: 0.15s;
-        }
-        .sort-item:hover { border-color: rgba(0,0,0,0.18); }
-        .sort-btn { 
-            width: 30px; height: 30px; padding: 0; display: flex; align-items: center; 
-            justify-content: center; background: var(--warm-bg); border: var(--border); 
-            border-radius: var(--radius); cursor: pointer; font-family: inherit; transition: 0.12s; 
-        }
-        .sort-btn:hover { background: rgba(0,0,0,0.1); }
-
-        .discuss-card {
-            background: var(--card-bg); border: var(--border); border-radius: var(--radius);
-            padding: 14px 16px; margin-bottom: 10px; text-align: left;
-            cursor: pointer; border-left: 4px solid var(--accent); transition: 0.15s;
-        }
-        .discuss-card:hover { background: var(--accent-light); }
-
-        /* --- NOTE TYPES --- */
-        .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
-        .type-btn { 
-            padding: 16px 14px; border-radius: var(--radius); font-weight: 700; cursor: pointer; 
-            display: flex; flex-direction: column; align-items: center; gap: 6px;
-            border: 2px solid transparent; background: var(--card-bg);
-            box-shadow: var(--shadow); transition: 0.15s; font-size: 0.9rem;
-        }
-        .type-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-deep); }
-        .type-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-        .t-notice { background: #fffbeb; border-color: #fbbf24; color: #92400e; }
-        .t-wonder { background: #f0f9ff; border-color: #38bdf8; color: #075985; }
-        .t-idea { background: #f0fdf4; border-color: #4ade80; color: #166534; }
-        .t-test { background: #fef2f2; border-color: #f87171; color: #991b1b; }
-        .t-sketch { background: var(--warm-bg); border-color: var(--border-color); color: var(--text); grid-column: span 2; border-width: 2px; border-style: solid; }
-        @media (prefers-color-scheme: dark) {
-            .t-notice { background: rgba(120,53,15,0.25); border-color: #d97706; color: #fbbf24; }
-            .t-wonder { background: rgba(7,89,133,0.25); border-color: #0284c7; color: #38bdf8; }
-            .t-idea { background: rgba(20,83,45,0.25); border-color: #16a34a; color: #4ade80; }
-            .t-test { background: rgba(153,27,27,0.25); border-color: #dc2626; color: #f87171; }
-            .t-sketch { background: rgba(255,255,255,0.05); border-color: var(--border-color); }
-        }
-
-        /* --- CONSENSUS MODE --- */
-        #scr-consensus { background: var(--warm-bg); overflow: hidden; }
-        #consensus-viewport {
-            width: 100%; height: 100%;
-            position: relative; overflow: hidden;
-            touch-action: none; cursor: grab;
-        }
-        #consensus-world { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
-        #consensus-items { position: absolute; inset: 0; pointer-events: none; }
-        #consensus-ink { position: absolute; inset: 0; pointer-events: none; }
-        
-        /* Consensus Items */
-        .c-item { 
-            position: absolute; background: var(--card-bg); padding: 10px; 
-            border-radius: var(--radius); font-family: var(--font-hand); font-size: 1.2rem;
-            box-shadow: var(--shadow); max-width: 200px;
-        }
-        .c-item img { width: 100%; display: block; }
-        .c-notice { background: #fef3c7; border: 2px solid #d97706; }
-        .c-wonder { background: #bae6fd; border: 2px solid #0284c7; }
-        .c-idea { background: #bbf7d0; border: 2px solid #166534; }
-        
-        #consensus-toolbar {
-            position: absolute; bottom: 0; left: 0; width: 100%;
-            background: var(--card-bg); padding: 10px;
-            display: flex; gap: 10px; justify-content: center;
-            border-top: var(--border); z-index: 100;
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
-        }
-        .c-tool {
-            width: 44px; height: 44px; border-radius: 50%; border: var(--border);
-            cursor: pointer; display: flex; align-items: center; justify-content: center;
-            font-size: 1.25rem; color: var(--text); background: var(--warm-bg);
-            transition: 0.15s;
-        }
-        .c-tool:hover { background: rgba(0,0,0,0.08); }
-        .c-tool.active { 
-            border-color: var(--accent); background: var(--accent-light); 
-            color: var(--accent); transform: scale(1.05); 
-            box-shadow: 0 0 0 2px var(--accent-light);
-        }
-
-        /* --- GENERAL MODALS & HISTORY --- */
-        .hist-container { flex: 1; background: var(--warm-bg); border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: 20px; overflow-y: auto; }
-        .note-card { 
-            background: var(--card-bg); padding: 14px; border-radius: var(--radius); 
-            margin-bottom: 10px; border-left: 4px solid var(--border-color); 
-            font-family: var(--font-hand); font-size: 1.1rem;
-            position: relative; border: var(--border); box-shadow: var(--shadow);
-        }
-        .n-notice { border-left: 4px solid #d97706 !important; background: #fffbeb; }
-        .n-wonder { border-left: 4px solid #0284c7 !important; background: #f0f9ff; }
-        .n-idea { border-left: 4px solid #16a34a !important; background: #f0fdf4; }
-        .n-claim { border-left: 4px solid #d97706 !important; background: #fffbeb; }
-        .n-evidence { border-left: 4px solid #0284c7 !important; background: #f0f9ff; }
-        .n-reasoning { border-left: 4px solid #16a34a !important; background: #f0fdf4; }
-
-        #modal-discuss {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 2000;
-            display: none; align-items: flex-end; justify-content: center;
-            backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-        }
-        #modal-discuss.active { display: flex; }
-        .modal-sheet {
-            background: var(--card-bg); width: 100%; max-width: 600px;
-            border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: 24px;
-            animation: slideUp 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
-            border-top: var(--border); box-shadow: var(--shadow-modal);
-        }
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-
-        /* WRITE SCREEN CHIPS */
-        .cat-selector { display: flex; gap: 8px; overflow-x: auto; width: 100%; padding-bottom: 10px; margin-bottom: 10px; }
-        .cat-chip { 
-            padding: 6px 14px; border-radius: 9999px; background: var(--warm-bg); color: var(--text-secondary);
-            font-weight: 600; font-size: 0.875rem; white-space: nowrap; cursor: pointer; border: var(--border);
-            transition: 0.12s;
-        }
-        .cat-chip:hover { background: rgba(0,0,0,0.07); }
-        .cat-chip.active { background: var(--accent); color: white; border-color: var(--accent); box-shadow: 0 2px 8px rgba(37,99,235,0.25); }
-
-        /* ======================== EXIT TICKET STYLES ======================== */
-        #scr-exit { background: var(--bg); }
-        .exit-header { padding: 20px 20px 0 20px; }
-        .exit-prompt-card {
-            background: var(--card-bg); border: var(--border); border-radius: var(--radius-lg);
-            padding: 16px 20px; margin-bottom: 16px; box-shadow: var(--shadow);
-        }
-        .exit-prompt-label {
-            font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-            color: var(--text-muted); margin-bottom: 6px;
-        }
-        #exit-prompt { font-size: 1.125rem; font-weight: 600; color: var(--text); line-height: 1.4; }
-        #exit-area { padding: 0 20px 20px 20px; }
-        #exit-submit { margin: 0 20px 24px 20px; width: calc(100% - 40px); }
-        .exit-mode-badge {
-            display: inline-block; padding: 4px 12px; border-radius: 9999px;
-            background: var(--accent-light); color: var(--accent); font-size: 0.7rem; font-weight: 700;
-            letter-spacing: 0.125px; margin-bottom: 16px; border: 1px solid rgba(37,99,235,0.2);
-        }
-        .exit-textarea {
-            width: 100%; padding: 12px 14px; border: var(--border); border-radius: var(--radius);
-            font-size: 1rem; font-family: var(--font-ui); resize: none; background: var(--card-bg);
-            color: var(--text); transition: 0.15s; user-select: text;
-        }
-        .exit-textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-light); }
-        .exit-char-count { text-align: right; font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
-
-        /* SMILEY / RATING */
-        .smiley-grid { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 4px 0 16px 0; }
-        .smiley-btn {
-            display: flex; flex-direction: column; align-items: center; gap: 6px;
-            padding: 12px 10px; border-radius: var(--radius); border: var(--border);
-            background: var(--card-bg); cursor: pointer; transition: 0.15s; flex: 1; min-width: 56px;
-            font-family: var(--font-ui);
-        }
-        .smiley-btn:hover { border-color: var(--accent); background: var(--accent-light); }
-        .smiley-btn.selected { 
-            border-color: var(--accent); background: var(--accent-light); 
-            box-shadow: 0 0 0 2.5px var(--accent); 
-        }
-        .smiley-emoji { font-size: 2rem; line-height: 1; transition: transform 0.15s; display: block; }
-        .smiley-btn.selected .smiley-emoji { transform: scale(1.3); }
-        .smiley-lbl { font-size: 0.62rem; color: var(--text-secondary); font-weight: 700; text-align: center; font-family: var(--font-ui); text-transform: uppercase; letter-spacing: 0.03em; }
-
-        /* MULTIPLE CHOICE */
-        .exit-mc, .exit-multi { padding-bottom: 4px; }
-        .mc-btn {
-            display: flex; align-items: center; gap: 12px; width: 100%;
-            padding: 12px 16px; border-radius: var(--radius); border: var(--border);
-            background: var(--card-bg); cursor: pointer; text-align: left; margin-bottom: 8px;
-            transition: 0.15s; font-family: var(--font-ui);
-        }
-        .mc-btn:hover { border-color: var(--accent); background: var(--accent-light); }
-        .mc-btn.selected { border-color: var(--accent); background: var(--accent-light); box-shadow: 0 0 0 1.5px var(--accent); }
-        .mc-btn.selected .mc-letter { background: var(--accent); color: white; border-color: var(--accent); }
-        .mc-letter {
-            width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border-color);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.75rem; font-weight: 700; flex-shrink: 0; transition: 0.15s;
-        }
-        .mc-text { font-size: 0.9375rem; color: var(--text); font-weight: 500; line-height: 1.4; }
-
-        /* MULTI SELECT */
-        .exit-multi-hint { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px; font-style: italic; }
-        .multi-btn {
-            display: flex; align-items: center; gap: 12px; width: 100%;
-            padding: 12px 16px; border-radius: var(--radius); border: var(--border);
-            background: var(--card-bg); cursor: pointer; text-align: left; margin-bottom: 8px;
-            transition: 0.15s; font-family: var(--font-ui);
-        }
-        .multi-btn:hover { border-color: var(--accent); background: var(--accent-light); }
-        .multi-btn.selected { border-color: var(--accent); background: var(--accent-light); box-shadow: 0 0 0 1.5px var(--accent); }
-        .multi-check {
-            width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--border-color);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.8rem; color: transparent; flex-shrink: 0; transition: 0.15s;
-        }
-        .multi-btn.selected .multi-check { background: var(--accent); border-color: var(--accent); color: white; }
-        .multi-text { font-size: 0.9375rem; color: var(--text); font-weight: 500; line-height: 1.4; }
-
-        /* LEARN / WONDER */
-        .lw-field { margin-bottom: 16px; }
-        .lw-label { display: flex; align-items: center; gap: 8px; font-size: 0.875rem; font-weight: 700; color: var(--text); margin-bottom: 8px; }
-        .lw-icon { font-size: 1rem; }
-
-        /* TOAST */
-        #s-toast-container { 
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%); 
-            z-index: 9999; display: flex; flex-direction: column; gap: 10px; 
-            pointer-events: none; align-items: center; 
-        }
-        .s-toast { 
-            background: rgba(15,23,42,0.95); color: #f1f5f9; padding: 11px 20px; 
-            border-radius: 9999px; font-weight: 600; font-size: 0.875rem; 
-            box-shadow: var(--shadow-deep); animation: s-fadeUp 0.3s ease-out; 
-            white-space: nowrap; backdrop-filter: blur(8px); 
-            border: 1px solid rgba(255,255,255,0.08);
-        }
-        @keyframes s-fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-
-        /* CONFIRM DIALOG */
-        #s-confirm { 
-            position: fixed; inset:0; background: rgba(0,0,0,0.5); z-index: 9000; 
-            display: none; align-items: center; justify-content: center; 
-            backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-        }
-        #s-confirm .s-dlg { 
-            background: var(--card-bg); padding: 28px; border-radius: var(--radius-xl); 
-            width: 320px; max-width: 90%; text-align: center; 
-            box-shadow: var(--shadow-modal); border: var(--border);
-            animation: dlgPop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-        @keyframes dlgPop { from { opacity: 0; transform: scale(0.92) translateY(12px); } to { opacity: 1; transform: none; } }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#ffffff">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="DQB Student">
+<meta name="robots" content="noindex, nofollow">
+<title>InquiryDQB · Student</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="../favicon.ico" sizes="any">
+<link rel="icon" href="../icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+<script>try{var t=localStorage.getItem('dqb_theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="../shared/ui.css">
+<link rel="stylesheet" href="app.css">
 </head>
 <body>
+<div id="app" data-app-root>
 
-<div id="s-toast-container"></div>
+  <header id="topbar" hidden>
+    <button type="button" id="me-btn" class="me-chip" aria-label="Your profile"><span id="me-av" aria-hidden="true">😀</span><span id="me-name" class="truncate">Student</span><i data-i="chev-down" class="sm"></i></button>
+    <div class="grow"></div>
+    <div id="timer-pill" class="chip" hidden aria-live="off"><i data-i="timer" class="sm"></i><span id="timer-text">00:00</span></div>
+    <div id="conn-pill" class="chip conn" role="status"><span class="dot" id="conn-dot"></span><span id="conn-text">Connecting…</span></div>
+  </header>
+  <div id="banner" role="status" hidden></div>
 
-<!-- CONFIRM DIALOG -->
-<div id="s-confirm" style="display:none">
-    <div class="s-dlg">
-        <div id="s-confirm-icon" style="font-size:2rem; margin-bottom:8px">⚠️</div>
-        <p id="s-confirm-msg" style="margin:0 0 20px 0; font-size:0.9375rem; color: var(--text); line-height:1.5"></p>
-        <div style="display:flex; flex-direction:column; gap:8px">
-            <button class="btn" id="s-confirm-ok" style="margin-bottom:0">Confirm</button>
-            <button class="btn btn-s" onclick="sConfirmCancel()">Cancel</button>
-        </div>
+  <main id="main">
+
+    <!-- 1. who are you -->
+    <section id="v-setup" class="view center-view" aria-labelledby="h-setup">
+      <div class="hero">
+        <img src="../icons/icon.svg" alt="" width="72" height="72" class="logo">
+        <h1 id="h-setup">Welcome!</h1>
+        <p class="text-2">Choose an avatar and tell your teacher who you are.</p>
+      </div>
+      <div class="card form">
+        <div class="join-chip" id="join-chip" hidden><i data-i="link" class="sm"></i><span>Joining class <b id="join-chip-code"></b></span></div>
+        <div class="field"><label id="l-av">Avatar</label><div id="av-grid" class="av-grid" role="radiogroup" aria-labelledby="l-av"></div></div>
+        <div class="field"><label for="inp-name">Your name</label><input id="inp-name" class="input" maxlength="24" autocomplete="given-name" autocapitalize="words" enterkeyhint="go" placeholder="First name"><div class="error" id="name-err" hidden></div></div>
+        <button type="button" id="btn-setup" class="btn btn-primary btn-lg btn-block">Continue</button>
+      </div>
+    </section>
+
+    <!-- 2. which class -->
+    <section id="v-join" class="view center-view" hidden aria-labelledby="h-join">
+      <div class="hero">
+        <div class="hero-ico"><i data-i="users" class="xl"></i></div>
+        <h1 id="h-join">Join a class</h1>
+        <p class="text-2">Type the code on your teacher’s screen, or scan the QR code.</p>
+      </div>
+      <div class="card form">
+        <div class="field"><label for="inp-code">Class code</label><input id="inp-code" class="input code-input" inputmode="text" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="40" enterkeyhint="go" placeholder="ABC-123"><div class="error" id="code-err" hidden></div></div>
+        <button type="button" id="btn-connect" class="btn btn-primary btn-lg btn-block">Join class</button>
+        <div class="divider"><span>or</span></div>
+        <div id="reader" hidden></div>
+        <div class="error" id="scan-err" hidden></div>
+        <button type="button" id="btn-scan" class="btn btn-secondary btn-block"><i data-i="qr"></i>Scan QR code</button>
+      </div>
+      <button type="button" id="btn-edit-me" class="btn btn-ghost">Change name or avatar</button>
+    </section>
+
+    <!-- 3. the class board (current activity) -->
+    <section id="v-board" class="view" hidden aria-label="Class board"><div id="board-content" class="stack-view"></div></section>
+
+    <!-- 4. my notes -->
+    <section id="v-notes" class="view" hidden aria-label="My notes">
+      <div class="stack-view">
+        <div class="view-head"><h1>My notes</h1><span class="muted" id="notes-count"></span></div>
+        <div id="notes-list"></div>
+      </div>
+    </section>
+
+    <!-- removed / ended -->
+    <section id="v-ended" class="view center-view" hidden>
+      <div class="hero"><div class="hero-ico" id="ended-ico"><i data-i="user-x" class="xl"></i></div><h1 id="ended-title">You left the class</h1><p class="text-2" id="ended-msg"></p></div>
+      <button type="button" id="btn-rejoin" class="btn btn-primary btn-lg">Join a class</button>
+    </section>
+  </main>
+
+  <nav id="tabbar" aria-label="Main" hidden>
+    <button type="button" class="tab" id="tab-board" data-tab="board" aria-current="page"><i data-i="home"></i><span>Board</span></button>
+    <button type="button" class="tab tab-fab" id="tab-add" aria-label="Add a note"><span class="fab"><i data-i="plus" class="lg"></i></span></button>
+    <button type="button" class="tab" id="tab-notes" data-tab="notes"><i data-i="note"></i><span>My notes</span><span class="badge" id="notes-badge" hidden>0</span></button>
+  </nav>
+
+  <!-- ===== full-screen task pages ===== -->
+
+  <section class="page" id="p-write" hidden role="dialog" aria-modal="true" aria-labelledby="w-title">
+    <header class="page-bar"><button type="button" class="icon-btn" data-close aria-label="Close and keep draft"><i data-i="close"></i></button><h2 id="w-title">New note</h2><span class="grow"></span><span id="w-count" class="muted counter">0 / 400</span></header>
+    <div class="page-body">
+      <div class="chip-row" id="w-chips" role="radiogroup" aria-label="Note type"></div>
+      <div class="note-paper" id="w-paper"><label for="w-txt" class="sr-only">Your note</label><textarea id="w-txt" maxlength="400" rows="7" placeholder="Type your thoughts here…" enterkeyhint="enter"></textarea></div>
+      <div class="hint" id="w-hint"></div>
+      <div class="warn-box" id="w-warn" hidden></div>
     </div>
+    <footer class="page-foot"><button type="button" class="btn btn-secondary" id="w-sketch"><i data-i="pen"></i>Draw instead</button><button type="button" class="btn btn-primary btn-lg grow" id="w-send"><i data-i="send"></i>Send note</button></footer>
+  </section>
+
+  <section class="page" id="p-sketch" hidden role="dialog" aria-modal="true" aria-labelledby="s-title">
+    <header class="page-bar"><button type="button" class="icon-btn" data-close aria-label="Close"><i data-i="close"></i></button><h2 id="s-title">Draw</h2><span class="grow"></span><button type="button" class="icon-btn" id="s-undo" aria-label="Undo"><i data-i="undo"></i></button><button type="button" class="icon-btn" id="s-clear" aria-label="Clear drawing"><i data-i="trash"></i></button></header>
+    <div class="page-body sketch-body">
+      <div class="canvas-wrap" id="s-wrap"><canvas id="s-canvas" aria-label="Drawing area"></canvas></div>
+      <div class="sketch-tools" role="toolbar" aria-label="Drawing tools">
+        <div class="swatches" id="s-colors" role="group" aria-label="Pen colour"></div>
+        <div class="seg" id="s-sizes" role="group" aria-label="Pen size"><button type="button" data-w="3" aria-pressed="true" aria-label="Thin"><span class="dotw" style="--s:5px"></span></button><button type="button" data-w="7" aria-pressed="false" aria-label="Medium"><span class="dotw" style="--s:9px"></span></button><button type="button" data-w="14" aria-pressed="false" aria-label="Thick"><span class="dotw" style="--s:15px"></span></button></div>
+        <button type="button" class="icon-btn soft" id="s-eraser" aria-pressed="false" aria-label="Eraser"><i data-i="eraser"></i></button>
+      </div>
+      <input id="s-caption" class="input" maxlength="80" placeholder="Add a caption (optional)" aria-label="Caption">
+      <div class="warn-box" id="s-warn" hidden></div>
+    </div>
+    <footer class="page-foot"><button type="button" class="btn btn-primary btn-lg btn-block" id="s-send"><i data-i="send"></i>Send drawing</button></footer>
+  </section>
+
+  <section class="page" id="p-poll" hidden role="dialog" aria-modal="true" aria-labelledby="poll-q">
+    <header class="page-bar"><button type="button" class="icon-btn" data-close aria-label="Close"><i data-i="close"></i></button><h2>Quick poll</h2></header>
+    <div class="page-body"><h1 id="poll-q" class="task-q"></h1><div id="poll-opts" class="choice-list" role="radiogroup" aria-labelledby="poll-q"></div></div>
+    <footer class="page-foot"><button type="button" class="btn btn-primary btn-lg btn-block" id="poll-send" disabled>Submit vote</button></footer>
+  </section>
+
+  <section class="page" id="p-graph" hidden role="dialog" aria-modal="true" aria-labelledby="graph-q">
+    <header class="page-bar"><button type="button" class="icon-btn" data-close aria-label="Close"><i data-i="close"></i></button><h2>Class data</h2></header>
+    <div class="page-body"><h1 id="graph-q" class="task-q"></h1><p class="text-2">Type a number and send it to add your value to the class graph.</p><input id="graph-val" class="input big-num" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="Your number"><div class="error" id="graph-err" hidden></div></div>
+    <footer class="page-foot"><button type="button" class="btn btn-primary btn-lg btn-block" id="graph-send"><i data-i="send"></i>Send</button></footer>
+  </section>
+
+  <section class="page" id="p-exit" hidden role="dialog" aria-modal="true" aria-labelledby="exit-q">
+    <header class="page-bar"><button type="button" class="icon-btn" data-close aria-label="Close"><i data-i="close"></i></button><h2><span class="muted" style="font-weight:600">Exit ticket</span></h2></header>
+    <div class="page-body"><div class="mode-badge" id="exit-badge"></div><h1 id="exit-q" class="task-q"></h1><div id="exit-area"></div><div class="error" id="exit-err" hidden></div></div>
+    <footer class="page-foot"><button type="button" class="btn btn-primary btn-lg btn-block" id="exit-send"><i data-i="send"></i>Submit</button></footer>
+  </section>
+
+  <section class="page" id="p-consensus" hidden role="dialog" aria-modal="true" aria-labelledby="cm-title">
+    <header class="page-bar"><button type="button" class="icon-btn" data-close aria-label="Leave the model"><i data-i="back"></i></button><div><h2 id="cm-title">Class model</h2><div class="sub" id="cm-sub">Watching</div></div><span class="grow"></span><button type="button" class="chip" id="cm-follow" aria-pressed="true"><i data-i="eye" class="sm"></i>Following teacher</button></header>
+    <div class="page-body cm-body"><div id="cm-view" aria-label="Shared model canvas"><div id="cm-world"><div id="cm-items"></div><svg id="cm-ink" style="overflow:visible"></svg></div><svg id="cm-temp" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible"></svg></div></div>
+    <footer class="page-foot cm-foot" id="cm-tools" hidden><div class="swatches" id="cm-colors" role="group" aria-label="Pen colour"></div><button type="button" class="icon-btn soft" id="cm-pan" aria-pressed="false" aria-label="Move around instead of drawing"><i data-i="hand"></i></button></footer>
+  </section>
+
 </div>
 
-<!-- SETUP SCREEN -->
-<div id="scr-setup" class="screen active">
-    <div class="card" style="max-width: 400px; width: 90%;">
-        <div class="hero-title">InquiryDQB</div>
-        <div style="color: var(--text-light); margin-bottom:20px">Student Remote</div>
-        
-        <div style="text-align:left; width:100%; margin-bottom:8px; font-weight:600; color: var(--text-muted); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px;">CHOOSE AVATAR</div>
-        <div class="av-grid" id="av-grid"></div>
-        
-        <div style="text-align:left; width:100%; margin-bottom:8px; font-weight:600; color: var(--text-muted); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.5px;">YOUR NAME</div>
-        <input id="inp-name" placeholder="Enter your name" style="text-align:center; font-weight:bold">
-        
-        <button class="btn" onclick="Setup()">Next ➔</button>
-    </div>
-</div>
-
-<!-- JOIN SCREEN -->
-<div id="scr-join" class="screen">
-    <div class="card">
-        <h2>Join Class</h2>
-        <div id="reader" style="border-radius:12px; overflow:hidden; margin-bottom:16px; width:100%; display:none"></div>
-        <button class="btn" id="btn-scan" onclick="StartScan()">📸 Scan QR Code</button>
-        <div style="margin: 10px 0; color: var(--text-muted); font-weight: 600;">— OR —</div>
-        <input id="inp-id" placeholder="Enter Session ID" style="text-align:center; text-transform:uppercase; letter-spacing: 2px;">
-        <button class="btn btn-s" onclick="Connect($('inp-id').value)">Connect Manually</button>
-    </div>
-</div>
-
-<!-- LOBBY SCREEN -->
-<div id="scr-lobby" class="screen">
-    <div class="lobby-header">
-        <div class="user-badge" id="user-badge">
-            <span id="my-av"></span>
-            <span id="my-name"></span>
-        </div>
-        <div style="display:flex; gap:8px; align-items:center">
-            <div id="status-badge" class="status-pill">Connecting...</div>
-            <button class="btn-icon" onclick="ManualDisconnect()">✕</button>
-        </div>
-    </div>
-
-    <div id="action-container">
-        <!-- 1. LOCKED -->
-        <div id="state-locked" style="text-align:center; padding:40px 20px; color: var(--text-light)">
-            <div style="font-size:4rem; margin-bottom:16px">👀</div>
-            <h3>Eyes on the Board</h3>
-            <p>Wait for the teacher to open an activity.</p>
-        </div>
-
-        <!-- 2. ZONE ACTIVITY -->
-        <div id="state-zone" style="display:none">
-            <div class="active-zone-card">
-                <div class="zone-badge" id="zone-type-badge">ACTIVITY</div>
-                <h3 id="zone-title" style="margin:0 0 10px 0; color:var(--accent-dark)">Target Zone</h3>
-                <p style="margin:0 0 16px 0; color: var(--text-light); font-size:0.9rem" id="zone-desc">Contribute to this activity.</p>
-                
-                <div id="zone-buttons-default">
-                    <button class="btn" onclick="Draft('idea')">💡 Add Note</button>
-                    <button class="btn btn-s" onclick="DraftSketch()">✏️ Add Sketch</button>
-                </div>
-                
-                <div id="zone-buttons-cer" style="display:none; grid-template-columns:1fr 1fr 1fr; gap:8px">
-                    <button class="btn" style="background:#d97706; padding:10px; font-size:0.9rem" onclick="Draft('claim')">🤔 Claim</button>
-                    <button class="btn" style="background:#0284c7; padding:10px; font-size:0.9rem" onclick="Draft('evidence')">📊 Evidence</button>
-                    <button class="btn" style="background:#166534; padding:10px; font-size:0.9rem" onclick="Draft('reasoning')">🔗 Reasoning</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- 3. OPEN BOARD -->
-        <div id="state-open" style="display:none">
-            <h3 style="margin:0 0 16px 0; text-align:center">Add to Board</h3>
-            <div class="type-grid">
-                <div class="type-btn t-notice" role="button" tabindex="0" onclick="Draft('notice')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();Draft('notice')}"><span>👁️</span>Notice</div>
-                <div class="type-btn t-wonder" role="button" tabindex="0" onclick="Draft('wonder')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();Draft('wonder')}"><span>❓</span>Wonder</div>
-                <div class="type-btn t-idea" role="button" tabindex="0" onclick="Draft('idea')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();Draft('idea')}"><span>💡</span>Idea</div>
-                <div class="type-btn t-test" role="button" tabindex="0" onclick="Draft('test')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();Draft('test')}"><span>🧪</span>Test</div>
-                <div class="type-btn t-sketch" role="button" tabindex="0" onclick="DraftSketch()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();DraftSketch()}"><span>✏️</span>Sketch</div>
-            </div>
-        </div>
-
-        <!-- 4. ACTIVITIES -->
-        <div id="act-vote" style="display:none">
-            <div class="active-zone-card">
-                <div class="zone-badge">VOTE</div>
-                <h3>Cast Your Vote</h3>
-                <div id="vote-list" style="margin-top:10px"></div>
-                <button class="btn" id="btn-submit-vote" style="margin-top:10px" disabled>Submit Vote</button>
-            </div>
-        </div>
-
-        <div id="act-sort" style="display:none">
-            <div class="active-zone-card">
-                <div class="zone-badge">RANK</div>
-                <h3>Rank Items</h3>
-                <div id="sort-list" style="margin-top:10px; display:flex; flex-direction:column; gap:8px;"></div>
-                <button class="btn" onclick="SubmitSort()" style="margin-top:15px">Submit Order</button>
-            </div>
-        </div>
-
-        <div id="act-discuss" style="display:none">
-            <div class="active-zone-card">
-                <div class="zone-badge">DISCUSS</div>
-                <h3>Discussion</h3>
-                <div id="discuss-items" style="max-height:300px; overflow-y:auto; margin-top:10px"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- HISTORY -->
-    <div class="hist-container">
-        <div style="display:flex; justify-content:space-between; margin-bottom:12px; color: var(--text-light); font-size:0.9rem; font-weight:700">
-            <span>YOUR CONTRIBUTIONS</span>
-            <span onclick="RenderHist()">↻ Refresh</span>
-        </div>
-        <div id="hist-list"></div>
-    </div>
-</div>
-
-<!-- WRITE SCREEN -->
-<div id="scr-write" class="screen">
-    <div class="card" style="height:100%; justify-content:flex-start">
-        <h2 id="w-head" style="margin-top:0">New Note</h2>
-        <div class="cat-selector" id="cat-scroll">
-            <div class="cat-chip" id="c-notice" onclick="SetDraftType('notice')">👁️ Notice</div>
-            <div class="cat-chip" id="c-wonder" onclick="SetDraftType('wonder')">❓ Wonder</div>
-            <div class="cat-chip" id="c-idea" onclick="SetDraftType('idea')">💡 Idea</div>
-            <div class="cat-chip" id="c-test" onclick="SetDraftType('test')">🧪 Test</div>
-            <div class="cat-chip" id="c-claim" onclick="SetDraftType('claim')">🤔 Claim</div>
-            <div class="cat-chip" id="c-evidence" onclick="SetDraftType('evidence')">📊 Evidence</div>
-            <div class="cat-chip" id="c-reasoning" onclick="SetDraftType('reasoning')">🔗 Reasoning</div>
-        </div>
-        <textarea id="w-txt" rows="6" placeholder="Type your thoughts here..."></textarea>
-        <div style="display:flex; gap:10px; width:100%; margin-top:auto">
-            <button class="btn btn-s" onclick="Show('scr-lobby')">Cancel</button>
-            <button class="btn" onclick="SendNote()">Send</button>
-        </div>
-    </div>
-</div>
-
-<!-- SKETCH SCREEN -->
-<div id="scr-sketch" class="screen">
-    <div class="card">
-        <h2 style="margin-top:0">Draw</h2>
-        <div style="display:flex; gap:12px; margin-bottom:12px">
-            <div class="c-tool active" id="tb-pen" onclick="SetSketchTool('pen')">✏️</div>
-            <div class="c-tool" id="tb-era" style="background:white; color:#333" onclick="SetSketchTool('eraser')">🧼</div>
-        </div>
-        <canvas id="sketch-canvas" style="border: var(--border); border-radius:8px; width:100%; height:300px; touch-action:none"></canvas>
-        <input id="sketch-caption" placeholder="Optional caption..." style="margin-top:16px">
-        <div style="display:flex; gap:10px; width:100%; margin-top:16px">
-            <button class="btn btn-s" onclick="Show('scr-lobby')">Cancel</button>
-            <button class="btn" onclick="SendSketch()">Send</button>
-        </div>
-    </div>
-</div>
-
-<!-- WIDGET SCREEN (Poll/Graph) -->
-<div id="scr-widget" class="screen">
-    <div class="card">
-        <h2 id="wid-title">Activity</h2>
-        <div id="wid-content" style="width:100%; padding:10px 0"></div>
-        <div id="wid-input-area" style="display:none; width:100%">
-            <input type="number" id="graph-val" placeholder="0.0" style="font-size:2rem; text-align:center">
-        </div>
-        <button class="btn" id="wid-submit" style="margin-top:10px">Submit</button>
-    </div>
-</div>
-
-<!-- EXIT TICKET SCREEN -->
-<div id="scr-exit" class="screen" role="main" aria-label="Exit Ticket">
-    <div class="exit-header">
-        <div class="exit-prompt-card">
-            <div class="exit-prompt-label">🎯 Exit Ticket</div>
-            <div id="exit-prompt" role="heading" aria-level="1">...</div>
-        </div>
-    </div>
-    <div id="exit-area" aria-live="polite"></div>
-    <button class="btn" id="exit-submit">Submit Response →</button>
-</div>
-
-<!-- CONSENSUS SCREEN (Robust) -->
-<div id="scr-consensus" class="screen">
-    <div class="lobby-header" style="background: white; border-bottom: var(--border);">
-        <div>
-            <div style="font-weight:700">Modeling Mode</div>
-            <div id="cm-perm-text" style="font-size:0.75rem; color: var(--text-muted);">View Only</div>
-        </div>
-        <div style="display:flex; gap:8px">
-            <div id="cm-pan-toggle" class="c-tool active" style="width:36px; height:36px; font-size:1rem" onclick="Consensus.toggleMode()">✋</div>
-            <button class="btn-icon" style="color: var(--text);" onclick="Consensus.exit()">✕</button>
-        </div>
-    </div>
-    
-    <div id="consensus-viewport">
-        <div id="consensus-world">
-            <div id="consensus-items"></div>
-            <svg id="consensus-ink" style="overflow:visible"></svg>
-        </div>
-    </div>
-
-    <div id="consensus-toolbar">
-        <div class="c-tool" onclick="Consensus.setTool('draw', '#ef4444')" style="background:#ef4444; border-color:#ef4444"></div>
-        <div class="c-tool" onclick="Consensus.setTool('draw', '#3b82f6')" style="background:#3b82f6; border-color:#3b82f6"></div>
-        <div class="c-tool" onclick="Consensus.setTool('draw', '#10b981')" style="background:#10b981; border-color:#10b981"></div>
-        <div class="c-tool" onclick="Consensus.setTool('draw', '#ffffff')" style="background:#ffffff; border-color:#9ca3af"></div>
-        <div class="c-tool" onclick="Consensus.setTool('eraser')" style="background:#f3f4f6; color:#1f2937">🧼</div>
-    </div>
-</div>
-
-<!-- DISCUSSION MODAL -->
-<div id="modal-discuss">
-    <div class="modal-sheet">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px">
-            <h3 style="margin:0">Add Comment</h3>
-            <button class="btn-icon" onclick="$('modal-discuss').classList.remove('active')">✕</button>
-        </div>
-        <div id="md-text" style="background: var(--warm-bg); padding:12px; border-radius:8px; margin-bottom:16px; font-style:italic; color: var(--text-light)"></div>
-        <div style="display:flex; gap:8px; margin-bottom:16px; justify-content:center">
-            <button class="status-pill online" onclick="SetDiscussTag(this, 'feedback')">Feedback</button>
-            <button class="status-pill" onclick="SetDiscussTag(this, 'question')">Question</button>
-            <button class="status-pill" onclick="SetDiscussTag(this, 'connection')">Connection</button>
-        </div>
-        <textarea id="md-input" rows="3" placeholder="Type your comment..."></textarea>
-        <button class="btn" onclick="SubmitDiscussComment()">Post Comment</button>
-    </div>
-</div>
-
+<script src="../vendor/peerjs.min.js"></script>
+<script src="../shared/icons.js"></script>
+<script src="../shared/ui.js"></script>
+<script src="../shared/net.js"></script>
+<script src="app.js"></script>
 <script>
-const $ = id => document.getElementById(id);
-const genId = () => Math.random().toString(36).substr(2, 9);
-const sanitizeHTML = (str) => {
-    if (str === null || str === undefined) return '';
-    const temp = document.createElement('div');
-    temp.textContent = str;
-    return temp.innerHTML;
-};
-
-/* --- GLOBAL STATE --- */
-const State = {
-    me: { name: '', av: '😀', color: null },
-    notes: [],
-    activity: { type: 'LOCKED', id: null, title: null, subType: null, items: [] },
-    draft: { id: null, sub: 'notice', text: '' },
-    hostId: null, boardId: null, lastHeartbeat: 0,
-    selectedVote: null, sortOrder: [], discussTag: 'feedback',
-    consensus: { active: false, canDraw: false, ink: [], tool: 'pan', color: '#ef4444', view: {x:0, y:0, z:1} }
-};
-
-/* --- DATABASE --- */
-const DB = {
-    db: null,
-    init: () => new Promise(res => {
-        const r = indexedDB.open('DQB_Student', 2);
-        r.onupgradeneeded = e => {
-            const db = e.target.result;
-            if(!db.objectStoreNames.contains('notes')) db.createObjectStore('notes', {keyPath:'id'});
-            if(!db.objectStoreNames.contains('profile')) db.createObjectStore('profile', {keyPath:'key'});
-        };
-        r.onsuccess = e => {
-            DB.db = e.target.result;
-            const tx = DB.db.transaction(['profile','notes'], 'readonly');
-            tx.objectStore('profile').get('me').onsuccess = ev => { if(ev.target.result) State.me = ev.target.result.val; };
-            tx.objectStore('notes').getAll().onsuccess = ev => { State.notes = ev.target.result || []; };
-            res();
-        };
-    }),
-    saveNote: (n) => {
-        n.boardId = State.boardId;
-        const tx = DB.db.transaction('notes', 'readwrite');
-        tx.objectStore('notes').put(n);
-        const idx = State.notes.findIndex(x=>x.id===n.id);
-        if(idx >= 0) State.notes[idx] = n; else State.notes.push(n);
-        RenderHist();
-    },
-    delNote: (id) => {
-        const tx = DB.db.transaction('notes', 'readwrite');
-        tx.objectStore('notes').delete(id);
-        State.notes = State.notes.filter(x=>x.id!==id);
-        RenderHist();
-    },
-    saveProfile: () => DB.db.transaction('profile', 'readwrite').objectStore('profile').put({key:'me', val:State.me})
-};
-
-/* --- SETUP & CONNECTION --- */
-const EMOJIS = ['😀','😎','🦊','🐱','🚀','🎨','⚽','🦄','🍔','🧩'];
-EMOJIS.forEach((e, idx) => {
-    let d = document.createElement('div'); d.className='av-item'; d.innerText=e;
-    d.setAttribute('role', 'radio'); d.setAttribute('aria-checked', 'false'); d.setAttribute('aria-label', `Avatar: ${e}`); d.setAttribute('tabindex', idx === 0 ? '0' : '-1');
-    const selectFn = () => {
-        document.querySelectorAll('.av-item').forEach(x=>{ x.classList.remove('sel'); x.setAttribute('aria-checked','false'); x.setAttribute('tabindex','-1'); });
-        d.classList.add('sel'); d.setAttribute('aria-checked','true'); d.setAttribute('tabindex','0'); State.me.av=e;
-    };
-    d.onclick = selectFn;
-    d.onkeydown = (ev) => {
-        const items = Array.from($('av-grid').querySelectorAll('.av-item'));
-        const i = items.indexOf(d);
-        if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); selectFn(); }
-        else if(ev.key==='ArrowRight'||ev.key==='ArrowDown'){ ev.preventDefault(); items[(i+1)%items.length].focus(); }
-        else if(ev.key==='ArrowLeft'||ev.key==='ArrowUp'){ ev.preventDefault(); items[(i-1+items.length)%items.length].focus(); }
-    };
-    $('av-grid').appendChild(d);
-});
-if($('av-grid').children[0]) { $('av-grid').children[0].click(); $('av-grid').setAttribute('role', 'radiogroup'); $('av-grid').setAttribute('aria-label', 'Choose avatar'); }
-
-function Setup() {
-    State.me.name = $('inp-name').value.trim() || "Student";
-    $('my-name').innerText = State.me.name; $('my-av').innerText = State.me.av;
-    DB.saveProfile();
-    const lastHost = localStorage.getItem('dqb_host_id');
-    if(lastHost) Connect(lastHost); else Show('scr-join');
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', function () { navigator.serviceWorker.register('../sw.js').catch(function () {}); });
 }
-
-function Show(id) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    $(id).classList.add('active');
-    window.scrollTo(0,0);
-}
-
-let peer, conn, hbInt;
-function StartScan() {
-    $('reader').style.display = 'block';
-    const s = new Html5Qrcode("reader");
-    s.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, t => { s.stop(); Connect(t); });
-    $('btn-scan').style.display = 'none';
-}
-
-function Connect(id) {
-    if(!id) return;
-    id = id.trim(); State.hostId = id; localStorage.setItem('dqb_host_id', id);
-    UpdateStatus("Connecting...", "status-pill");
-    if(peer) peer.destroy();
-    peer = new Peer();
-    peer.on('open', () => { conn = peer.connect(id); SetupConn(conn); });
-    peer.on('error', () => { UpdateStatus("Error", "status-pill error"); setTimeout(() => Connect(State.hostId), 3000); });
-    
-    if(hbInt) clearInterval(hbInt);
-    hbInt = setInterval(() => { if(Date.now() - State.lastHeartbeat > 8000) Connect(State.hostId); }, 2000);
-}
-
-function SetupConn(c) {
-    c.on('open', () => {
-        SafeSend({ type:'JOIN', name:State.me.name, avatar:State.me.av });
-        State.lastHeartbeat = Date.now();
-        UpdateStatus("Online", "status-pill online");
-        Show('scr-lobby');
-    });
-    c.on('data', d => Handle(JSON.parse(d)));
-    c.on('close', () => UpdateStatus("Offline", "status-pill error"));
-}
-
-function SafeSend(data) { if(conn && conn.open) conn.send(JSON.stringify(data)); }
-function UpdateStatus(msg, cls) { $('status-badge').innerText = msg; $('status-badge').className = cls; }
-
-function showToast(msg) {
-    const t = document.createElement('div');
-    t.className = 's-toast'; t.textContent = msg;
-    document.getElementById('s-toast-container').appendChild(t);
-    setTimeout(() => t.remove(), 3000);
-}
-let _sConfirmCb = null;
-function sConfirm(msg, onOk, icon, okLabel) {
-    _sConfirmCb = onOk;
-    $('s-confirm-msg').textContent = msg;
-    $('s-confirm-icon').textContent = icon || '⚠️';
-    $('s-confirm-ok').textContent = okLabel || 'Confirm';
-    $('s-confirm-ok').onclick = () => { $('s-confirm').style.display = 'none'; if (_sConfirmCb) { _sConfirmCb(); _sConfirmCb = null; } };
-    $('s-confirm').style.display = 'flex';
-}
-function sConfirmCancel() { $('s-confirm').style.display = 'none'; _sConfirmCb = null; }
-
-function ManualDisconnect() { sConfirm("Leave this session?", () => { if(conn) conn.close(); localStorage.removeItem('dqb_host_id'); location.reload(); }, '👋', 'Leave'); }
-
-/* --- LOGIC HANDLER --- */
-function Handle(d) {
-    State.lastHeartbeat = Date.now();
-    switch(d.type) {
-        case 'HEARTBEAT': break;
-        case 'WELCOME':
-            State.boardId = d.boardId;
-            if(d.sync) d.sync.forEach(n => { const l=State.notes.find(x=>x.id===n.id); if(l){l.text=n.text; l.sub=n.sub; DB.saveNote(l);} });
-            RenderHist();
-            if(d.payload) Handle(d.payload); else if(d.mode) Handle({ type: 'MODE', val: d.mode });
-            break;
-        case 'MODE': SetActivity('LOCKED'); if(d.val==='OPEN') SetActivity('OPEN'); break;
-        case 'ZONE_ACT': case 'OPEN_ZONE': case 'ACT_VOTE': case 'ACT_SORT': case 'ACT_DISCUSS':
-            SetActivity('ZONE_ACT', d.actId, d.title, d.type || d.subType, d.items);
-            break;
-        case 'ACT_POLL': SetActivity('WIDGET', d.actId, d.q); RenderPoll(d); break;
-        case 'ACT_GRAPH': SetActivity('WIDGET', d.actId, d.title); RenderGraphInput(d); break;
-        case 'EXIT_TICKET': SetActivity('EXIT', d.actId, "Exit Ticket"); RenderExit(d); break;
-        case 'STOP_ACT': SetActivity('LOCKED'); Show('scr-lobby'); break;
-        case 'SET_COLOR': 
-            State.me.color = d.color; 
-            $('user-badge').style.backgroundColor = d.color ? d.color+'20' : 'white';
-            $('user-badge').style.borderColor = d.color || 'transparent';
-            break;
-        
-        // Consensus
-        case 'CONSENSUS_START': Consensus.start(d.items, d.ink); break;
-        case 'CONSENSUS_STOP': Consensus.exit(); break;
-        case 'CONSENSUS_PERMS': Consensus.setPerms(d.canDraw); break;
-        case 'CONSENSUS_INK': Consensus.addInk(d.ink); break;
-        case 'CONSENSUS_CLEAR': Consensus.clear(); break;
-        case 'CONSENSUS_SET_INK': State.consensus.ink = d.ink; Consensus.render(); break;
-        case 'CONSENSUS_ITEM_MOVE': Consensus.moveItem(d.id, d.x, d.y); break;
-    }
-}
-
-function SetActivity(type, id=null, title=null, subType=null, items=[]) {
-    State.activity = { type, id, title, subType, items };
-    ['state-locked','state-open','state-zone','act-vote','act-sort','act-discuss'].forEach(x => $(x).style.display='none');
-    
-    if(type === 'LOCKED') $('state-locked').style.display='block';
-    else if(type === 'OPEN') $('state-open').style.display='block';
-    else if(type === 'ZONE_ACT') {
-        if(subType === 'ACT_VOTE') { $('act-vote').style.display='block'; RenderVote(items); }
-        else if(subType === 'ACT_SORT') { $('act-sort').style.display='block'; RenderSort(items); }
-        else if(subType === 'ACT_DISCUSS') { $('act-discuss').style.display='block'; RenderDiscuss(items); }
-        else {
-            $('state-zone').style.display='block';
-            $('zone-title').innerText = title || "Activity";
-            $('zone-type-badge').innerText = subType === 'cer' ? "CER Builder" : "Zone Activity";
-            $('zone-desc').innerText = subType === 'cer' ? "Build an argument." : "Contribute notes.";
-            $('zone-buttons-default').style.display = subType === 'cer' ? 'none' : 'block';
-            $('zone-buttons-cer').style.display = subType === 'cer' ? 'grid' : 'none';
-        }
-    }
-    else if(type === 'WIDGET') Show('scr-widget');
-    else if(type === 'EXIT') Show('scr-exit');
-}
-
-/* --- CONSENSUS MODE --- */
-const Consensus = {
-    touch: { x:0, y:0, d:0 },
-    init: false,
-    
-    start: (items, ink) => {
-        State.consensus.active = true;
-        State.consensus.ink = ink || [];
-        State.consensus.view = {x:0, y:0, z:1};
-        $('consensus-items').innerHTML = items.map(i => {
-            let inner = i.type === 'note' ? (i.src ? `<img src="${i.src}">` : i.text) : '';
-            return `<div id="ci-${i.id}" class="c-item c-${i.sub||'notice'}" style="transform:translate(${i.x}px,${i.y}px); width:${i.w}px; height:${i.h}px">${inner}</div>`;
-        }).join('');
-        Show('scr-consensus');
-        Consensus.render();
-    },
-    
-    exit: () => { State.consensus.active = false; Show('scr-lobby'); },
-    
-    setPerms: (canDraw) => {
-        State.consensus.canDraw = canDraw;
-        $('cm-perm-text').innerText = canDraw ? "You can draw" : "View Only";
-        $('consensus-toolbar').style.display = canDraw ? 'flex' : 'none';
-        if(canDraw) Consensus.setTool('draw'); else Consensus.setTool('pan');
-    },
-
-    toggleMode: () => {
-        if(!State.consensus.canDraw) return;
-        if(State.consensus.tool === 'pan') Consensus.setTool('draw'); else Consensus.setTool('pan');
-    },
-
-    setTool: (t, c) => {
-        State.consensus.tool = t;
-        if(c) State.consensus.color = c;
-        $('cm-pan-toggle').classList.toggle('active', t==='pan');
-        $('consensus-viewport').style.cursor = t==='pan' ? 'grab' : 'crosshair';
-        document.querySelectorAll('#consensus-toolbar .c-tool').forEach(b => b.classList.remove('active'));
-        if(event && t!=='pan') event.currentTarget.classList.add('active');
-    },
-
-    render: () => {
-        const svg = $('consensus-ink');
-        svg.innerHTML = State.consensus.ink.map(s => `<path d="${s.points.map((p,i)=>`${i===0?'M':'L'} ${p.x} ${p.y}`).join(' ')}" stroke="${s.color}" stroke-width="${s.width}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
-        Consensus.syncView();
-    },
-
-    addInk: (ink) => { State.consensus.ink.push(ink); Consensus.render(); },
-    clear: () => { State.consensus.ink = []; Consensus.render(); },
-    moveItem: (id, x, y) => { const el=$(`ci-${id}`); if(el) el.style.transform = `translate(${x}px, ${y}px)`; },
-    
-    syncView: () => {
-        const v = State.consensus.view;
-        $('consensus-world').style.transform = `scale(${v.z}) translate(${v.x}px, ${v.y}px)`;
-    },
-
-    // Input Handling
-    path: [],
-    inputStart: (e) => {
-        if(!State.consensus.active) return;
-        const evt = e.touches ? e.touches[0] : e;
-        const rect = $('consensus-viewport').getBoundingClientRect();
-        Consensus.touch = { sx: evt.clientX, sy: evt.clientY, vx: State.consensus.view.x, vy: State.consensus.view.y };
-        
-        if(State.consensus.tool !== 'pan') {
-            const wx = (evt.clientX - rect.left)/State.consensus.view.z - State.consensus.view.x;
-            const wy = (evt.clientY - rect.top)/State.consensus.view.z - State.consensus.view.y;
-            Consensus.path = [{x:wx, y:wy}];
-        }
-    },
-    inputMove: (e) => {
-        if(!State.consensus.active || !Consensus.touch.sx) return;
-        e.preventDefault();
-        const evt = e.touches ? e.touches[0] : e;
-        const rect = $('consensus-viewport').getBoundingClientRect();
-        
-        if(State.consensus.tool === 'pan') {
-            State.consensus.view.x = Consensus.touch.vx + (evt.clientX - Consensus.touch.sx)/State.consensus.view.z;
-            State.consensus.view.y = Consensus.touch.vy + (evt.clientY - Consensus.touch.sy)/State.consensus.view.z;
-            Consensus.syncView();
-        } else {
-            const wx = (evt.clientX - rect.left)/State.consensus.view.z - State.consensus.view.x;
-            const wy = (evt.clientY - rect.top)/State.consensus.view.z - State.consensus.view.y;
-            Consensus.path.push({x:wx, y:wy});
-            // Simplified render for preview could go here
-            Consensus.render(); // Re-render with new temp path logic if needed, simplifed here to just wait for end or add local temp line
-        }
-    },
-    inputEnd: () => {
-        if(State.consensus.tool !== 'pan' && Consensus.path.length > 1) {
-            const ink = { id: genId(), points: Consensus.path, color: State.consensus.color, width: 4 };
-            Consensus.addInk(ink);
-            SafeSend({ type: 'CONSENSUS_INK', ink: ink });
-        }
-        Consensus.touch = { sx:null }; Consensus.path = [];
-    }
-};
-
-// Bind Consensus Events
-const cv = $('consensus-viewport');
-cv.addEventListener('mousedown', Consensus.inputStart);
-cv.addEventListener('mousemove', Consensus.inputMove);
-cv.addEventListener('mouseup', Consensus.inputEnd);
-cv.addEventListener('touchstart', Consensus.inputStart, {passive:false});
-cv.addEventListener('touchmove', Consensus.inputMove, {passive:false});
-cv.addEventListener('touchend', Consensus.inputEnd);
-
-
-/* --- ACTIVITY RENDERERS --- */
-function RenderVote(items) {
-    $('vote-list').innerHTML = items.map(i => `<div class="vote-item" onclick="SelectVote('${i.id}', this)"><div>${i.text.substring(0,60)}...</div></div>`).join('');
-    $('btn-submit-vote').disabled = true; $('btn-submit-vote').innerText = "Submit Vote";
-}
-function SelectVote(id, el) { 
-    document.querySelectorAll('.vote-item').forEach(e => e.classList.remove('selected')); 
-    el.classList.add('selected'); State.selectedVote = id; $('btn-submit-vote').disabled = false; 
-}
-$('btn-submit-vote').onclick = () => { if(State.selectedVote) { SafeSend({ type: 'SUBMIT_VOTE', actId: State.activity.id, choiceId: State.selectedVote }); showToast("✅ Vote Sent!"); } };
-
-function RenderSort(items) {
-    State.sortOrder = [...items];
-    const render = () => $('sort-list').innerHTML = State.sortOrder.map((i, idx) => `<div class="sort-item"><div>#${idx+1}</div><div style="flex:1">${i.text.substring(0,40)}</div><div class="sort-controls"><button class="sort-btn" onclick="MoveItem(${idx},-1)">▲</button><button class="sort-btn" onclick="MoveItem(${idx},1)">▼</button></div></div>`).join('');
-    render();
-    window.MoveItem = (idx, dir) => { if(idx+dir<0||idx+dir>=State.sortOrder.length)return; [State.sortOrder[idx],State.sortOrder[idx+dir]]=[State.sortOrder[idx+dir],State.sortOrder[idx]]; render(); };
-}
-function SubmitSort() { SafeSend({ type: 'SUBMIT_SORT', actId: State.activity.id, order: State.sortOrder.map(i=>i.id) }); showToast("✅ Ranking Submitted!"); }
-
-function RenderDiscuss(items) { $('discuss-items').innerHTML = items.map(i => `<div class="discuss-card" onclick="OpenDiscuss('${i.id}', '${i.text.replace(/'/g,"\\'")}')"><div style="font-size:0.8rem;color: var(--text-muted);font-weight:700">NOTE</div><div>${i.text.substring(0,100)}...</div></div>`).join(''); }
-let discussTarget = null;
-function OpenDiscuss(id, txt) { discussTarget = id; $('md-text').innerText = txt; $('md-input').value=''; $('modal-discuss').classList.add('active'); }
-function SetDiscussTag(el, tag) { document.querySelectorAll('.status-pill').forEach(b => b.classList.remove('online')); el.classList.add('online'); State.discussTag = tag; }
-function SubmitDiscussComment() { 
-    const txt = $('md-input').value.trim(); 
-    if(!txt) return; 
-    SafeSend({ type:'COMMENT', targetId:discussTarget, text:txt, author:State.me.name, tag:State.discussTag }); 
-    $('modal-discuss').classList.remove('active'); 
-}
-
-/* --- DRAFTING --- */
-function Draft(sub) { State.draft = { id: genId(), sub, text: '' }; SetDraftType(sub); Show('scr-write'); setTimeout(()=>$('w-txt').focus(), 200); }
-function SetDraftType(sub) { 
-    State.draft.sub = sub; 
-    $('w-head').innerText = sub.charAt(0).toUpperCase() + sub.slice(1);
-    document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
-    const chip = $(`c-${sub}`); if(chip) { chip.classList.add('active'); chip.scrollIntoView({ behavior:'smooth', inline:'center' }); }
-}
-function SendNote() {
-    const txt = $('w-txt').value.trim(); if(!txt) return;
-    const n = { id: State.draft.id, sub: State.draft.sub, text: txt, ts: Date.now(), boardId: State.boardId };
-    DB.saveNote(n);
-    SafeSend({ type:'NOTE', id:n.id, sub:n.sub, text:n.text, zoneId: State.activity.type === 'ZONE_ACT' ? State.activity.id : null });
-    Show('scr-lobby');
-}
-
-/* --- SKETCHING --- */
-let ctx, isSketching=false;
-function DraftSketch() { 
-    State.draft = { id: genId(), sub: 'sketch' }; $('sketch-caption').value=''; 
-    Show('scr-sketch'); 
-    const c=$('sketch-canvas'); c.width=c.parentElement.clientWidth-48; c.height=300;
-    ctx = c.getContext('2d'); ctx.lineCap='round'; ctx.lineJoin='round'; SetSketchTool('pen');
-    
-    const start = (e) => { isSketching=true; draw(e); };
-    const move = (e) => { if(isSketching) draw(e); };
-    const end = () => isSketching=false;
-    const draw = (e) => { 
-        const r=c.getBoundingClientRect(); 
-        const x=(e.clientX||e.touches[0].clientX)-r.left, y=(e.clientY||e.touches[0].clientY)-r.top;
-        ctx.lineTo(x,y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x,y);
-    }
-    
-    c.onmousedown=start; c.onmousemove=move; c.onmouseup=end;
-    c.ontouchstart=e=>{e.preventDefault();start(e);}; c.ontouchmove=e=>{e.preventDefault();move(e);}; c.ontouchend=end;
-}
-function SetSketchTool(t) { ctx.beginPath(); if(t==='pen') { ctx.globalCompositeOperation='source-over'; ctx.lineWidth=3; ctx.strokeStyle='#000'; } else { ctx.globalCompositeOperation='destination-out'; ctx.lineWidth=20; } document.querySelectorAll('#scr-sketch .c-tool').forEach(b=>b.classList.remove('active')); $(`tb-${t==='pen'?'pen':'era'}`).classList.add('active'); }
-function SendSketch() {
-    const data=$('sketch-canvas').toDataURL(), cap=$('sketch-caption').value.trim()||'Sketch';
-    const n={id:State.draft.id,sub:'sketch',text:cap,src:data,ts:Date.now(),boardId:State.boardId};
-    DB.saveNote(n);
-    SafeSend({type:'IMG_NOTE',id:n.id,src:data,text:cap,zoneId:State.activity.type==='ZONE_ACT'?State.activity.id:null});
-    Show('scr-lobby');
-}
-
-/* --- WIDGETS --- */
-function RenderPoll(d) { $('wid-title').innerText=d.q; $('wid-content').innerHTML=d.opts.map((o,i)=>`<button class="btn btn-s" style="margin-bottom:8px; text-align:left" onclick="SafeSend({type:'POLL_VOTE',actId:'${d.actId}',idx:${i}});Show('scr-lobby')">${sanitizeHTML(o.lbl)}</button>`).join(''); $('wid-input-area').style.display='none'; $('wid-submit').style.display='none'; }
-function RenderGraphInput(d) { $('wid-title').innerText=d.title; $('wid-content').innerHTML=''; $('wid-input-area').style.display='block'; $('wid-submit').style.display='block'; $('wid-submit').onclick=()=>{ SafeSend({type:'DATA_SUBMIT',actId:d.actId,val:parseFloat($('graph-val').value)||0}); Show('scr-lobby'); }; }
-function RenderExit(d) {
-    $('exit-prompt').innerHTML = sanitizeHTML(d.prompt);
-    const a = $('exit-area');
-    a.innerHTML = '';
-    let val = null;
-
-    if(d.mode === 'short') {
-        a.innerHTML = `
-            <div style="padding: 0 20px;">
-                <div class="exit-mode-badge">📝 Short Answer</div>
-                <textarea id="ex-txt" class="exit-textarea" rows="6" placeholder="Type your response here…" maxlength="500" aria-label="Your response"></textarea>
-                <div class="exit-char-count" aria-live="polite"><span id="ex-char">0</span> / 500</div>
-            </div>`;
-        const ta = document.getElementById('ex-txt');
-        const cc = document.getElementById('ex-char');
-        ta.addEventListener('input', () => cc.textContent = ta.value.length);
-        $('exit-submit').onclick = () => SubmitExit(ta.value);
-
-    } else if(d.mode === 'smiley') {
-        const ratings = [
-            { e: '😡', lbl: 'Not at all' },
-            { e: '🙁', lbl: 'Not really' },
-            { e: '😐', lbl: 'Somewhat' },
-            { e: '🙂', lbl: 'Mostly' },
-            { e: '😀', lbl: 'Absolutely!' }
-        ];
-        a.innerHTML = `
-            <div style="padding: 0 20px;">
-                <div class="exit-mode-badge">⭐ Rating Scale</div>
-                <div class="smiley-grid" role="group" aria-label="Rating">
-                    ${ratings.map(r => `
-                        <button type="button" class="smiley-btn" aria-pressed="false" data-val="${r.e}" aria-label="${r.lbl}" onclick="SelectSmiley(this,'${r.e}')">
-                            <span class="smiley-emoji">${r.e}</span>
-                            <span class="smiley-lbl">${r.lbl}</span>
-                        </button>
-                    `).join('')}
-                </div>
-            </div>`;
-        window.SelectSmiley = (el, v) => {
-            document.querySelectorAll('.smiley-btn').forEach(b => { b.classList.remove('selected'); b.setAttribute('aria-pressed', 'false'); });
-            el.classList.add('selected'); el.setAttribute('aria-pressed', 'true'); val = v;
-        };
-        $('exit-submit').onclick = () => SubmitExit(val);
-
-    } else if(d.mode === 'mc') {
-        const letters = 'ABCDEFGH';
-        a.innerHTML = `
-            <div style="padding: 0 20px;" class="exit-mc">
-                <div class="exit-mode-badge">🔘 Multiple Choice</div>
-                <div role="group" aria-label="Answer choices">
-                ${d.opts.map((o, i) => `
-                    <button type="button" class="mc-btn" aria-pressed="false" aria-label="Option ${letters[i]}: ${o}" onclick="SelectMC(this,${JSON.stringify(o)})">
-                        <span class="mc-letter">${letters[i]}</span>
-                        <span class="mc-text">${sanitizeHTML(o)}</span>
-                    </button>
-                `).join('')}
-                </div>
-            </div>`;
-        window.SelectMC = (el, v) => {
-            document.querySelectorAll('.mc-btn').forEach(b => { b.classList.remove('selected'); b.setAttribute('aria-pressed', 'false'); });
-            el.classList.add('selected'); el.setAttribute('aria-pressed', 'true'); val = v;
-        };
-        $('exit-submit').onclick = () => SubmitExit(val);
-
-    } else if(d.mode === 'multi') {
-        const selected = new Set();
-        a.innerHTML = `
-            <div style="padding: 0 20px;" class="exit-multi">
-                <div class="exit-mode-badge">☑️ Multi-Select</div>
-                <div class="exit-multi-hint">Select all that apply</div>
-                ${d.opts.map(o => `
-                    <button type="button" class="multi-btn" aria-pressed="false" aria-label="${o}" onclick="ToggleMulti(this,${JSON.stringify(o)})">
-                        <span class="multi-check" aria-hidden="true">✓</span>
-                        <span class="multi-text">${sanitizeHTML(o)}</span>
-                    </button>
-                `).join('')}
-            </div>`;
-        window.ToggleMulti = (el, v) => {
-            el.classList.toggle('selected');
-            const checked = el.classList.contains('selected');
-            el.setAttribute('aria-pressed', checked ? 'true' : 'false');
-            if(checked) selected.add(v); else selected.delete(v);
-        };
-        $('exit-submit').onclick = () => SubmitExit(Array.from(selected));
-
-    } else if(d.mode === 'lw') {
-        a.innerHTML = `
-            <div style="padding: 0 20px;">
-                <div class="exit-mode-badge">🧠 Learn &amp; Wonder</div>
-                <div class="lw-field">
-                    <label class="lw-label" for="ex-l"><span class="lw-icon">💡</span> I Learned…</label>
-                    <textarea id="ex-l" class="exit-textarea" rows="3" placeholder="Something I learned today was…"></textarea>
-                </div>
-                <div class="lw-field">
-                    <label class="lw-label" for="ex-w"><span class="lw-icon">❓</span> I Wonder…</label>
-                    <textarea id="ex-w" class="exit-textarea" rows="3" placeholder="I'm still wondering about…"></textarea>
-                </div>
-            </div>`;
-        $('exit-submit').onclick = () => SubmitExit({ l: $('ex-l').value, w: $('ex-w').value });
-    }
-}
-function SubmitExit(val) { if(!val) return; SafeSend({ type:'EXIT_SUBMIT', actId:State.activity.id, val }); Show('scr-lobby'); }
-
-/* --- HISTORY --- */
-function RenderHist() {
-    const list=$('hist-list'), notes=State.notes.filter(n=>n.boardId===State.boardId).sort((a,b)=>b.ts-a.ts);
-    if(!notes.length) return list.innerHTML=`<div style="text-align:center;color: var(--text-muted);padding:20px">No notes yet</div>`;
-    list.innerHTML=notes.map(n=>`<div class="note-card n-${n.sub}"><div>${n.sub==='sketch'?`<img src="${n.src}" style="width:100%">`:`${sanitizeHTML(n.text)}`}</div><div style="text-align:right;margin-top:5px"><span onclick="DeleteNote('${n.id}')" style="font-size:0.8rem;color:#dc2626;cursor:pointer">Delete</span></div></div>`).join('');
-}
-function DeleteNote(id) { sConfirm("Delete this note?", () => { DB.delNote(id); SafeSend({ type:'DELETE_NOTE', id }); }, '🗑️', 'Delete'); }
-
-window.onload = () => DB.init().then(() => { if(State.me.name) Setup(); });
 </script>
 </body>
 </html>

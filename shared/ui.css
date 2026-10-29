@@ -295,6 +295,12 @@ button.list-row:hover { background: var(--surface-2); }
 .toast.success .i { color: #4ade80; } .toast.error .i { color: #f87171; } .toast.warn .i { color: #fbbf24; }
 :root[data-theme="dark"] .toast.success .i { color: #15803d; } :root[data-theme="dark"] .toast.error .i { color: #dc2626; } :root[data-theme="dark"] .toast.warn .i { color: #b45309; }
 .toast .toast-action { margin-left: 4px; padding: 4px 10px; border: none; border-radius: var(--radius-full); background: rgba(255, 255, 255, 0.16); color: inherit; font-weight: 700; font-size: 0.8125rem; }
+/* ---------- Colour swatches ---------- */
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.swatch { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--border-strong); padding: 0; transition: transform 0.12s; }
+.swatch:hover { transform: scale(1.1); }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2.5px var(--accent); transform: scale(1.08); }
+
 @keyframes toastIn { from { opacity: 0; transform: translateY(16px) scale(0.96); } to { opacity: 1; transform: none; } }
 @keyframes toastOut { to { opacity: 0; transform: translateY(8px); } }
 

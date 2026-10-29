@@ -211,10 +211,6 @@ svg { overflow: visible; }
 .tile.t-idea { background: #dcfce7; border-color: #9fe0b5; color: #14532d; } .tile.t-idea .i { color: #15803d; }
 .tile.t-test { background: #fee2e2; border-color: #f5b0b0; color: #7f1d1d; } .tile.t-test .i { color: #b91c1c; }
 .insert .section-label:first-child { padding-top: 2px; }
-.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
-.swatch { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--border-strong); padding: 0; transition: transform 0.12s; }
-.swatch:hover { transform: scale(1.1); }
-.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2.5px var(--accent); transform: scale(1.08); }
 .draw-opts { display: flex; flex-direction: column; gap: 16px; }
 .draw-opts .field > label { display: flex; justify-content: space-between; }
 .width-preview { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }

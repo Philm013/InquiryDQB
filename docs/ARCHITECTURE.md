@@ -81,6 +81,8 @@ Everything that arrives over the network (and everything imported from a file) i
 | `security.test.js` | A hostile client: injected names and text, forbidden messages, spoofed ids, bad images, wrong co-host key, oversize and flood |
 | `teacher-ui.test.js` | Pointer and keyboard editing on desktop, exports, co-host, persistence; phone navigation and back button |
 | `site.test.js` | Landing page, no third-party requests, manifests and precache list, offline start-up |
+| `a11y.test.js` | axe-core audit (WCAG 2.0/2.1 A + AA, best practices) of the landing page, teacher console and student app in light and dark themes, on desktop and phone |
+| `touch.test.js` | Real touch input on a phone: drawing a sketch, panning, dragging a note and pinch-zooming the board |
 
 ## Extending
 

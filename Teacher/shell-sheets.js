@@ -99,7 +99,7 @@
       wrap.innerHTML = `
         <div class="share-hero">
           <div class="status-line" role="status">${statusHtml}</div>
-          <div class="qr-box ${s === 'ready' ? '' : 'off'}" id="share-qr" aria-label="QR code for the join link"></div>
+          <div class="qr-box ${s === 'ready' ? '' : 'off'}" id="share-qr" role="img" aria-label="QR code that opens the student join page"></div>
           <div class="center"><div class="label">Join code</div><div class="code-big" id="share-code" aria-label="Join code ${esc(code || '')}">${code ? esc(Net.formatCode(code)) : '– – –'}</div></div>
           <div class="row" style="gap:8px;width:100%;flex-wrap:wrap">
             <button type="button" class="btn btn-primary grow" data-copy="code" ${code ? '' : 'disabled'}>${ic('copy')}Copy code</button>
@@ -108,7 +108,7 @@
           </div>
           <p class="muted center" style="font-size:.875rem">Students open <b>${esc(studentPage)}</b> and type the code, or scan the QR code with their camera. <a href="${esc(url)}" target="_blank" rel="noopener">Preview as a student ↗</a></p>
         </div>
-        ${s !== 'ready' ? `<div class="help-box" style="margin-top:14px"><b>${esc(err ? err.title : (s === 'connecting' ? 'Connecting…' : 'Not connected'))}</b><div style="margin-top:4px">${esc(err ? err.msg : 'Setting up your class. This usually takes a second or two.')}</div>${s === 'error' ? `<button type="button" class="btn btn-primary btn-sm" style="margin-top:10px" data-retry>${ic('refresh', 'sm')}Try again</button>` : ''}</div>` : ''}
+        ${s !== 'ready' ? `<div class="help-box" style="margin-top:14px"><b>${esc(err ? err.title : (s === 'connecting' ? 'Connecting…' : 'Not connected'))}</b><div style="margin-top:4px">${esc(err ? err.msg : 'Setting up your class. This usually takes a second or two.')}</div>${(s === 'error' || err) ? `<button type="button" class="btn btn-primary btn-sm" style="margin-top:10px" data-retry>${ic('refresh', 'sm')}Try again</button>` : ''}</div>` : ''}
         <details class="help-box" style="margin-top:14px"><summary style="cursor:pointer;font-weight:600">Add a co-host</summary>
           <div style="margin-top:8px">A second teacher device can join with this private code and help run the board.</div>
           <div class="row" style="margin-top:10px;gap:8px"><code class="grow" style="font-size:1.05rem;font-weight:700;letter-spacing:.06em;user-select:all;-webkit-user-select:all">${esc(Network.cohostCode() || '—')}</code><button type="button" class="btn btn-secondary btn-sm" data-copy="cohost" ${code ? '' : 'disabled'}>${ic('copy', 'sm')}Copy</button></div>
@@ -122,6 +122,7 @@
         Shell.Share._qrFor = url;
         try { new QRCode(qr, { text: url, width: 200, height: 200, colorDark: '#0f172a', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M }); }
         catch (e) { qr.textContent = 'QR code unavailable'; }
+        qr.querySelectorAll('img, canvas').forEach(n => { n.setAttribute('alt', ''); n.setAttribute('aria-hidden', 'true'); });
         Shell.Share._qrHtml = qr.innerHTML;
       } else if (code && Shell.Share._qrHtml) qr.innerHTML = Shell.Share._qrHtml;
       if (!code) qr.innerHTML = `<div class="muted" style="text-align:center;padding:30px 10px">${ic('qr', 'xl')}</div>`;

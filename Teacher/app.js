@@ -8,15 +8,16 @@ const { esc, safeId, safeColor, safeImg, clampStr } = DQBUI;
 
 /* --- CONSTANTS --- */
 window.TYPES = {
-    notice: { col: '#fef3c7', bor: '#d97706', icon: '👁️', lbl: 'Notice' },
-    wonder: { col: '#bae6fd', bor: '#0284c7', icon: '❓', lbl: 'Wonder' },
-    idea:   { col: '#bbf7d0', bor: '#166534', icon: '💡', lbl: 'Idea' },
-    test:   { col: '#fecaca', bor: '#dc2626', icon: '🧪', lbl: 'Testable' },
-    meta:   { col: '#f8fafc', bor: '#64748b', icon: '📝', lbl: 'Note' },
-    sketch: { col: '#ffffff', bor: '#64748b', icon: '✏️', lbl: 'Sketch' },
-    claim: { col: '#fffbeb', bor: '#d97706', icon: '🤔', lbl: 'Claim' },
-    evidence: { col: '#f0f9ff', bor: '#0284c7', icon: '📊', lbl: 'Evidence' },
-    reasoning: { col: '#f0fdf4', bor: '#166534', icon: '🔗', lbl: 'Reasoning' }
+    // col: paper colour · bor: border / accent · ink: header text (≥ 4.5:1 on the header tint)
+    notice: { col: '#fef3c7', bor: '#d97706', ink: '#92400e', icon: '👁️', lbl: 'Notice' },
+    wonder: { col: '#bae6fd', bor: '#0284c7', ink: '#075985', icon: '❓', lbl: 'Wonder' },
+    idea:   { col: '#bbf7d0', bor: '#166534', ink: '#14532d', icon: '💡', lbl: 'Idea' },
+    test:   { col: '#fecaca', bor: '#dc2626', ink: '#7f1d1d', icon: '🧪', lbl: 'Testable' },
+    meta:   { col: '#f8fafc', bor: '#64748b', ink: '#334155', icon: '📝', lbl: 'Note' },
+    sketch: { col: '#ffffff', bor: '#64748b', ink: '#334155', icon: '✏️', lbl: 'Sketch' },
+    claim: { col: '#fffbeb', bor: '#d97706', ink: '#92400e', icon: '🤔', lbl: 'Claim' },
+    evidence: { col: '#f0f9ff', bor: '#0284c7', ink: '#075985', icon: '📊', lbl: 'Evidence' },
+    reasoning: { col: '#f0fdf4', bor: '#166534', ink: '#14532d', icon: '🔗', lbl: 'Reasoning' }
 };
 
 /* --- STATE & HISTORY --- */
@@ -1132,7 +1133,7 @@ window.Render = {
             if (i.type === 'note' && !i.src && !el.classList.contains('consensus-child')) {
                 const head = TYPES[i.sub] || TYPES.meta;
                 if (wrapper) { wrapper.style.background = head.col; wrapper.style.borderColor = head.bor; }
-                const h = el.querySelector('.i-head'); if (h) { h.style.background = head.bor + '26'; h.style.color = head.bor; }
+                const h = el.querySelector('.i-head'); if (h) { h.style.background = head.bor + '26'; h.style.color = head.ink || head.bor; }
                 const icon = el.querySelector('.icon-span'); if (icon) icon.textContent = head.icon;
                 const auth = el.querySelector('.auth-span'); if (auth) auth.textContent = i.author || head.lbl;
             }
@@ -1315,7 +1316,7 @@ window.Render = {
         if (d.zoneType === 'breakout') wrap.style.borderColor = safeColor(d.roomColor) || '#8b5cf6';
         if (d.type === 'note' && !isConsensusChild) {
             wrap.style.background = head.col; wrap.style.borderColor = head.bor;
-            const h = wrap.querySelector('.i-head'); h.style.background = head.bor + '26'; h.style.color = head.bor;
+            const h = wrap.querySelector('.i-head'); h.style.background = head.bor + '26'; h.style.color = head.ink || head.bor;
         }
 
         // content that came from users is assigned through DOM properties (never parsed as HTML)
@@ -3532,7 +3533,7 @@ window.Breakout = {
         wrap.querySelector('.auth-span').textContent = title;
         el.appendChild(wrap);
 
-        if (itemType === 'note' && item.sub !== 'sketch' && !item.src) { wrap.style.background = head.col; wrap.style.borderColor = head.bor; const h = wrap.querySelector('.i-head'); h.style.background = head.bor + '26'; h.style.color = head.bor; }
+        if (itemType === 'note' && item.sub !== 'sketch' && !item.src) { wrap.style.background = head.col; wrap.style.borderColor = head.bor; const h = wrap.querySelector('.i-head'); h.style.background = head.bor + '26'; h.style.color = head.ink || head.bor; }
         else if (itemType === 'zone' && safeColor(item.color)) { wrap.style.borderColor = item.color; wrap.style.borderWidth = '3px'; wrap.style.borderStyle = 'solid'; wrap.style.background = item.color + '1a'; }
         const img = wrap.querySelector('img'); if (img) { const s = safeImg(item.src); if (s) img.src = s; }
         const ta = wrap.querySelector('textarea');

@@ -20,6 +20,7 @@
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
+<noscript><p style="padding:24px;font:16px/1.5 system-ui,sans-serif">InquiryDQB needs JavaScript to run. Please turn it on in your browser settings and reload the page.</p></noscript>
 
 <!-- ============================ BOARDS HOME ============================ -->
 <div id="landing" data-app-root>
@@ -27,7 +28,7 @@
     <header class="home-head">
       <div class="brand"><img src="../icons/icon.svg" alt="" width="36" height="36"><div><div class="brand-name">InquiryDQB</div><div class="brand-sub">Teacher console</div></div></div>
       <div class="row">
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-join-cohost"><i data-i="handshake"></i><span class="hide-mobile">Join as co-host</span></button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-join-cohost" aria-label="Join as co-host"><i data-i="handshake"></i><span class="hide-mobile">Join as co-host</span></button>
         <button type="button" class="icon-btn" id="home-theme" aria-label="Change theme"><i data-i="moon"></i></button>
       </div>
     </header>
@@ -120,14 +121,14 @@
     </div>
     <div class="tb-group tb-right">
       <button type="button" class="chip conn-chip" id="conn-chip" aria-label="Connection status"><span class="dot" id="conn-dot"></span><span id="conn-label">Connecting…</span></button>
-      <button type="button" class="btn btn-primary btn-sm" id="btn-share"><i data-i="share"></i><span class="hide-mobile">Share</span></button>
+      <button type="button" class="btn btn-primary btn-sm" id="btn-share" aria-label="Share"><i data-i="share"></i><span class="hide-mobile">Share</span></button>
       <button type="button" class="icon-btn hide-mobile" id="btn-panel" aria-label="Class panel" aria-pressed="false" data-tip="Class panel" data-tip-pos="bottom"><i data-i="users"></i><span class="badge badge-count" id="conn-badge" hidden>0</span></button>
       <button type="button" class="icon-btn hide-mobile" id="btn-more" aria-label="More options" data-tip="More" data-tip-pos="bottom"><i data-i="more"></i></button>
     </div>
   </header>
 
   <!-- Desktop tool rail -->
-  <nav id="rail" aria-label="Tools" role="toolbar" aria-orientation="vertical">
+  <nav id="rail" aria-label="Tools">
     <button type="button" class="rail-btn" id="rail-select" data-tool="select" aria-label="Select (V)" data-tip="Select · V" data-tip-pos="right" aria-pressed="false"><i data-i="select"></i></button>
     <button type="button" class="rail-btn" id="rail-pan" data-tool="pan" aria-label="Hand tool (H)" data-tip="Hand · H" data-tip-pos="right" aria-pressed="false"><i data-i="hand"></i></button>
     <div class="rail-sep"></div>
@@ -142,9 +143,9 @@
   </nav>
 
   <!-- Zoom / view controls -->
-  <div id="viewbar" role="group" aria-label="View controls">
+  <div id="viewbar" role="region" aria-label="View controls">
     <button type="button" class="icon-btn sm" id="zoom-out" aria-label="Zoom out" data-tip="Zoom out · −" data-tip-pos="top"><i data-i="minus"></i></button>
-    <button type="button" class="zoom-pct" id="zoom-pct" aria-label="Zoom level, open zoom menu">100%</button>
+    <button type="button" class="zoom-pct" id="zoom-pct" aria-label="100% zoom, open zoom menu">100%</button>
     <button type="button" class="icon-btn sm" id="zoom-in" aria-label="Zoom in" data-tip="Zoom in · +" data-tip-pos="top"><i data-i="plus"></i></button>
     <span class="vsep"></span>
     <button type="button" class="icon-btn sm" id="zoom-fit" aria-label="Fit board to screen" data-tip="Fit to screen · ⇧1" data-tip-pos="top"><i data-i="fit"></i></button>
@@ -155,7 +156,7 @@
   <div id="minimap-container" role="region" aria-label="Board minimap"><canvas id="minimap" aria-hidden="true"></canvas></div>
 
   <!-- Floating selection toolbar -->
-  <div id="selbar" role="toolbar" aria-label="Selection actions" hidden></div>
+  <div id="selbar" role="region" aria-label="Selection actions" hidden></div>
 
   <!-- Floating chips -->
   <button type="button" id="home-pill" class="float-pill" hidden><i data-i="fit" class="sm"></i><span>Back to content</span></button>

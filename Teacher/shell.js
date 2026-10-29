@@ -195,7 +195,7 @@
     if (state === 'saved') Shell._saveWarned = false;
   };
   Shell.onDbError = function () { Toast.warn('Your browser is blocking local storage, so boards can’t be saved here. You can still run a session and export the board.', { duration: 8000 }); const n = $('saved-list'); if (n) Shell.Home.render(); };
-  Shell.syncZoom = function () { const z = $('zoom-pct'); if (z) { const t = Workspace.zoomPct() + '%'; if (z.textContent !== t) z.textContent = t; } };
+  Shell.syncZoom = function () { const z = $('zoom-pct'); if (z) { const t = Workspace.zoomPct() + '%'; if (z.textContent !== t) { z.textContent = t; z.setAttribute('aria-label', t + ' zoom, open zoom menu'); } } };
   Shell.syncHistory = function () {
     const u = $('rail-undo'), r = $('rail-redo'); if (!u) return;
     u.disabled = !Workspace.canUndo(); r.disabled = !Workspace.canRedo();
@@ -260,7 +260,11 @@
       } else if (Workspace.mode === 'breakout' && Breakout._state.selectedId) return { kind: 'bk' };
       return null;
     },
-    btn(o) { return `<button type="button" class="sb-btn${o.danger ? ' danger' : ''}${o.accent ? ' accent' : ''}${o.on ? ' on' : ''}${o.keep ? ' keep-label' : ''}" data-sb="${o.id}" aria-label="${DQBUI.esc(o.title || o.label || o.id)}" title="${DQBUI.esc(o.title || o.label || '')}">${o.icon ? ic(o.icon) : ''}${o.emoji ? `<span class="sb-emoji">${DQBUI.esc(o.emoji)}</span>` : ''}${o.label ? `<span>${DQBUI.esc(o.label)}</span>` : ''}${o.dot ? `<span class="sb-dot" style="background:${o.dot}"></span>` : ''}</button>`; },
+    btn(o) {
+      // the accessible name must contain the visible text (WCAG 2.5.3): "Idea" + "Change type" → "Idea – change type"
+      const vis = o.label ? `${o.emoji ? o.emoji + ' ' : ''}${o.label}` : '';
+      const name = vis ? ((o.title && o.title.toLowerCase().indexOf(o.label.toLowerCase()) === 0) ? o.title : (o.title && o.title !== o.label ? `${vis} – ${o.title.charAt(0).toLowerCase()}${o.title.slice(1)}` : vis)) : (o.title || o.id);
+      return `<button type="button" class="sb-btn${o.danger ? ' danger' : ''}${o.accent ? ' accent' : ''}${o.on ? ' on' : ''}${o.keep ? ' keep-label' : ''}" data-sb="${o.id}" aria-label="${DQBUI.esc(name)}" title="${DQBUI.esc(o.title || o.label || '')}">${o.icon ? ic(o.icon) : ''}${o.emoji ? `<span class="sb-emoji">${DQBUI.esc(o.emoji)}</span>` : ''}${o.label ? `<span>${DQBUI.esc(o.label)}</span>` : ''}${o.dot ? `<span class="sb-dot" style="background:${o.dot}"></span>` : ''}</button>`; },
     render() {
       const bar = $('selbar'); if (!bar) return;
       const c = Shell.SelBar.ctx();

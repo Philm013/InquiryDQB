@@ -27,7 +27,7 @@
   /* ====================================================================== */
   /* State + persistence                                                     */
   /* ====================================================================== */
-  const State = window.StudentState = {
+  const State = {
     me: { sid: '', name: '', av: '😀', color: null },
     target: null,            // { peerId, code }
     boardId: null, notes: [],
@@ -349,7 +349,7 @@
       const b = $('notes-badge'); b.hidden = !n; b.textContent = n;
     },
     renderMe() {
-      $('me-av').textContent = State.me.av; $('me-name').textContent = State.me.name || 'Student';
+      $('me-av').textContent = State.me.av; $('me-name').textContent = State.me.name || 'Student'; $('me-btn').setAttribute('aria-label', (State.me.name || 'Student') + ', your profile');
       const btn = $('me-btn'); btn.classList.toggle('has-color', !!State.me.color); btn.style.borderColor = State.me.color || ''; btn.style.background = State.me.color ? State.me.color + '22' : '';
     },
     joinError(msg) { const e = $('code-err'); e.textContent = msg; e.hidden = false; $('inp-code').classList.add('invalid'); },
@@ -579,7 +579,9 @@
     },
     layout() {
       const wrap = $('s-wrap'), cv = $('s-canvas'), dpr = Math.min(2, window.devicePixelRatio || 1);
-      const w = wrap.clientWidth || 320, h = Math.round(Math.min(Math.max(w * 0.9, 240), window.innerHeight * 0.52));
+      const side = window.matchMedia('(orientation: landscape) and (max-height: 520px)').matches;       // phone on its side: tools sit beside the canvas
+      const body = wrap.parentElement, cs = getComputedStyle(body);
+      const w = wrap.clientWidth || 320, h = side ? Math.max(140, Math.round(body.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom))) : Math.round(Math.min(Math.max(w * 0.9, 240), window.innerHeight * 0.52));
       wrap.style.height = h + 'px';
       if (cv.width === Math.round(w * dpr) && cv.height === Math.round(h * dpr) && Sketch.ctx) return;
       let snap = null; if (Sketch.ctx && Sketch.dirty) { snap = document.createElement('canvas'); snap.width = cv.width; snap.height = cv.height; snap.getContext('2d').drawImage(cv, 0, 0); }

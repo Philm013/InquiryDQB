@@ -10,6 +10,7 @@
     "icons": "npm --prefix tools install && npm --prefix tools run icons"
   },
   "devDependencies": {
+    "axe-core": "^4.10.0",
     "peer": "^1.0.2",
     "playwright": "^1.63.0"
   },

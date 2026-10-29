@@ -83,6 +83,7 @@ Everything that arrives over the network (and everything imported from a file) i
 | `teacher-ui.test.js` | Pointer and keyboard editing on desktop, exports, co-host, persistence; phone navigation and back button |
 | `site.test.js` | Landing page, no third-party requests, manifests and precache list, offline start-up |
 | `a11y.test.js` | axe-core audit (WCAG 2.0/2.1 A + AA, best practices) of the landing page, teacher console and student app in light and dark themes, on desktop and phone |
+| `load.test.js` | A full class: 30 students join at once and send 90 notes; nothing overlaps and the host stays responsive |
 | `legacy.test.js` | Boards and notes saved by earlier versions (same IndexedDB databases) still open, and hostile text inside them stays inert |
 | `touch.test.js` | Real touch input on a phone: drawing a sketch, panning, dragging a note and pinch-zooming the board |
 

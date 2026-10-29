@@ -34,7 +34,8 @@ async function boot() {
   const peerHttp = await new Promise((resolve) => { PeerServer({ port: peerPort, host: '127.0.0.1', path: '/', allow_discovery: false }, resolve); });
   const origin = `http://127.0.0.1:${web.port}`;
   const peerOpts = { host: '127.0.0.1', port: peerPort, path: '/', secure: false };
-  const browser = await chromium.launch({ args: ['--disable-features=WebRtcHideLocalIpsWithMdns', '--use-fake-ui-for-media-stream'] });
+  // DQB_CHROMIUM lets sandboxes and CI use a browser that is already installed instead of Playwright's own download
+  const browser = await chromium.launch({ executablePath: process.env.DQB_CHROMIUM || undefined, args: ['--disable-features=WebRtcHideLocalIpsWithMdns', '--use-fake-ui-for-media-stream'] });
   const contexts = [];
   const pageErrors = [];
 

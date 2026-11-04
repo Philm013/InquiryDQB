@@ -32,7 +32,7 @@ The join code is six characters from an alphabet without look-alikes (`ABCDEFGHJ
 | `Teacher/app.js` | `State` and `StateManager` (with `batch` for one-step undo of composite edits), `Render` loop, `InputController` (Pointer Events), `Modes` (select, pan, draw, erase, laser), `SnapSystem`, `Sanitize`, `InkTools` (stroke geometry, painting, strokes → one image, clustering) and `InkSel` (selected ink on each canvas), `Network` (host, co-host, moderation, activities, open zones and colour groups), `Workspace` router (board, consensus, breakout), `Consensus`, `Breakout`, `Board` (save, load, export) |
 | `Teacher/shell*.js` | App chrome on top of `app.js`: home screen, tool rail, floating bars, selection toolbar, class panel, sheets (share, settings, templates, accessibility view), phone bottom navigation |
 | `Student/app.js` | Store (IndexedDB), `Conn` (connection, watchdog, reconnect, outbox), message handler, views (setup, join, board, notes), full-screen task pages, shared-model viewer |
-| `sw.js` | Precaches the shell so the console and student app open offline; network-first for code (updates arrive at once), cache-first for fonts, icons and libraries |
+| `sw.js` | Precaches the shell so the console and student app open offline. The install is all or nothing for the app shell (`CORE`: every file must download within 30 s, with one retry, or the browser tries again on the next visit), best effort for extras (`EXTRA`, topped up on later visits). Network-first for code (updates arrive at once; after 4 s without a reply the cached copy answers, if there is one, otherwise it keeps waiting), cache-first for fonts, icons and libraries |
 
 ## Wire protocol
 
@@ -99,7 +99,7 @@ Everything that arrives over the network (and everything imported from a file) i
 | `resilience.test.js` | Shared model, drafts on a locked board, reconnecting, offline outbox, removing a student, resetting the code |
 | `security.test.js` | A hostile client: injected names and text, forbidden messages, spoofed ids, bad images, wrong co-host key, oversize and flood |
 | `teacher-ui.test.js` | Pointer and keyboard editing on desktop, changing type and locking several notes at once, exports, co-host (including live zones and deletions mirrored from the host), persistence; phone navigation and back button |
-| `site.test.js` | Landing page, no third-party requests, manifests and precache list, offline start-up |
+| `site.test.js` | Landing page, no third-party requests, manifests and precache list, offline start-up, all-or-nothing install with a retry, slow replies |
 | `a11y.test.js` | axe-core audit (WCAG 2.0/2.1 A + AA, best practices) of the landing page, teacher console (including selected ink, the Groups sheet and open zones) and student app (including choosing a zone) in light and dark themes, on desktop and phone |
 | `load.test.js` | A full class: 30 students join at once and send 90 notes; nothing overlaps and the host stays responsive |
 | `legacy.test.js` | Boards and notes saved by earlier versions (same IndexedDB databases) still open, and hostile text inside them stays inert |

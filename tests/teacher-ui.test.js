@@ -203,3 +203,48 @@ test('phone: bottom navigation, tap-to-select, sheets and the system back button
   const tooSmall = await E(() => [...document.querySelectorAll('button, a, [role=button]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width && r.height && e.offsetParent && (r.width < 36 || r.height < 36) && !e.closest('.item') && !e.matches('.resize-h'); }).map((e) => e.id || e.className).slice(0, 8));
   assert.deepEqual(tooSmall, [], 'touch targets on the phone board are at least 36px');
 });
+
+test('Install app: opens the browser’s install window, reports the outcome, and is gone once installed', async () => {
+  const p = await env.teacher('desktop');
+  // stands in for the browser's beforeinstallprompt event (test browsers never offer installation)
+  const offer = (mode) => p.evaluate((mode) => {
+    const e = new Event('beforeinstallprompt', { cancelable: true });
+    let answer; e.userChoice = new Promise((r) => { answer = r; });
+    e.prompt = () => {
+      window.__prompts = (window.__prompts || 0) + 1;
+      if (mode === 'refused') return Promise.reject(new DOMException('not allowed', 'NotAllowedError'));
+      if (mode === 'closed') answer({ outcome: 'dismissed', platform: '' });          // the browser shut its window straight away
+      return Promise.resolve();
+    };
+    window.__answer = (outcome) => answer({ outcome, platform: 'web' });
+    window.dispatchEvent(e);
+  }, mode);
+  const menu = async () => {
+    await p.click('#btn-more');
+    await p.waitForSelector('.menu');
+    return p.$$eval('.menu .menu-item span:not(.kbd)', (els) => els.map((e) => e.textContent));
+  };
+  const clearToasts = () => p.evaluate(() => document.querySelectorAll('.toast').forEach((t) => t.remove()));
+
+  assert.equal((await menu()).includes('Install app'), false, 'not offered until the browser says the app can be installed');
+  await p.keyboard.press('Escape');
+  await offer('ok');
+  assert.equal((await menu()).includes('Install app'), true);
+  await p.locator('.menu-item', { hasText: 'Install app' }).click();
+  assert.equal(await p.evaluate(() => window.__prompts), 1, 'the browser’s install window opens');
+  await p.evaluate(() => window.__answer('accepted'));
+  await p.waitForSelector('.toast:has-text("Installing InquiryDQB Teacher")');
+  await p.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+  await p.waitForSelector('.toast:has-text("is installed")');
+  assert.equal((await menu()).includes('Install app'), false, 'no longer offered once installed');
+  await p.keyboard.press('Escape');
+
+  for (const mode of ['closed', 'refused']) {                                        // the browser couldn't show its window
+    await clearToasts();
+    await p.waitForTimeout(950);                                                     // past the toast de-duplication window
+    await offer(mode);
+    await menu();
+    await p.locator('.menu-item', { hasText: 'Install app' }).click();
+    await p.waitForSelector('.toast:has-text("didn’t open its install window")');
+  }
+});

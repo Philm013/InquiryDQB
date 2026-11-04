@@ -57,4 +57,4 @@ The pages ship with a strict CSP (`<meta http-equiv="Content-Security-Policy">`)
 
 ## 4. Updating
 
-Deploy the new files. The service worker is network-first for HTML, JS and CSS, so users get changes on their next visit. If you change which files make up the app shell, bump `CACHE_VERSION` in `sw.js` so old caches are cleaned up.
+Deploy the new files. The service worker is network-first for HTML, JS and CSS, so users get changes on their next visit. If you change which files make up the app shell, update the `CORE` / `EXTRA` lists and bump `CACHE_VERSION` in `sw.js` so old caches are cleaned up. Every file in `CORE` must be reachable: if one is missing or blocked (by a web filter, say), the service worker does not install and the apps work online only. The page's console then warns `InquiryDQB: offline support could not be set up`, and the service worker's own console names the file.

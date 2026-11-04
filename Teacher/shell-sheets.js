@@ -65,7 +65,7 @@
       items.push({ separator: true });
       items.push({ label: 'Settings', icon: 'settings', onClick: () => Shell.Settings.open() });
       if (!isMobile()) items.push({ label: 'Keyboard shortcuts', icon: 'keyboard', kbd: '?', onClick: () => Shell.Shortcuts.open() });
-      if (Shell.installPrompt) items.push({ label: 'Install app', icon: 'download', onClick: () => { Shell.installPrompt.prompt(); Shell.installPrompt = null; } });
+      if (Shell.installPrompt) items.push({ label: 'Install app', icon: 'download', onClick: () => Shell.install() });
       if (board) { items.push({ separator: true }); items.push({ label: 'Leave board', icon: 'logout', danger: true, onClick: () => Board.exit() }); }
       DQBUI.Menu.open({ anchor: anchor || $('btn-more'), items, align: 'end', title: 'More' });
     }

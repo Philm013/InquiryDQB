@@ -8,6 +8,26 @@ const { boot, ROOT } = require('./harness');
 
 let env;
 before(async () => { env = await boot(); });
+
+/** The service worker's two precache lists: CORE (all or nothing) and EXTRA (best effort). */
+function precacheLists() {
+  const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+  const list = (name) => JSON.parse(sw.match(new RegExp(`const ${name} = (\\[[\\s\\S]*?\\]);`))[1].replace(/'/g, '"'));
+  return { core: list('CORE'), extra: list('EXTRA') };
+}
+
+/** Resolves once no service worker is installing or waiting, with what the page can see of the registration. */
+function swSettled(page) {
+  return page.evaluate(() => new Promise((resolve) => {
+    const check = async () => {
+      const reg = await navigator.serviceWorker.getRegistration();
+      const busy = reg && (reg.installing || reg.waiting);
+      if (busy) { busy.addEventListener('statechange', () => setTimeout(check, 50), { once: true }); return; }
+      resolve({ registered: !!reg, active: !!(reg && reg.active), controlled: !!navigator.serviceWorker.controller });
+    };
+    check();
+  }));
+}
 after(async () => {
   assert.deepEqual(env.pageErrors, [], 'no uncaught page errors during the run');
   await env.close();
@@ -50,12 +70,19 @@ test('manifests are valid and every icon, script and style they or the service w
     assert.ok(m.icons.some((i) => i.sizes === '512x512' && i.purpose === 'maskable') || m.icons.some((i) => /maskable/.test(i.purpose || '')), `${app}: has a maskable icon`);
     for (const icon of m.icons) assert.ok(fs.existsSync(path.join(ROOT, app, icon.src)), `${app}: ${icon.src} exists`);
   }
-  const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-  const shell = JSON.parse(sw.match(/const SHELL = (\[[\s\S]*?\]);/)[1].replace(/'/g, '"'));
-  for (const u of shell) {
+  const { core, extra } = precacheLists();
+  for (const u of [...core, ...extra]) {
     const file = path.join(ROOT, u === './' ? 'index.html' : u);
     const target = fs.existsSync(file) && fs.statSync(file).isDirectory() ? path.join(file, 'index.html') : file;
     assert.ok(fs.existsSync(target) || /\/$/.test(u), `service worker precache entry exists: ${u}`);
+  }
+  // offline start-up needs every script and stylesheet the two apps load, so each must be in the all-or-nothing list
+  for (const app of ['Teacher', 'Student']) {
+    const html = fs.readFileSync(path.join(ROOT, app, 'index.html'), 'utf8');
+    for (const m of html.matchAll(/<(?:script[^>]*\ssrc|link[^>]*rel="stylesheet"[^>]*\shref)="([^"]+)"/g)) {
+      const rel = path.posix.normalize(path.posix.join(app, m[1]));
+      assert.ok(core.includes(rel), `${app}/index.html loads ${rel}, which must be in the service worker's CORE list`);
+    }
   }
   for (const page of ['index.html', 'Teacher/index.html', 'Student/index.html']) {
     const html = fs.readFileSync(path.join(ROOT, page), 'utf8');
@@ -111,4 +138,38 @@ test('after one visit the teacher console and student app start without a networ
   await p.waitForSelector('body[data-ready="1"]', { timeout: 8000 });
   assert.equal(await p.isVisible('#v-setup'), true, 'the student app boots from cache');
   await ctx.setOffline(false);
+});
+
+test('the service worker installs the whole app shell or nothing, and tries again on the next visit', async () => {
+  const { core, extra } = precacheLists();
+  const cacheName = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8').match(/const CACHE_VERSION = '([^']+)'/)[1];
+  const ctx = await env.context('desktop');
+  const p = await ctx.newPage();
+
+  // first visit: one file of the app shell can't be downloaded (dropped Wi-Fi, a web filter)
+  const blocked = [];
+  await ctx.route('**/Teacher/shell-home.js', (route) => { blocked.push(route.request().url()); return route.abort(); });
+  await p.goto(env.origin + '/Student/');
+  await p.waitForSelector('body[data-ready="1"]');
+  for (let i = 0; i < 100 && blocked.length < 2; i++) await p.waitForTimeout(100);
+  assert.equal(blocked.length, 2, 'the missing file is tried twice before the install gives up');
+  assert.deepEqual(await swSettled(p), { registered: false, active: false, controlled: false }, 'no half-installed worker takes over');
+  assert.equal(await p.isVisible('#v-setup'), true, 'the app itself still works');
+
+  // next visit: the browser tries again and gets everything
+  await ctx.unroute('**/Teacher/shell-home.js');
+  await p.reload();
+  await p.waitForSelector('body[data-ready="1"]');
+  await p.evaluate(() => navigator.serviceWorker.ready);
+  assert.equal((await swSettled(p)).active, true, 'the retry installs and activates the worker');
+  const cached = await p.evaluate(async (name) => (await (await caches.open(name)).keys()).map((r) => new URL(r.url).pathname), cacheName);
+  const expected = [...core, ...extra].map((u) => new URL(u, env.origin + '/').pathname);
+  assert.deepEqual(expected.filter((u) => !cached.includes(u)), [], `every precache entry is stored in ${cacheName}`);
+
+  // a slow network never turns into an error for something that isn't cached: the worker keeps waiting
+  await p.reload();                                                                          // controlled from here on
+  await p.waitForSelector('body[data-ready="1"]');
+  await ctx.route('**/docs/SELF_HOSTING.md', async (route) => { await new Promise((r) => setTimeout(r, 4600)); await route.continue(); });
+  assert.equal(await p.evaluate(() => fetch('../docs/SELF_HOSTING.md').then((r) => r.status, (e) => e.message)), 200, 'a reply slower than the 4 s cache fallback still arrives');
+  await ctx.close();
 });

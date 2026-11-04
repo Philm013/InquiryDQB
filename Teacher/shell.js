@@ -749,11 +749,25 @@
     window.addEventListener('online', () => Shell.checkNetwork());
     window.addEventListener('beforeunload', (e) => { if (!State.isCoHost && Network.studentCount() > 0 && !$('app').hidden) { e.preventDefault(); e.returnValue = ''; } });
     window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); Shell.installPrompt = e; });
+    window.addEventListener('appinstalled', () => { Shell.installPrompt = null; Toast.success('InquiryDQB Teacher is installed. Open it from your apps or home screen.', { duration: 6000 }); });
 
     DB.init().then(() => { Shell.Home.init(); Shell.Home.render(); });
     InputController.init(); Consensus.init(); Breakout.initEvents();
     const cohostParam = new URLSearchParams(location.search).get('cohost');
     if (cohostParam) setTimeout(() => Shell.Join.open(cohostParam), 300);
+  };
+  /** “Install app”: opens the browser's own install window. Only offered while the browser says the app can be installed. */
+  Shell.install = async function () {
+    const e = Shell.installPrompt; if (!e) return;
+    Shell.installPrompt = null;                                  // a prompt can be shown only once; the browser sends a fresh one if it is dismissed
+    const help = () => Toast.warn('Your browser didn’t open its install window. Use Install in the address bar or the browser menu instead.', { duration: 8000 });
+    const shownAt = Date.now();
+    try {
+      await e.prompt();
+      const { outcome } = await e.userChoice;
+      if (outcome === 'accepted') Toast.info('Installing InquiryDQB Teacher…');
+      else if (Date.now() - shownAt < 700) help();               // closed faster than anyone could answer: the browser couldn't show it
+    } catch (err) { help(); }
   };
   Shell.zoomTo = (z) => { const r = Viewport.rect(); InputController.zoom(z / State.view.z, r.x + r.w / 2, r.y + r.h / 2); };
   Shell.onBreakpoint = function () {

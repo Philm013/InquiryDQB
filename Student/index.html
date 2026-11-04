@@ -96,6 +96,7 @@
   <section class="page" id="p-write" hidden role="dialog" aria-modal="true" aria-labelledby="w-title">
     <header class="page-bar"><button type="button" class="icon-btn" data-close aria-label="Close and keep draft"><i data-i="close"></i></button><h2 id="w-title">New note</h2><span class="grow"></span><span id="w-count" class="muted counter">0 / 400</span></header>
     <div class="page-body">
+      <div class="zone-row" id="w-zone" hidden></div>
       <div class="chip-row" id="w-chips" role="radiogroup" aria-label="Note type"></div>
       <div class="note-paper" id="w-paper"><label for="w-txt" class="sr-only">Your note</label><textarea id="w-txt" maxlength="400" rows="7" placeholder="Type your thoughts here…" enterkeyhint="enter"></textarea></div>
       <div class="hint" id="w-hint"></div>
@@ -113,6 +114,7 @@
         <div class="seg" id="s-sizes" role="group" aria-label="Pen size"><button type="button" data-w="3" aria-pressed="true" aria-label="Thin"><span class="dotw" style="--s:5px"></span></button><button type="button" data-w="7" aria-pressed="false" aria-label="Medium"><span class="dotw" style="--s:9px"></span></button><button type="button" data-w="14" aria-pressed="false" aria-label="Thick"><span class="dotw" style="--s:15px"></span></button></div>
         <button type="button" class="icon-btn soft" id="s-eraser" aria-pressed="false" aria-label="Eraser"><i data-i="eraser"></i></button>
       </div>
+      <div class="zone-row" id="s-zone" hidden></div>
       <input id="s-caption" class="input" maxlength="80" placeholder="Add a caption (optional)" aria-label="Caption">
       <div class="warn-box" id="s-warn" hidden></div>
     </div>

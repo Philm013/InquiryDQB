@@ -29,7 +29,7 @@ The join code is six characters from an alphabet without look-alikes (`ABCDEFGHJ
 | `shared/ui.css`, `shared/ui.js` | Design tokens (light, dark, `[data-theme]`), buttons, inputs, chips; `Overlay` (bottom sheet on phones, modal on desktop), `Dialog` (confirm / alert / prompt without native dialogs), `Menu`, `Toast`; the history manager (`Hist`) so the phone back gesture closes sheets and pages; escaping and validation helpers (`esc`, `safeId`, `safeColor`, `safeImg`, `clampStr`) |
 | `shared/net.js` | Code generation and parsing, join URLs, PeerJS options, human-readable error messages, reconnect back-off |
 | `shared/icons.js` | Generated from Lucide by `tools/build-icons.mjs` (do not edit by hand) |
-| `Teacher/app.js` | `State` and `StateManager`, `Render` loop, `InputController` (Pointer Events), `Modes` (select, pan, draw, erase, laser), `SnapSystem`, `Sanitize`, `Network` (host, co-host, moderation, activities), `Workspace` router (board, consensus, breakout), `Consensus`, `Breakout`, `Board` (save, load, export) |
+| `Teacher/app.js` | `State` and `StateManager` (with `batch` for one-step undo of composite edits), `Render` loop, `InputController` (Pointer Events), `Modes` (select, pan, draw, erase, laser), `SnapSystem`, `Sanitize`, `InkTools` (stroke geometry, painting, strokes → one image, clustering) and `InkSel` (selected ink on each canvas), `Network` (host, co-host, moderation, activities, open zones and colour groups), `Workspace` router (board, consensus, breakout), `Consensus`, `Breakout`, `Board` (save, load, export) |
 | `Teacher/shell*.js` | App chrome on top of `app.js`: home screen, tool rail, floating bars, selection toolbar, class panel, sheets (share, settings, templates, accessibility view), phone bottom navigation |
 | `Student/app.js` | Store (IndexedDB), `Conn` (connection, watchdog, reconnect, outbox), message handler, views (setup, join, board, notes), full-screen task pages, shared-model viewer |
 | `sw.js` | Precaches the shell so the console and student app open offline; network-first for code (updates arrive at once), cache-first for fonts, icons and libraries |
@@ -40,11 +40,27 @@ Messages are JSON strings with a `type`. The host accepts a **fixed allow-list**
 
 **Student → host:** `JOIN {name, avatar, sid}`, `NOTE`, `IMG_NOTE`, `DELETE_NOTE`, `POLL_VOTE`, `DATA_SUBMIT`, `SUBMIT_VOTE`, `SUBMIT_SORT`, `COMMENT`, `EXIT_SUBMIT`, `CONSENSUS_INK`, `HEARTBEAT`, `LEAVE`.
 
-**Host → student:** `WELCOME {boardId, mode, payload, sync, rules, muted, color, pending, timer}`, `RULES`, `MUTE`, `KICKED {reason}`, `TIMER`, `NOTE_STATUS {id, status, reason}`, `SET_COLOR`, `MODE`, `ZONE_ACT` / `OPEN_ZONE` / `ACT_VOTE` / `ACT_SORT` / `ACT_DISCUSS`, `ACT_POLL`, `ACT_GRAPH`, `EXIT_TICKET`, `STOP_ACT`, `CONSENSUS_START` / `_STOP` / `_PERMS` / `_INK` / `_CLEAR` / `_SET_INK` / `_ITEM_MOVE` / `_VIEW_SYNC`, `HEARTBEAT`.
+**Host → student:** `WELCOME {boardId, mode, payload, sync, rules, muted, color, pending, timer}`, `RULES`, `MUTE`, `KICKED {reason}`, `TIMER`, `NOTE_STATUS {id, status, reason}`, `SET_COLOR {color, name}`, `MODE`, `ZONE_ACT` / `OPEN_ZONE` / `ACT_VOTE` / `ACT_SORT` / `ACT_DISCUSS`, `ACT_POLL`, `ACT_GRAPH`, `EXIT_TICKET`, `STOP_ACT`, `CONSENSUS_START` / `_STOP` / `_PERMS` / `_INK` / `_CLEAR` / `_SET_INK` / `_ITEM_MOVE` / `_ITEMS` / `_VIEW_SYNC`, `HEARTBEAT`.
 
 **Co-host ↔ host:** `AUTH_COHOST {key}` → `AUTH_OK` or `AUTH_FAIL`, then `FULL_SYNC`, `SYNC_REQ`, `ADD_ITEM`, `NOTE_UPDATE`, `BATCH_UPDATE`, `GROUP_ITEMS`, `UNGROUP_ITEMS`, `ZONE_REORDER`, `INK_ADD`, `LASER`, `STATE_META`.
 
 Every activity start carries a fresh round id (`rid`), so a student can answer again when the teacher re-runs the same item; the host accepts one answer per student per round.
+
+### Open zones and colour groups
+
+Several zones can be open at once (`State.activity` is `ZONE_ACT` with `payload.subType = 'OPEN_ZONE'` and `payload.zones = [ids]`). Each student gets their **own** `OPEN_ZONE` message rather than a broadcast:
+
+- `zones: [{id, title, zoneType, color, group}]` lists the open zones that student may write into: zones of their colour group plus uncoloured zones. A student with none of their own (no group, or their group's zone is closed) gets every open zone with `unplaced: true` when the class rule "Students without a group pick a zone" is on, or an empty list with `waiting: true` when it is off.
+- `actId`, `title` and `zoneType` describe the first zone, so an older student app still works with a single zone.
+- The host re-sends it whenever zones open or close, a student's group changes (`SET_COLOR`), or an open zone is renamed, recoloured or deleted. Groups are remembered by `sid`, so a student who reconnects keeps their group.
+
+A student note's `zoneId` is honoured only if that zone is in the student's own list; otherwise the note goes to their first zone, and a student with no zone at all gets `NOTE_STATUS {status: 'rejected', reason: 'group'}` (the student app offers "Try again" once they are placed). Which items are live (`isOpen`) is derived from the activity by `Network.syncOpenFlags()` and is kept out of undo history, so undo never opens or closes anything and a board saved mid-activity reopens with nothing live.
+
+`CONSENSUS_ITEMS {items}` refreshes the notes on a shared model (for example after the teacher turns strokes into a note); students rebuild their model view from it.
+
+### Ink selection
+
+Strokes are picked by geometry (`InkTools.hit`, a fixed number of screen pixels, wider for fingers), not by their thin painted paths. Each canvas has an `InkSel` controller (`InkSel.board`, `.consensus`, `.breakout`) holding the selected stroke ids and an adapter for that canvas's storage, history and network sync, so recolour, thickness, move, duplicate, delete and "make one note" behave the same everywhere. On the board a box selection, Shift-click, Ctrl/⌘A, arrow keys and Delete act on notes and ink together, as one undo step (`StateManager.batch`). "Make one note" renders the selected strokes into a single transparent PNG (`InkTools.toImage`, capped so it syncs to students) and places the note where the drawing was; "Pin ink as notes" makes one note per drawing (strokes within 60 px of each other).
 
 ### Connection behaviour
 
@@ -78,11 +94,13 @@ Everything that arrives over the network (and everything imported from a file) i
 | File | Covers |
 | --- | --- |
 | `flow.test.js` | Join, notes, sketches, approvals, muting, vote / rank / discuss, polls, graphs, all exit-ticket formats, timer |
+| `groups.test.js` | Several colour zones open at once, per-student routing, students without a group (pick a zone or wait, "Put them in groups"), host-side zone validation, live updates when zones are renamed / recoloured / closed, groups surviving a reconnect, the Groups sheet, no stale live zones after reload |
+| `ink.test.js` | Picking strokes by click, Shift-click, box and touch; moving, recolouring, thickness, duplicate, delete and undo; several strokes into one note; clustered pinning; the same tools in a consensus model (synced to students) and a breakout room |
 | `resilience.test.js` | Shared model, drafts on a locked board, reconnecting, offline outbox, removing a student, resetting the code |
 | `security.test.js` | A hostile client: injected names and text, forbidden messages, spoofed ids, bad images, wrong co-host key, oversize and flood |
-| `teacher-ui.test.js` | Pointer and keyboard editing on desktop, exports, co-host, persistence; phone navigation and back button |
+| `teacher-ui.test.js` | Pointer and keyboard editing on desktop, changing type and locking several notes at once, exports, co-host (including live zones and deletions mirrored from the host), persistence; phone navigation and back button |
 | `site.test.js` | Landing page, no third-party requests, manifests and precache list, offline start-up |
-| `a11y.test.js` | axe-core audit (WCAG 2.0/2.1 A + AA, best practices) of the landing page, teacher console and student app in light and dark themes, on desktop and phone |
+| `a11y.test.js` | axe-core audit (WCAG 2.0/2.1 A + AA, best practices) of the landing page, teacher console (including selected ink, the Groups sheet and open zones) and student app (including choosing a zone) in light and dark themes, on desktop and phone |
 | `load.test.js` | A full class: 30 students join at once and send 90 notes; nothing overlaps and the host stays responsive |
 | `legacy.test.js` | Boards and notes saved by earlier versions (same IndexedDB databases) still open, and hostile text inside them stays inert |
 | `touch.test.js` | Real touch input on a phone: drawing a sketch, panning, dragging a note and pinch-zooming the board |

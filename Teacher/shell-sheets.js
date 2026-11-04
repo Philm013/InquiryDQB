@@ -247,12 +247,67 @@
   Shell.ColorPick = {
     open(id) {
       const z = State.items.find(i => i.id === id); if (!z) return;
-      const cols = [['#ef4444', 'Red'], ['#f97316', 'Orange'], ['#10b981', 'Green'], ['#3b82f6', 'Blue'], ['#8b5cf6', 'Purple']];
-      const wrap = h(`<div class="stack"><div class="swatches" role="group" aria-label="Zone colour">${cols.map(([c, n]) => `<button type="button" class="swatch" data-c="${c}" style="background:${c};width:44px;height:44px" aria-label="${n}" aria-pressed="${z.color === c}"></button>`).join('')}<button type="button" class="swatch" data-c="" style="width:44px;height:44px;background:var(--surface-2);display:flex;align-items:center;justify-content:center" aria-label="No colour" aria-pressed="${!z.color}">${ic('close', 'sm')}</button></div><p class="muted" style="font-size:.875rem">Colour a zone to make it a group zone: only students assigned the same colour group (Class → student menu) can add notes to it.</p></div>`);
+      const cols = GROUPS.map(g => [g.color, g.name]);
+      const wrap = h(`<div class="stack"><div class="swatches" role="group" aria-label="Zone colour">${cols.map(([c, n]) => `<button type="button" class="swatch" data-c="${c}" style="background:${c};width:44px;height:44px" aria-label="${n}" aria-pressed="${z.color === c}"></button>`).join('')}<button type="button" class="swatch" data-c="" style="width:44px;height:44px;background:var(--surface-2);display:flex;align-items:center;justify-content:center" aria-label="No colour" aria-pressed="${!z.color}">${ic('close', 'sm')}</button></div><p class="muted" style="font-size:.875rem">Colour a zone to make it a group zone: students in the same colour group write into it. Open several colour zones at once and every group gets its own. Set up groups from Class → Groups.</p></div>`);
       const ov = Overlay.open({ title: 'Zone colour', content: wrap, size: 'sm' });
       on(wrap, 'click', e => { const b = e.target.closest('[data-c]'); if (!b) return; StateManager.updateItem(id, { color: b.dataset.c || null }); ov.close(); });
     }
   };
+  /* ---------------------------------------------------------------------- */
+  /* Groups: split the class into colour groups (pairs with colour zones)    */
+  /* ---------------------------------------------------------------------- */
+  Shell.Groups = {
+    ov: null, n: 0, who: 'all', zones: true,
+    students() { return Object.entries(State.students).filter(([, s]) => s.role === 'student'); },
+    open() {
+      if (Shell.Groups.ov) return;
+      const coloured = new Set(State.items.filter(i => Network.openableZone(i) && DQBUI.safeColor(i.color)).map(i => i.color)).size;
+      if (!Shell.Groups.n) Shell.Groups.n = Math.max(2, Math.min(GROUPS.length, coloured >= 2 ? coloured : Math.ceil(Shell.Groups.students().length / 5) || 4));
+      const wrap = document.createElement('div'); wrap.className = 'stack groups-sheet'; wrap.style.gap = '18px';
+      Shell.Groups.ov = Overlay.open({
+        title: 'Groups', content: wrap, size: 'md',
+        footer: [
+          { label: 'Clear groups', kind: 'danger-soft', icon: 'close', close: false, onClick: () => { Network.clearGroups(); Shell.Groups.refresh(); Toast.show('Groups cleared'); } },
+          { label: 'Make groups', kind: 'primary', icon: 'users', close: false, onClick: () => Shell.Groups.make() }
+        ],
+        onClose: () => { Shell.Groups.ov = null; }
+      });
+      on(wrap, 'click', e => {
+        const b = e.target.closest('[data-gn], [data-gw], #gr-zones'); if (!b) return;
+        if (b.dataset.gn) Shell.Groups.n = +b.dataset.gn;
+        else if (b.dataset.gw) Shell.Groups.who = b.dataset.gw;
+        else Shell.Groups.zones = !Shell.Groups.zones;
+        Shell.Groups.refresh();
+      });
+      Shell.Groups.refresh();
+    },
+    refresh() {
+      const ov = Shell.Groups.ov; if (!ov) return;
+      const wrap = ov.body.firstElementChild, G = Shell.Groups, list = G.students();
+      const per = list.length ? Math.ceil(list.length / G.n) : 0;
+      const groups = GROUPS.map(g => ({ g, members: list.filter(([, s]) => s.color === g.color).map(([, s]) => s.name) })).filter(x => x.members.length);
+      const none = list.filter(([, s]) => !s.color).map(([, s]) => s.name);
+      const focusKey = document.activeElement && wrap.contains(document.activeElement) ? (document.activeElement.dataset.gn ? '[data-gn="' + document.activeElement.dataset.gn + '"]' : (document.activeElement.dataset.gw ? '[data-gw="' + document.activeElement.dataset.gw + '"]' : (document.activeElement.id ? '#' + document.activeElement.id : null))) : null;
+      wrap.innerHTML = `
+        <p class="text-2">Split the class into colour groups. When you open colour zones, each student writes into their own group’s zone, and several groups can work at the same time.</p>
+        <div class="field"><label>Number of groups</label><div class="seg" role="group" aria-label="Number of groups">${[2, 3, 4, 5, 6].map(k => `<button type="button" data-gn="${k}" aria-pressed="${G.n === k}">${k}</button>`).join('')}</div><div class="hint">${esc(Network.groupColors(G.n).map(groupName).join(', '))} · ${list.length ? `${list.length} student${list.length === 1 ? '' : 's'} connected, about ${per} per group` : 'no students connected yet; you can still add the group zones now'}</div></div>
+        <div class="field"><label>Who to sort</label><div class="seg" role="group" aria-label="Who to sort"><button type="button" data-gw="all" aria-pressed="${G.who === 'all'}">Everyone · new mix</button><button type="button" data-gw="new" aria-pressed="${G.who === 'new'}">Only students without a group</button></div></div>
+        <div class="rule-row" style="padding:0;border:0"><div class="grow"><div class="t" style="font-weight:600">Add a zone for each group</div><div class="s muted" style="font-size:.8125rem">Adds any missing colour zones to the board and selects them, ready to open together.</div></div><button type="button" class="switch" role="switch" id="gr-zones" aria-checked="${G.zones}" aria-label="Add a zone for each group"></button></div>
+        <div><div class="section-label" style="padding-top:0">Current groups</div>
+        ${groups.length || none.length ? `<div class="gr-list">${groups.map(({ g, members }) => `<div class="gr-card" style="--zc:${g.color}"><div class="gr-h"><span class="oz-dot"></span><b>${esc(g.name)}</b><span class="muted">${members.length}</span></div><div class="gr-m">${members.map(esc).join(', ')}</div></div>`).join('')}${none.length ? `<div class="gr-card"><div class="gr-h"><span class="oz-dot any"></span><b>No group</b><span class="muted">${none.length}</span></div><div class="gr-m">${none.map(esc).join(', ')}</div></div>` : ''}</div>` : '<div class="muted">Nobody is in a group yet.</div>'}</div>`;
+      if (focusKey) { const f = wrap.querySelector(focusKey); if (f) f.focus({ preventScroll: true }); }
+    },
+    make() {
+      const G = Shell.Groups, moved = Network.makeGroups(G.n, G.who === 'new');
+      const zones = G.zones ? Actions.createGroupZones(G.n) : [];
+      Shell.Groups.refresh();
+      const parts = [];
+      if (G.students().length) parts.push(moved ? `${moved} student${moved === 1 ? '' : 's'} sorted into ${G.n} groups` : 'Everyone already has a group');
+      if (zones.length) parts.push(`${zones.length} zone${zones.length === 1 ? '' : 's'} added`);
+      Toast.success(parts.join(' · ') || `${G.n} group zones are on the board`);
+    }
+  };
+
   Shell.Arrange = {
     open(anchor) {
       const node = $('arrange-content');
@@ -312,7 +367,7 @@
   };
   Shell.Shortcuts = {
     open() {
-      const rows = [['Select', 'V'], ['Hand (pan)', 'H or hold Space'], ['Draw', 'P'], ['Eraser', 'E'], ['Laser pointer', 'L'], ['New note', 'N or double-click'], ['Add menu', 'A'], ['Delete', '⌫ / Delete'], ['Undo / redo', '⌘Z / ⇧⌘Z'], ['Duplicate', '⌘D'], ['Select all', '⌘A'], ['Group / ungroup', '⌘G / ⇧⌘G'], ['Nudge selection', 'Arrow keys (⇧ = bigger)'], ['Move without snapping', 'hold Alt'], ['Zoom in / out', '+ / −'], ['Zoom 100%', '0'], ['Fit to screen', '⇧1'], ['Minimap', 'M'], ['This list', '?']];
+      const rows = [['Select', 'V'], ['Hand (pan)', 'H or hold Space'], ['Draw', 'P'], ['Eraser', 'E'], ['Laser pointer', 'L'], ['New note', 'N or double-click'], ['Add menu', 'A'], ['Add to or remove from the selection', '⇧ click'], ['Delete', '⌫ / Delete'], ['Undo / redo', '⌘Z / ⇧⌘Z'], ['Duplicate', '⌘D'], ['Select all notes and ink', '⌘A'], ['Turn selected ink into one note', 'J'], ['Group / ungroup', '⌘G / ⇧⌘G'], ['Nudge selection', 'Arrow keys (⇧ = bigger)'], ['Move without snapping', 'hold Alt'], ['Zoom in / out', '+ / −'], ['Zoom 100%', '0'], ['Fit to screen', '⇧1'], ['Minimap', 'M'], ['This list', '?']];
       Overlay.open({ title: 'Keyboard shortcuts', size: 'md', content: `<div class="shortcut-grid">${rows.map(([a, k]) => `<div>${esc(a)}</div><div>${k.split(' or ').map(x => `<span class="kbd">${esc(DQBUI.kbd(x))}</span>`).join(' or ')}</div>`).join('')}</div>`, footer: [{ label: 'Close', kind: 'primary' }] });
     }
   };

@@ -28,10 +28,12 @@
   /* State + persistence                                                     */
   /* ====================================================================== */
   const State = {
-    me: { sid: '', name: '', av: '😀', color: null },
+    me: { sid: '', name: '', av: '😀', color: null, group: '' },
     target: null,            // { peerId, code }
     boardId: null, notes: [],
-    activity: { type: 'LOCKED', id: null, rid: null, sub: null, title: '', zoneType: null, items: [], payload: null },
+    // zones: the open zones this student may write into ({ id, title, zoneType, color, group }); zonePick: the one they chose
+    activity: { type: 'LOCKED', id: null, rid: null, sub: null, title: '', zoneType: null, items: [], payload: null, zones: [], waiting: false, unplaced: false },
+    zonePick: null,
     rules: { names: true, approve: false }, muted: false,
     responded: {}, everConnected: false, tab: 'board', view: 'setup',
     timer: { running: false, endsAt: 0, remainingMs: 0, totalMs: 0 },
@@ -207,14 +209,17 @@
   /* ====================================================================== */
   function setActivity(a) {
     const prev = State.activity;
-    State.activity = Object.assign({ type: 'LOCKED', id: null, rid: null, sub: null, title: '', zoneType: null, items: [], payload: null }, a);
+    State.activity = Object.assign({ type: 'LOCKED', id: null, rid: null, sub: null, title: '', zoneType: null, items: [], payload: null, zones: [], waiting: false, unplaced: false }, a);
+    const zoneSig = (x) => (x.zones || []).map(z => z.id + ':' + z.title + ':' + z.zoneType).join('|') + (x.waiting ? '!' : '');
     const changed = prev.type !== State.activity.type || prev.id !== State.activity.id || prev.sub !== State.activity.sub || prev.rid !== State.activity.rid;
+    const zonesChanged = zoneSig(prev) !== zoneSig(State.activity);
     Views.renderBoard(); Views.syncChrome();
-    if (changed) {
-      const t = State.activity.type;
+    if (changed || zonesChanged) {
+      const t = State.activity.type, z = State.activity.zones || [];
       if (t === 'OPEN') DQBUI.announce('Your teacher opened the board. You can add notes.');
       else if (t === 'LOCKED' && prev.type !== 'LOCKED') DQBUI.announce('The board is locked.');
-      Write.sync();
+      else if (Write.zoneActive()) DQBUI.announce(State.activity.waiting ? 'Your teacher is putting you in a group.' : (z.length > 1 ? `${z.length} zones are open. Choose where your note goes.` : `${z[0].title} is open. You can add notes.`));
+      Write.sync(); Sketch.sync();
     }
   }
   function autoOpenTask() {
@@ -254,7 +259,15 @@
         if (sub !== 'OPEN_ZONE') Pages.closeAll();
         if (sub === 'ACT_SORT') Rank.reset(items);
         if (sub === 'ACT_VOTE') Vote.reset();
-        setActivity({ type: 'ZONE', id: safeId(d.actId), rid: safeId(d.rid), sub, title: clampStr(d.title, 80), zoneType: d.zoneType || null, items });
+        if (sub === 'OPEN_ZONE') {
+          // the zones this student may write into; an older teacher app sends a single zone as actId
+          let zones = Array.isArray(d.zones) ? d.zones.slice(0, 24).map(z => ({ id: safeId(z && z.id), title: clampStr(z && z.title, 80) || 'Zone', zoneType: z && z.zoneType === 'cer' ? 'cer' : null, color: safeColor(z && z.color) || null, group: clampStr(z && z.group, 24) })).filter(z => z.id) : null;
+          if (!zones) zones = safeId(d.actId) ? [{ id: safeId(d.actId), title: clampStr(d.title, 80) || 'Zone', zoneType: d.zoneType === 'cer' ? 'cer' : null, color: null, group: '' }] : [];
+          if (!zones.some(z => z.id === State.zonePick)) State.zonePick = zones.length ? zones[0].id : null;
+          setActivity({ type: 'ZONE', id: State.zonePick, rid: safeId(d.rid), sub, title: zones.length ? zones[0].title : '', zoneType: null, items, zones, waiting: !zones.length || !!d.waiting, unplaced: !!d.unplaced });
+          break;
+        }
+        setActivity({ type: 'ZONE', id: safeId(d.actId), rid: safeId(d.rid), sub, title: clampStr(d.title, 80), zoneType: d.zoneType === 'cer' ? 'cer' : null, items });
         break;
       }
       case 'ACT_POLL': { const id = safeId(d.actId); Pages.closeAll(); setActivity({ type: 'POLL', id, rid: safeId(d.rid), title: clampStr(d.q, 200), payload: { q: clampStr(d.q, 200), opts: (Array.isArray(d.opts) ? d.opts : []).slice(0, 12).map(o => clampStr(o && o.lbl, 80)) } }); Poll.reset(); autoOpenTask(); break; }
@@ -265,7 +278,13 @@
         autoOpenTask(); break;
       }
       case 'STOP_ACT': { Pages.closeAll(['p-write', 'p-sketch']); setActivity({ type: 'LOCKED' }); break; }
-      case 'SET_COLOR': State.me.color = safeColor(d.color) || null; Views.renderMe(); break;
+      case 'SET_COLOR': {
+        const had = State.me.color;
+        State.me.color = safeColor(d.color) || null; State.me.group = State.me.color ? (clampStr(d.name, 24) || 'colour') : '';
+        Views.renderMe(); Views.renderBoard();
+        if (State.me.color && State.me.color !== had) Toast.info(`You’re in the ${State.me.group} group`, { duration: 2400 });
+        break;
+      }
       case 'RULES': if (d.rules) { State.rules = { names: d.rules.names !== false, approve: !!d.rules.approve }; Write.sync(); } break;
       case 'MUTE': State.muted = !!d.on; Views.renderBoard(); Views.syncChrome(); Write.sync(); if (State.muted) Toast.warn('Your teacher paused notes from you for now.'); else Toast.success('You can add notes again.'); break;
       case 'KICKED': Conn.stop(); Store.setLastJoin(null); State.everConnected = false; Pages.closeAll(); Views.ended(d.reason === 'code-reset' ? 'The class code was reset' : 'You were removed from the class', d.reason === 'code-reset' ? 'Your teacher generated a new code. Ask for it to rejoin.' : 'Your teacher removed you from this session.'); break;
@@ -283,10 +302,12 @@
       case 'CONSENSUS_CLEAR': CM.setInk([]); break;
       case 'CONSENSUS_SET_INK': CM.setInk(d.ink); break;
       case 'CONSENSUS_ITEM_MOVE': CM.moveItem(d.id, d.x, d.y); break;
+      case 'CONSENSUS_ITEMS': if (CM.active) CM.setItems(d.items); break;
       case 'CONSENSUS_VIEW_SYNC': CM.hostView(d); break;
     }
   }
-  function rejectMsg(r) { return ({ locked: 'The board is locked, so that note wasn’t added. It’s saved in My notes.', muted: 'Your teacher paused notes from you.', color: 'That zone is for a different group.', limit: 'You’ve reached the note limit for this session.', image: 'That drawing was too large to send. Try a simpler one.', declined: 'Your teacher didn’t add that note.' })[r] || 'That note wasn’t added to the board.'; }
+  function rejectMsg(r) { return ({ locked: 'The board is locked, so that note wasn’t added. It’s saved in My notes.', muted: 'Your teacher paused notes from you.', color: 'That zone is for a different group.', group: 'You’re not in a group yet, so that note wasn’t added. It’s saved in My notes.', limit: 'You’ve reached the note limit for this session.', image: 'That drawing was too large to send. Try a simpler one.', declined: 'Your teacher didn’t add that note.' })[r] || 'That note wasn’t added to the board.'; }
+  const RETRY_REASONS = ['locked', 'group', 'color'];
 
   /* ====================================================================== */
   /* Pages (full-screen task screens with history support)                   */
@@ -368,8 +389,16 @@
       else if (a.type === 'OPEN') html += Views.statusCard('✨', 'The board is open', 'Choose what you’d like to add.', true) + Views.typeTiles(OPEN_TYPES);
       else if (a.type === 'ZONE') {
         if (a.sub === 'OPEN_ZONE') {
-          const cer = a.zoneType === 'cer';
-          html += Views.statusCard(cer ? '🏛️' : '📌', a.title || 'Add to this zone', cer ? 'Build an argument: add a claim, evidence and reasoning.' : 'Your notes will go into this zone on the board.', true) + Views.typeTiles(cer ? CER_TYPES : OPEN_TYPES);
+          const z = Write.zone(), many = (a.zones || []).length > 1, cer = !!(z && z.zoneType === 'cer');
+          if (a.waiting || !z) html += State.me.color
+            ? Views.statusCard('⏳', `The ${State.me.group || 'group'} zone isn’t open`, 'Other groups are adding notes right now. Your teacher will open your group’s zone or move you to another group.')
+            : Views.statusCard('🧩', 'Waiting for a group', 'Your teacher is putting the class into groups. You can add notes as soon as you’re in one.');
+          else {
+            if (many) html += ZonePick.card();
+            else html += Views.statusCard(cer ? '🏛️' : '📌', z.title || 'Add to this zone', cer ? 'Build an argument: add a claim, evidence and reasoning.' : (z.group ? `Your notes go into the ${z.group} group’s zone.` : 'Your notes will go into this zone on the board.'), true);
+            if (a.unplaced) html += `<div class="info-box">${ic('info', 'sm')}<span>${State.me.color ? `The ${esc(State.me.group || 'group')} zone isn’t open, so you can add to any open zone for now.` : 'You’re not in a group yet, so you can add to any open zone.'}</span></div>`;
+            html += Views.typeTiles(cer ? CER_TYPES : OPEN_TYPES);
+          }
         } else if (a.sub === 'ACT_VOTE') html += Vote.html();
         else if (a.sub === 'ACT_SORT') html += Rank.html();
         else if (a.sub === 'ACT_DISCUSS') html += Discuss.html();
@@ -392,7 +421,7 @@
       const label = { sending: ['Sending…', 'status-sending'], approved: ['On the board', 'status-approved'], pending: ['Waiting for your teacher', 'status-pending'], rejected: ['Not added', 'status-rejected'] };
       list.innerHTML = notes.map(n => {
         const t = TYPES[n.sub] || TYPES.notice, st = label[n.status || 'approved'];
-        return `<article class="note-card t-${esc(TYPES[n.sub] ? n.sub : 'notice')}" data-id="${esc(n.id)}">${n.src ? `<img alt="Your drawing" data-img="${esc(n.id)}">${n.text ? `<div class="txt" style="margin-top:8px;font-size:1.05rem">${esc(n.text)}</div>` : ''}` : `<div class="txt">${esc(n.text)}</div>`}<div class="meta"><span class="chip">${t.icon} ${t.lbl}</span><span class="chip ${st[1]}">${st[0]}</span><span class="grow"></span>${n.status === 'rejected' && n.reason === 'locked' ? `<button type="button" class="btn btn-soft btn-sm" data-act="retry" data-id="${esc(n.id)}">${ic('refresh', 'sm')}Try again</button>` : ''}<button type="button" class="icon-btn sm" data-act="del" data-id="${esc(n.id)}" aria-label="Delete this note">${ic('trash', 'sm')}</button></div></article>`;
+        return `<article class="note-card t-${esc(TYPES[n.sub] ? n.sub : 'notice')}" data-id="${esc(n.id)}">${n.src ? `<img alt="Your drawing" data-img="${esc(n.id)}">${n.text ? `<div class="txt" style="margin-top:8px;font-size:1.05rem">${esc(n.text)}</div>` : ''}` : `<div class="txt">${esc(n.text)}</div>`}<div class="meta"><span class="chip">${t.icon} ${t.lbl}</span><span class="chip ${st[1]}">${st[0]}</span><span class="grow"></span>${n.status === 'rejected' && RETRY_REASONS.includes(n.reason) ? `<button type="button" class="btn btn-soft btn-sm" data-act="retry" data-id="${esc(n.id)}">${ic('refresh', 'sm')}Try again</button>` : ''}<button type="button" class="icon-btn sm" data-act="del" data-id="${esc(n.id)}" aria-label="Delete this note">${ic('trash', 'sm')}</button></div></article>`;
       }).join('');
       $$('img[data-img]', list).forEach(img => { const n = State.notes.find(x => x.id === img.dataset.img); const s = n && safeImg(n.src, 3000000); if (s) img.src = s; });
       Views.syncChrome();
@@ -410,6 +439,7 @@
     else if (act === 'send-vote') Vote.send();
     else if (act === 'send-rank') Rank.send();
     else if (act === 'comment') Discuss.open(b.dataset.id);
+    else if (act === 'pick-zone') ZonePick.choose(b.dataset.id);
   });
   function autoOpenTaskForce() { const a = State.activity; if (a.type === 'POLL') Poll.open(); else if (a.type === 'GRAPH') Graph.open(); else if (a.type === 'EXIT') Exit.open(); }
   on($('notes-list'), 'click', async e => {
@@ -419,8 +449,8 @@
       const ok = await Dialog.confirm({ title: 'Delete this note?', message: n.status === 'approved' || n.status === 'sending' ? 'It will also be removed from the board.' : 'This can’t be undone.', confirmLabel: 'Delete', danger: true });
       if (!ok) return; Conn.send({ type: 'DELETE_NOTE', id: n.id }, true); Store.delNote(n.id); Toast.show('Note deleted');
     } else if (b.dataset.act === 'retry') {
-      if (!Write.canAdd()) { Toast.warn('The board is locked right now.'); return; }
-      n.status = 'sending'; n.reason = null; Store.saveNote(n); Conn.send(noteMsg(n), true);
+      if (!Write.canAdd()) { Toast.warn(Write.zoneActive() && State.activity.waiting ? 'You’re not in a group yet. Your teacher will put you in one.' : 'The board is locked right now.'); return; }
+      n.status = 'sending'; n.reason = null; n.zoneId = Write.targetZoneId(); Store.saveNote(n); Conn.send(noteMsg(n), true);
     }
   });
   on($('tabbar'), 'click', e => {
@@ -508,13 +538,55 @@
   };
 
   /* ====================================================================== */
+  /* Choosing a zone (when the teacher has several open for this student)    */
+  /* ====================================================================== */
+  const ZonePick = {
+    sub(z) { return [z.zoneType === 'cer' ? 'Claim · Evidence · Reasoning' : '', z.group ? `${z.group} group` : (z.color ? '' : 'Everyone')].filter(Boolean).join(' · '); },
+    /** Board tab: one radio card per zone. */
+    card() {
+      const a = State.activity, cur = Write.zone();
+      return `<div class="card act-card zone-pick"><div class="act-head"><span class="live-tag">LIVE</span></div><h2 id="zp-h">Choose where your note goes</h2><div class="choice-list" role="radiogroup" aria-labelledby="zp-h">${a.zones.map(z => `<button type="button" class="choice zone-choice" role="radio" aria-checked="${!!cur && cur.id === z.id}" data-act="pick-zone" data-id="${esc(z.id)}"${z.color ? ` style="--zc:${z.color}"` : ''}><span class="mark">${ic('check', 'sm')}</span><span class="txt"><b>${esc(z.title)}</b>${ZonePick.sub(z) ? `<small>${esc(ZonePick.sub(z))}</small>` : ''}</span><span class="zdot${z.color ? '' : ' any'}" aria-hidden="true"></span></button>`).join('')}</div></div>`;
+    },
+    /** Write and sketch pages: where this note will go (a chip per zone when there is a choice). */
+    row(el) {
+      if (!el) return;
+      const a = State.activity, zones = Write.zoneActive() && !a.waiting ? (a.zones || []) : [];
+      el.hidden = !zones.length;
+      if (!zones.length) { el.innerHTML = ''; return; }
+      const cur = Write.zone();
+      el.innerHTML = zones.length === 1
+        ? `<span class="zr-label">Adding to</span><span class="chip zone-chip static"${zones[0].color ? ` style="--zc:${zones[0].color}"` : ''}><span class="zdot${zones[0].color ? '' : ' any'}" aria-hidden="true"></span>${esc(zones[0].title)}</span>`
+        : `<span class="zr-label" id="${el.id}-l">Adding to</span><div class="chip-row" role="radiogroup" aria-labelledby="${el.id}-l">${zones.map(z => `<button type="button" class="chip zone-chip" role="radio" aria-checked="${!!cur && cur.id === z.id}" data-zone="${esc(z.id)}"${z.color ? ` style="--zc:${z.color}"` : ''}><span class="zdot${z.color ? '' : ' any'}" aria-hidden="true"></span>${esc(z.title)}</button>`).join('')}</div>`;
+    },
+    choose(id) {
+      const a = State.activity, z = (a.zones || []).find(x => x.id === id); if (!z) return;
+      const before = Write.ctxTypes();
+      State.zonePick = z.id; a.id = z.id;
+      Views.renderBoard();
+      ZonePick.row($('w-zone')); ZonePick.row($('s-zone'));
+      if (Pages.isOpen('p-write') && Write.ctxTypes() !== before) Write.retype();
+      DQBUI.haptic(8);
+    },
+    init() { ['w-zone', 's-zone'].forEach(id => on($(id), 'click', e => { const b = e.target.closest('[data-zone]'); if (b) ZonePick.choose(b.dataset.zone); })); }
+  };
+
+  /* ====================================================================== */
   /* Write a note                                                            */
   /* ====================================================================== */
   const Write = {
     type: 'notice', types: OPEN_TYPES,
     zoneActive() { const a = State.activity; return a.type === 'ZONE' && a.sub === 'OPEN_ZONE'; },
-    canAdd() { const a = State.activity; return !State.muted && (a.type === 'OPEN' || (a.type === 'ZONE' && a.sub === 'OPEN_ZONE')); },
-    ctxTypes() { return (Write.zoneActive() && State.activity.zoneType === 'cer') ? CER_TYPES : OPEN_TYPES; },
+    /** The zone a new note goes into: the student's pick, or their only zone. */
+    zone() { const a = State.activity; if (!Write.zoneActive() || a.waiting) return null; const zs = a.zones || []; return zs.find(z => z.id === State.zonePick) || zs[0] || null; },
+    targetZoneId() { const z = Write.zone(); return z ? z.id : null; },
+    canAdd() { const a = State.activity; return !State.muted && (a.type === 'OPEN' || (Write.zoneActive() && !!Write.zone())); },
+    ctxTypes() { const z = Write.zone(); return (z && z.zoneType === 'cer') ? CER_TYPES : OPEN_TYPES; },
+    /** The note types change when the student switches between a CER zone and a regular one. */
+    retype() {
+      Write.types = Write.ctxTypes();
+      $('w-chips').innerHTML = Write.types.map(t => `<button type="button" class="chip" role="radio" aria-checked="false" data-type="${t}">${TYPES[t].icon} ${TYPES[t].lbl}</button>`).join('');
+      Write.setType(Write.types.includes(Write.type) ? Write.type : Write.types[0], true);
+    },
     openDefault() { Write.open(Write.ctxTypes()[0]); },
     open(type) {
       if (!Write.canAdd()) { Toast.info('The board isn’t open for notes right now.'); return; }
@@ -540,8 +612,10 @@
     count() { const n = $('w-txt').value.length; const c = $('w-count'); c.textContent = `${n} / ${MAX_TEXT}`; c.classList.toggle('near', n > MAX_TEXT - 40); $('w-send').disabled = !$('w-txt').value.trim() || !Write.canAdd(); },
     sync() {
       if (!Pages.isOpen('p-write')) return;
+      ZonePick.row($('w-zone'));
+      if (Write.canAdd() && Write.ctxTypes() !== Write.types) Write.retype();
       const w = $('w-warn');
-      if (!Write.canAdd()) { w.hidden = false; w.textContent = State.muted ? 'Your teacher paused notes from you. Your draft is saved.' : 'The board was locked, so this note can’t be sent yet. Your draft is saved.'; }
+      if (!Write.canAdd()) { w.hidden = false; w.textContent = State.muted ? 'Your teacher paused notes from you. Your draft is saved.' : (Write.zoneActive() ? 'You’re not in a group yet, so this note can’t be sent. Your draft is saved.' : 'The board was locked, so this note can’t be sent yet. Your draft is saved.'); }
       else { w.hidden = true; }
       const hint = State.rules.approve ? ' Your teacher will check notes before they appear.' : (State.rules.names ? '' : ' Your name won’t be shown.');
       $('w-hint').textContent = TYPES[Write.type].hint + hint;
@@ -552,11 +626,12 @@
     send() {
       const text = $('w-txt').value.trim();
       if (!text || !Write.canAdd()) return;
-      const n = { id: DQBUI.genId(), sub: Write.type, text: clampStr(text, MAX_TEXT), ts: Date.now(), boardId: State.boardId || 'board', status: 'sending', zoneId: Write.zoneActive() ? State.activity.id : null };
+      const n = { id: DQBUI.genId(), sub: Write.type, text: clampStr(text, MAX_TEXT), ts: Date.now(), boardId: State.boardId || 'board', status: 'sending', zoneId: Write.targetZoneId() };
       Store.saveNote(n); Conn.send(noteMsg(n), true);
       try { localStorage.removeItem('dqb_draft'); } catch (e) { /* ignore */ }
       $('w-txt').value = ''; Pages.close('p-write'); DQBUI.haptic(15);
-      Toast.success(State.rules.approve ? 'Sent — waiting for your teacher' : 'Sent to the board', { duration: 2000 });
+      const z = Write.zone();
+      Toast.success(State.rules.approve ? 'Sent — waiting for your teacher' : (z && (State.activity.zones || []).length > 1 ? `Sent to ${z.title}` : 'Sent to the board'), { duration: 2000 });
     },
     init() {
       on($('w-txt'), 'input', () => { Write.count(); Write.saveDraft(); });
@@ -592,7 +667,8 @@
     },
     sync() {
       const w = $('s-warn');
-      if (!Write.canAdd()) { w.hidden = false; w.textContent = 'The board was locked, so this drawing can’t be sent yet. Your drawing is kept here.'; } else w.hidden = true;
+      ZonePick.row($('s-zone'));
+      if (!Write.canAdd()) { w.hidden = false; w.textContent = Write.zoneActive() && !State.muted ? 'You’re not in a group yet, so this drawing can’t be sent. It’s kept here.' : 'The board was locked, so this drawing can’t be sent yet. Your drawing is kept here.'; } else w.hidden = true;
       $('s-send').disabled = !Sketch.dirty || !Write.canAdd();
       $('s-undo').disabled = Sketch.history.length === 0; $('s-clear').disabled = !Sketch.dirty;
     },
@@ -627,7 +703,7 @@
     send() {
       if (!Sketch.dirty || !Write.canAdd()) return;
       const src = Sketch.exportData();
-      const n = { id: DQBUI.genId(), sub: 'sketch', text: clampStr($('s-caption').value.trim(), 80), src, ts: Date.now(), boardId: State.boardId || 'board', status: 'sending', zoneId: Write.zoneActive() ? State.activity.id : null };
+      const n = { id: DQBUI.genId(), sub: 'sketch', text: clampStr($('s-caption').value.trim(), 80), src, ts: Date.now(), boardId: State.boardId || 'board', status: 'sending', zoneId: Write.targetZoneId() };
       Store.saveNote(n); Conn.send(noteMsg(n), true);
       Sketch.ctx.clearRect(0, 0, $('s-canvas').width, $('s-canvas').height); Sketch.dirty = false; Sketch.history = []; $('s-caption').value = '';
       Pages.close('p-sketch'); DQBUI.haptic(15); Toast.success(State.rules.approve ? 'Sent — waiting for your teacher' : 'Drawing sent', { duration: 2000 });
@@ -717,19 +793,22 @@
     start(d) {
       CM.active = true; CM.canDraw = false; CM.follow = true; CM.view = { x: 0, y: 0, z: 1 }; CM.host = null;
       CM.ink = (Array.isArray(d.ink) ? d.ink : []).map(CM.cleanInk).filter(Boolean);
-      const NS = 'http://www.w3.org/2000/svg';
+      CM.setItems(d.items);
+      $('cm-title').textContent = clampStr(d.title, 60) || 'Class model';
+      CM.renderInk(); CM.setPerms(false); CM.fitDefault();
+      Pages.closeAll(['p-consensus']);
+      Pages.open('p-consensus'); CM.loop();
+    },
+    /** The notes and sketches placed on the model (sent at the start, and again whenever the teacher changes them). */
+    setItems(list) {
       const box = $('cm-items'); box.textContent = '';
-      (Array.isArray(d.items) ? d.items : []).slice(0, 200).forEach(i => {
-        const id = safeId(i.id); if (!id) return;
+      (Array.isArray(list) ? list : []).slice(0, 200).forEach(i => {
+        const id = safeId(i && i.id); if (!id) return;
         const el = document.createElement('div'); el.id = 'ci-' + id; el.className = `c-item t-${TYPES[i.sub] ? i.sub : 'notice'}`;
         el.style.cssText = `transform:translate(${+i.x || 0}px,${+i.y || 0}px);width:${Math.max(40, +i.w || 180)}px;height:${Math.max(40, +i.h || 120)}px`;
         const s = i.src ? safeImg(i.src, 1500000) : ''; if (s) { const im = document.createElement('img'); im.src = s; im.alt = 'Sketch'; el.appendChild(im); } else el.textContent = clampStr(i.text, 500);
         box.appendChild(el);
       });
-      $('cm-title').textContent = clampStr(d.title, 60) || 'Class model';
-      CM.renderInk(); CM.setPerms(false); CM.fitDefault();
-      Pages.closeAll(['p-consensus']);
-      Pages.open('p-consensus'); CM.loop();
     },
     fitDefault() { const r = $('cm-view').getBoundingClientRect(); const items = $$('.c-item', $('cm-items')); if (!r.width) { CM.view = { x: 20, y: 20, z: 0.6 }; return; } let w = 600, h = 500; CM.view = { z: Math.min(1, r.width / (w + 40)), x: 20, y: 20 }; CM.view.z = Math.max(0.25, CM.view.z); },
     stop() { if (!CM.active) return; CM.active = false; Pages.close('p-consensus'); Toast.info('The shared model has ended', { duration: 2200 }); },
@@ -895,7 +974,7 @@
   async function boot() {
     hydrateIcons(document); Theme.apply();
     await Store.init();
-    Onboard.init(); Write.init(); Sketch.init(); Poll.init(); Graph.init(); Exit.init(); CM.init();
+    Onboard.init(); Write.init(); Sketch.init(); Poll.init(); Graph.init(); Exit.init(); CM.init(); ZonePick.init();
     Views.renderMe(); Views.renderNotes();
     const params = new URLSearchParams(location.search), jp = params.get('join');
     if (jp) State.target = Net.parseJoinInput(jp);

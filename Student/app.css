@@ -140,6 +140,23 @@ input, textarea, .selectable { -webkit-user-select: text; user-select: text; }
 .note-paper textarea:focus { outline: none; }
 .hint { color: var(--text-3); font-size: 0.875rem; }
 .warn-box { padding: 10px 12px; border-radius: var(--radius); background: var(--warn-50); color: var(--warn); font-weight: 600; font-size: 0.875rem; }
+.info-box { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--radius); background: var(--accent-50); color: var(--text-2); font-size: 0.875rem; }
+.info-box .i { color: var(--accent); flex-shrink: 0; }
+
+/* ---- choosing a zone (several open for this student) ---- */
+.zdot { width: 14px; height: 14px; border-radius: 50%; background: var(--zc, var(--success)); flex-shrink: 0; box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px color-mix(in srgb, var(--zc, var(--success)) 45%, transparent); }
+.zdot.any { background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
+.zone-choice { border-left: 6px solid var(--zc, var(--border-strong)); }
+.choice.zone-choice[aria-checked] { border-left-color: var(--zc, var(--border-strong)); }     /* the zone keeps its colour when chosen */
+.zone-choice .txt b { display: block; font-size: 1.02rem; }
+.zone-choice .txt small { display: block; color: var(--text-3); font-size: 0.8125rem; font-weight: 600; margin-top: 2px; }
+.zone-row { display: flex; align-items: center; gap: 10px; min-width: 0; flex-shrink: 0; }
+.zone-row[hidden] { display: none; }
+.zone-row .zr-label { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); flex-shrink: 0; }
+.zone-row .chip-row { flex: 1; min-width: 0; padding-bottom: 0; }
+.zone-chip { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; font-weight: 600; border-color: color-mix(in srgb, var(--zc, var(--border-strong)) 55%, var(--border)); }
+.zone-chip[aria-checked="true"] { background: color-mix(in srgb, var(--zc, var(--accent)) 14%, var(--surface)); border-color: var(--zc, var(--accent)); color: var(--text); }
+.zone-chip.static { cursor: default; }
 .sketch-body { gap: 12px; }
 .canvas-wrap { position: relative; width: 100%; border-radius: var(--radius-lg); border: 2px solid var(--border-strong); background: #fff; overflow: hidden; touch-action: none; box-shadow: var(--shadow-xs); }
 #s-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
@@ -205,11 +222,12 @@ input, textarea, .selectable { -webkit-user-select: text; user-select: text; }
   #tabbar { width: 84px; padding: 8px 6px; }
   .tab-fab { height: 64px; margin-bottom: 4px; }
   .tab-fab .fab { width: 50px; height: 50px; border-radius: 16px; }
-  .sketch-body { max-width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: 1fr auto auto; gap: 10px 16px; align-items: stretch; }
-  .sketch-body .canvas-wrap { grid-column: 1; grid-row: 1 / 4; }
+  .sketch-body { max-width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: 1fr auto auto auto; gap: 10px 16px; align-items: stretch; }
+  .sketch-body .canvas-wrap { grid-column: 1; grid-row: 1 / 5; }
   .sketch-body .sketch-tools { grid-column: 2; grid-row: 1; align-self: start; }
-  .sketch-body #s-caption { grid-column: 2; grid-row: 2; }
-  .sketch-body #s-warn { grid-column: 2; grid-row: 3; }
+  .sketch-body #s-zone { grid-column: 2; grid-row: 2; flex-wrap: wrap; }
+  .sketch-body #s-caption { grid-column: 2; grid-row: 3; }
+  .sketch-body #s-warn { grid-column: 2; grid-row: 4; }
 }
 @media (max-width: 560px) { .av-grid, .prof-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .av { aspect-ratio: 5 / 4; font-size: 1.9rem; } }
 @media (max-width: 380px) { .smileys { gap: 5px; } .smiley { font-size: 1.7rem; } }

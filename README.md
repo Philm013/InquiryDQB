@@ -14,6 +14,8 @@ InquiryDQB is a static website: HTML, CSS and vanilla JavaScript, with no build 
 
 - **Infinite canvas** with pan, zoom, minimap, smart snapping guides, multi-select, grouping, align / distribute, undo and redo.
 - **Purposeful content:** Notice, Wonder, Idea and Test notes; zones that auto-arrange their notes; a Claim · Evidence · Reasoning builder; a shared class model; breakout rooms.
+- **Group work:** split the class into colour groups (balanced, in one tap), give each group a colour zone and open several zones at once. Every student writes into their own group's zone; students without a group can pick any open zone or wait until you place them, and you can see who still needs a group.
+- **Ink tools everywhere:** on the board, the class model and breakout rooms, pick strokes one at a time or with a box, move, recolour, duplicate or delete them, and turn several strokes into one sketch note.
 - **Live activities:** poll, live graph, spinner; vote, rank and discuss on any set of notes; five exit-ticket formats (short answer, rating, multiple choice, multi-select, learn / wonder).
 - **Classroom control:** approve notes before they appear, pause or remove a student, hide names, class timer, co-host on a second device, lock or open the board.
 - **Yours to keep:** boards autosave on the device; export as a board file (JSON), a picture (PNG) or a printable outline; text-only accessibility view; templates (See-Think-Wonder, K-W-L, Frayer, Venn, Four Corners, Compass Points) and your own.
@@ -22,7 +24,7 @@ InquiryDQB is a static website: HTML, CSS and vanilla JavaScript, with no build 
 ### Student app (`/Student/`)
 
 - Join by typing the six-character code, scanning the QR code, or opening the join link. Pick an avatar and a first name.
-- Board tab shows only what the teacher is running now; **My notes** keeps everything the student wrote, with delivery status (sending, on the board, waiting for the teacher, not added).
+- Board tab shows only what the teacher is running now; when several zones are open to them, students choose where each note goes. **My notes** keeps everything the student wrote, with delivery status (sending, on the board, waiting for the teacher, not added).
 - Full-screen task pages for writing, sketching, polls, graphs, exit tickets and the shared model.
 - Survives flaky Wi-Fi: reconnects automatically, queues notes while offline, restores drafts.
 - Installable on a home screen (PWA); light and dark themes.

@@ -20,7 +20,7 @@ test('landing page: join form validates inline, forwards a clean code, and nothi
     assert.equal(await p.textContent('#year'), String(new Date().getFullYear()));
     const broken = await p.evaluate(() => [...document.images].filter((i) => i.complete && i.naturalWidth === 0).map((i) => i.src));
     assert.deepEqual(broken, [], `${device}: every image loads`);
-    for (const id of ['how', 'features', 'privacy', 'faq', 'join']) assert.equal(await p.locator('#' + id).count(), 1, `#${id} exists`);
+    for (const id of ['inquiry', 'how', 'features', 'routines', 'ready', 'privacy', 'faq', 'join']) assert.equal(await p.locator('#' + id).count(), 1, `#${id} exists`);
   }
   const p = await env.open('desktop', '/');
   await p.fill('#join-code', 'x');

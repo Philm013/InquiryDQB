@@ -250,14 +250,24 @@
   /* ====================================================================== */
   /* Selection toolbar                                                       */
   /* ====================================================================== */
+  const INK_DOTS = [['#ef4444', 'Red'], ['#3b82f6', 'Blue'], ['#10b981', 'Green'], ['#111827', 'Black'], ['#f97316', 'Orange']];
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + 's')}`;
   Shell.SelBar = {
     ctx() {
-      if (Workspace.mode === 'board') {
-        if (InkManager.selectedId) return { kind: 'ink' };
+      const m = Workspace.mode, n = Workspace.ink().count();
+      if (m === 'board') {
         const sel = State.selection.map(id => State.items.find(i => i.id === id)).filter(Boolean);
+        if (n && !sel.length) return { kind: 'ink', n };
+        if (n) return { kind: 'mixed', items: sel, n };
         if (sel.length === 1) return { kind: 'one', item: sel[0] };
         if (sel.length > 1) return { kind: 'many', items: sel };
-      } else if (Workspace.mode === 'breakout' && Breakout._state.selectedId) return { kind: 'bk' };
+      } else if (m === 'consensus') {
+        if (n) return { kind: 'ink', n };
+      } else if (m === 'breakout') {
+        const items = Breakout.selectedItems();
+        if (n && !items.length) return { kind: 'ink', n };
+        if (items.length) return { kind: 'bk', items, n };
+      }
       return null;
     },
     btn(o) {
@@ -273,18 +283,43 @@
       const add = (o, fn) => { parts.push(B(o)); A[o.id] = fn; };
       const sep = () => parts.push('<span class="sb-sep"></span>');
       const more = (id) => add({ id: 'more', icon: 'more', title: 'More actions' }, (e) => DQBUI.Menu.open({ anchor: e.currentTarget, items: Actions.menuItems(id), align: 'end', place: isMobile() ? 'above' : 'below' }));
+      const ink = Workspace.ink(), caps = Workspace.caps();
+      const makeNote = (n) => { if (caps.combine) add({ id: 'ink-note', icon: 'note', label: n > 1 ? 'Make one note' : 'Make a note', keep: true, accent: true, title: n > 1 ? 'Combine the selected strokes into one sketch note' : 'Turn this stroke into a sketch note' }, () => ink.combine()); };
       if (c.kind === 'ink') {
-        ['#ef4444', '#3b82f6', '#10b981', '#111827', '#f97316'].forEach(col => add({ id: 'ink-' + col, dot: col, title: 'Colour ' + col }, () => InkManager.colorSelected(col)));
-        sep(); add({ id: 'ink-pin', icon: 'pin', label: 'Pin', keep: true, title: 'Turn this stroke into a note' }, () => InkManager.pinSelected());
-        add({ id: 'ink-del', icon: 'trash', danger: true, title: 'Delete stroke' }, () => InkManager.deleteSelected());
+        const cols = new Set(ink.strokes().map(s => String(s.color).toLowerCase()));
+        parts.push(`<span class="sb-count">${plural(c.n, 'stroke')}</span>`); sep();
+        INK_DOTS.forEach(([col, name]) => add({ id: 'ink-' + col, dot: col, on: cols.size === 1 && cols.has(col), title: 'Colour: ' + name.toLowerCase() }, () => ink.recolor(col)));
+        sep(); makeNote(c.n);
+        add({ id: 'ink-dup', icon: 'copy', title: 'Duplicate' }, () => Workspace.duplicateSelection());
+        add({ id: 'ink-more', icon: 'more', title: 'More ink options' }, (e) => DQBUI.Menu.open({ anchor: e.currentTarget, items: Actions.inkMenuItems(), align: 'end', place: isMobile() ? 'above' : 'below', title: 'Ink' }));
+        add({ id: 'ink-del', icon: 'trash', danger: true, title: c.n > 1 ? `Delete ${c.n} strokes` : 'Delete stroke' }, () => Workspace.deleteSelection());
       } else if (c.kind === 'bk') {
-        add({ id: 'bk-del', icon: 'trash', danger: true, label: 'Delete', keep: true, title: 'Delete item' }, () => Breakout.deleteSelected());
+        parts.push(`<span class="sb-count">${plural(c.items.length, 'item')}${c.n ? ' · ' + plural(c.n, 'stroke') : ''}</span>`); sep();
+        if (c.n) makeNote(c.n);
+        add({ id: 'bk-dup', icon: 'copy', title: 'Duplicate' }, () => Breakout.duplicateSelected());
+        add({ id: 'bk-del', icon: 'trash', danger: true, label: 'Delete', keep: true, title: 'Delete the selection' }, () => Breakout.deleteSelected());
+      } else if (c.kind === 'mixed') {
+        parts.push(`<span class="sb-count">${plural(c.items.length, 'item')} · ${plural(c.n, 'stroke')}</span>`); sep();
+        makeNote(c.n);
+        if (c.items.length > 1) add({ id: 'arr', icon: 'grid', title: 'Arrange' }, (e) => Shell.Arrange.open(e.currentTarget));
+        if (c.items.some(i => i.type === 'note')) add({ id: 'mtz', icon: 'zone', title: 'Move notes to a zone' }, () => Actions.showZoneList());
+        add({ id: 'dup', icon: 'copy', title: 'Duplicate' }, Actions.duplicate);
+        sep(); add({ id: 'del', icon: 'trash', danger: true, title: 'Delete' }, () => Actions.delete());
       } else if (c.kind === 'many') {
         parts.push(`<span class="sb-count">${c.items.length} selected</span>`); sep();
-        const grouped = !!c.items[0].groupId;
+        const grouped = !!c.items[0].groupId, ids = c.items.map(i => i.id);
         add({ id: 'grp', icon: grouped ? 'ungroup' : 'group', title: grouped ? 'Ungroup' : 'Group' }, grouped ? Actions.ungroupSelection : Actions.groupSelection);
         add({ id: 'arr', icon: 'grid', title: 'Arrange' }, (e) => Shell.Arrange.open(e.currentTarget));
+        const textNotes = c.items.filter(i => i.type === 'note' && !i.src);
+        if (textNotes.length) add({ id: 'type', icon: 'note', title: 'Change note type' }, (e) => DQBUI.Menu.open({ anchor: e.currentTarget, place: isMobile() ? 'above' : 'below', title: `Change ${plural(textNotes.length, 'note')} to`, items: ['notice', 'wonder', 'idea', 'test'].map(k => ({ label: `${TYPES[k].icon}  ${TYPES[k].lbl}`, checked: textNotes.every(n => n.sub === k), onClick: () => Actions.setTypeMany(textNotes.map(n => n.id), k) })) }));
         if (c.items.some(i => i.type === 'note')) add({ id: 'mtz', icon: 'zone', title: 'Move to zone' }, () => Actions.showZoneList());
+        const zones = c.items.filter(Network.openableZone);
+        if (zones.length) {
+          const open = Network.openZoneIds(), allOpen = zones.every(z => open.includes(z.id)), zids = zones.map(z => z.id);
+          add({ id: 'ozs', icon: allOpen ? 'stop' : 'broadcast', label: allOpen ? (zones.length > 1 ? 'Close zones' : 'Close zone') : (zones.length > 1 ? `Open ${zones.length} zones` : 'Open zone'), keep: true, accent: !allOpen, on: allOpen, title: allOpen ? 'Stop students adding to these zones' : 'Let students add notes to these zones' }, () => (allOpen ? Network.closeZones(zids) : Network.openZones(zids)));
+        }
+        const allLocked = c.items.every(i => i.locked);
+        add({ id: 'lock', icon: allLocked ? 'unlock' : 'lock', on: allLocked, title: allLocked ? 'Unlock' : 'Lock in place' }, () => Actions.lockMany(ids, !allLocked));
         add({ id: 'dup', icon: 'copy', title: 'Duplicate' }, Actions.duplicate);
         sep(); add({ id: 'del', icon: 'trash', danger: true, title: 'Delete' }, () => Actions.delete());
       } else {
@@ -331,25 +366,33 @@
     }
   };
   Shell.onSelection = function () { Shell.SelBar.render(); Shell.Panel.onSelection && Shell.Panel.onSelection(); };
+  /** True while the selection itself is being dragged (or the canvas panned) in the current workspace. */
+  const selDragging = () => {
+    const m = Workspace.mode;
+    if (m === 'board') return !!(State.drag && (State.drag.mode === 'move' || State.drag.mode === 'pan') && (State.drag.moved || State.drag.mode === 'pan'));
+    const d = m === 'consensus' ? Consensus.drag : Breakout.drag;
+    return !!(d && (d.moved || d.mode === 'pan'));
+  };
   Shell.positionSelBar = function () {
     const bar = $('selbar'); if (!bar || bar.hidden) return;
-    if (isMobile()) { bar.style.left = bar.style.top = ''; bar.style.translate = ''; bar.style.opacity = State.drag && State.drag.mode === 'move' && State.drag.moved ? '0.3' : ''; return; }
+    if (isMobile()) { bar.style.left = bar.style.top = ''; bar.style.translate = ''; bar.style.opacity = selDragging() ? '0.3' : ''; return; }
     const c = Shell.SelBar.ctx(); if (!c) return;
     let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
-    if (c.kind === 'ink') { const p = InkManager.selPoint || { x: innerWidth / 2, y: innerHeight / 2 }; l = r = p.x; t = b = p.y; }
-    else {
-      const ids = c.kind === 'bk' ? ['bk-' + Breakout._state.selectedId] : State.selection;
-      ids.forEach(id => { const el = document.getElementById(id); if (!el) return; const rc = el.getBoundingClientRect(); l = Math.min(l, rc.left); t = Math.min(t, rc.top); r = Math.max(r, rc.right); b = Math.max(b, rc.bottom); });
-    }
+    const grow = (rc) => { if (!rc) return; l = Math.min(l, rc.left); t = Math.min(t, rc.top); r = Math.max(r, rc.right); b = Math.max(b, rc.bottom); };
+    const ids = c.kind === 'bk' ? c.items.map(i => 'bk-' + i.id) : (Workspace.mode === 'board' ? State.selection : []);
+    ids.forEach(id => { const el = document.getElementById(id); if (el) grow(el.getBoundingClientRect()); });
+    if (c.n) grow(Workspace.ink().screenRect());
     if (!isFinite(l)) { bar.style.opacity = '0'; return; }
     const w = bar.offsetWidth, h = bar.offsetHeight;
     let x = (l + r) / 2, y = t - 14, below = false;
     if (y - h < 70) { y = b + 14; below = true; }
-    x = Math.max(w / 2 + 12, Math.min(innerWidth - w / 2 - 12, x));
+    const clear = Viewport.rect();                                                   // stay clear of the tool rail and the docked panel
+    const lo = w / 2 + 12 + (clear.w > w + 24 ? clear.x : 0), hi = (clear.w > w + 24 ? clear.x + clear.w : innerWidth) - w / 2 - 12;
+    x = Math.max(lo, Math.min(hi, x));
     y = Math.max(h + 70, Math.min(innerHeight - 20 - (below ? h : 0), y));
     bar.style.left = x + 'px'; bar.style.top = y + 'px';
     bar.style.translate = below ? '-50% 0' : '-50% -100%';
-    bar.style.opacity = (State.drag && (State.drag.mode === 'move' || State.drag.mode === 'pan') && (State.drag.moved || State.drag.mode === 'pan')) ? '0.25' : '';
+    bar.style.opacity = selDragging() ? '0.25' : '';
   };
 
   /* ====================================================================== */
@@ -386,14 +429,37 @@
       const it = State.items.find(i => i.id === a.targetId);
       const kind = a.payload && a.payload.subType || a.type;
       const names = { ACT_VOTE: 'Vote', ACT_SORT: 'Rank', ACT_DISCUSS: 'Discussion', OPEN_ZONE: 'Open zone', ACT_POLL: 'Poll', ACT_GRAPH: 'Live graph', EXIT_TICKET: 'Exit ticket' };
-      $('act-name').textContent = (names[kind] || 'Activity') + (it && it.title ? ` · ${it.title}` : (it && it.q ? ` · ${it.q}` : ''));
-      $('act-info').textContent = a.payload && a.payload.items && a.payload.items.length ? `${a.payload.items.length} notes · ${Network.studentCount()} students connected` : `${Network.studentCount()} students connected`;
+      const n = Network.studentCount(), stu = `${n} student${n === 1 ? '' : 's'} connected`;
+      if (kind === 'OPEN_ZONE') {
+        const zones = Network.openZoneItems();
+        $('act-name').textContent = zones.length === 1 ? `Open zone · ${zones[0].title || 'Zone'}` : `${zones.length} zones open`;
+        $('act-info').textContent = stu;
+        Shell.renderOpenZones(zones);
+      } else {
+        $('act-name').textContent = (names[kind] || 'Activity') + (it && it.title ? ` · ${it.title}` : (it && it.q ? ` · ${it.q}` : ''));
+        $('act-info').textContent = a.payload && a.payload.items && a.payload.items.length ? `${a.payload.items.length} notes · ${stu}` : stu;
+        const res = $('act-results'); if (res && res._oz) Shell.setActivityResults('<div class="muted">Waiting for responses…</div>');
+      }
     } else {
       const res = $('act-results');
-      if (res && !res.querySelector('.empty')) res.innerHTML = `<div class="empty"><div class="em-ico">${ic('vote', 'lg')}</div><div class="em-t">No activity running</div><div>Open a zone, run a vote or rank from a zone’s toolbar, or broadcast a poll or exit ticket.</div></div>`;
+      if (res && !res.querySelector('.empty')) Shell.setActivityResults(`<div class="empty"><div class="em-ico">${ic('vote', 'lg')}</div><div class="em-t">No activity running</div><div>Open one or more zones, run a vote or rank from a zone’s toolbar, or broadcast a poll or exit ticket.</div></div>`);
     }
   };
-  Shell.setActivityResults = function (html) { const r = $('act-results'); if (r) r.innerHTML = html; };
+  /** Activity tab while zones are open: who writes where, and anyone left without a zone. */
+  Shell.renderOpenZones = function (zones) {
+    const res = $('act-results'); if (!res) return;
+    const esc = DQBUI.esc, students = Object.values(State.students).filter(s => s.role === 'student');
+    const rows = zones.map(z => {
+      const col = DQBUI.safeColor(z.color), who = students.filter(s => Network.zonesFor(s).placed && (!col || s.color === col)).length;
+      return `<div class="oz-row" role="listitem"${col ? ` style="--zc:${col}"` : ''}><button type="button" class="oz-main" data-oz="show" data-id="${esc(z.id)}" title="Show on the board"><span class="oz-dot${col ? '' : ' any'}"></span><span class="grow"><span class="t">${esc(z.title || 'Zone')}</span><span class="s">${col ? `${esc(groupName(col))} group · ` : 'Everyone · '}${who} student${who === 1 ? '' : 's'}</span></span></button><button type="button" class="btn btn-ghost btn-sm" data-oz="close" data-id="${esc(z.id)}" aria-label="Close ${esc(z.title || 'Zone')}">Close</button></div>`;
+    }).join('');
+    const un = Network.unplaced(), names = un.slice(0, 5).map(([, s]) => esc(s.name)).join(', ') + (un.length > 5 ? ` and ${un.length - 5} more` : '');
+    const alert = un.length ? `<div class="oz-alert" role="status"><div><b>${un.length} student${un.length === 1 ? ' has' : 's have'} no zone of their own</b> (${names}). ${State.settings.anyZone ? 'For now they can pick any open zone.' : 'They are waiting until you put them in a group.'}</div><div class="row"><button type="button" class="btn btn-soft btn-sm" data-oz="assign">${ic('user-plus', 'sm')}Put them in groups</button><button type="button" class="btn btn-ghost btn-sm" data-oz="groups">Groups…</button></div></div>` : '';
+    const tip = zones.length === 1 ? `<p class="muted oz-tip">Open more zones to run them side by side. Give a zone a colour to make it one group’s zone.</p>` : '';
+    const html = `<div class="oz-list" role="list" aria-label="Open zones">${rows}</div>${alert}${tip}`;
+    if (res._oz !== html) { res._oz = html; res.innerHTML = html; }
+  };
+  Shell.setActivityResults = function (html) { const r = $('act-results'); if (r) { r._oz = null; r.innerHTML = html; } };
   Shell.queueCount = () => State.pending.length;
   Shell.syncQueue = function (flash) {
     const n = State.pending.length;
@@ -453,20 +519,29 @@
         box.innerHTML = `<div class="empty"><div class="em-ico">${ic('users', 'lg')}</div><div class="em-t">Waiting for students</div><div>Share the code or QR so students can join from any phone, tablet or laptop.</div><button type="button" class="btn btn-primary" id="roster-share">${ic('qr')}Show join code</button></div>`;
         on($('roster-share'), 'click', () => Shell.Share.open());
       } else {
-        const COLORS = { '#ef4444': 'Red', '#3b82f6': 'Blue', '#10b981': 'Green', '#f97316': 'Orange', '#8b5cf6': 'Purple' };
-        box.innerHTML = list.map(([pid, s]) => `<div class="stu${State.muted[s.sid] ? ' muted-stu' : ''}"><div class="av">${DQBUI.esc(s.avatar)}${s.color ? `<span class="pip" style="background:${DQBUI.safeColor(s.color)}"></span>` : ''}</div><div class="grow"><div class="nm truncate">${DQBUI.esc(s.name)}</div><div class="st">${State.muted[s.sid] ? 'Muted · can’t add notes' : (s.color ? (COLORS[s.color] || 'Group') + ' group' : 'Connected')}</div></div><button type="button" class="icon-btn" data-pid="${DQBUI.esc(pid)}" aria-label="Actions for ${DQBUI.esc(s.name)}">${ic('more')}</button></div>`).join('') + (cohosts ? `<div class="stu"><div class="av">👑</div><div class="grow"><div class="nm">Co-host${cohosts > 1 ? 's' : ''}</div><div class="st">${cohosts} connected</div></div></div>` : '');
+        const zonesLive = Network._openZonesRunning();
+        const status = (s) => {
+          if (State.muted[s.sid]) return 'Muted · can’t add notes';
+          const g = s.color ? `${groupName(s.color)} group` : '';
+          if (zonesLive && !Network.zonesFor(s).placed) return (g ? g + ' · ' : 'No group · ') + (State.settings.anyZone ? 'picks any zone' : 'waiting for a zone');
+          return g || 'Connected';
+        };
+        box.innerHTML = list.map(([pid, s]) => `<div class="stu${State.muted[s.sid] ? ' muted-stu' : ''}"><div class="av">${DQBUI.esc(s.avatar)}${s.color ? `<span class="pip" style="background:${DQBUI.safeColor(s.color)}"></span>` : ''}</div><div class="grow"><div class="nm truncate">${DQBUI.esc(s.name)}</div><div class="st">${DQBUI.esc(status(s))}</div></div><button type="button" class="icon-btn" data-pid="${DQBUI.esc(pid)}" aria-label="Actions for ${DQBUI.esc(s.name)}">${ic('more')}</button></div>`).join('') + (cohosts ? `<div class="stu"><div class="av">👑</div><div class="grow"><div class="nm">Co-host${cohosts > 1 ? 's' : ''}</div><div class="st">${cohosts} connected</div></div></div>` : '');
         $$('#roster [data-pid]').forEach(b => on(b, 'click', () => {
           const pid = b.dataset.pid, s = State.students[pid]; if (!s) return;
           const items = [
             { label: State.muted[s.sid] ? 'Allow notes again' : 'Mute (stop notes)', icon: State.muted[s.sid] ? 'volume-2' : 'volume-x', onClick: () => Network.toggleMute(pid) },
             { header: 'Colour group' }
-          ].concat(Object.entries(COLORS).map(([c, n]) => ({ label: n, checked: s.color === c, onClick: () => Network.assignStudentColor(pid, c) })))
+          ].concat(GROUPS.map(g => ({ label: g.name, checked: s.color === g.color, onClick: () => Network.assignStudentColor(pid, g.color) })))
+           .concat(s.color ? [{ label: 'No group', icon: 'close', onClick: () => Network.setStudentColor(pid, null) }] : [])
            .concat([{ separator: true }, { label: 'Remove from class', icon: 'user-x', danger: true, onClick: () => Network.kick(pid) }]);
           DQBUI.Menu.open({ anchor: b, items, align: 'end', title: s.name });
         }));
       }
       if (Workspace.mode === 'consensus') Consensus.renderParticipants();
       if (Workspace.mode === 'breakout') Breakout.renderParticipants();
+      if (Shell.Groups && Shell.Groups.ov) Shell.Groups.refresh();
+      if (Network._openZonesRunning()) Shell.syncActivity();
       Shell.syncNav();
     },
     init() {
@@ -482,13 +557,22 @@
         const id = b.closest('[data-id]').dataset.id; Network.approve(id, b.dataset.q === 'yes');
       });
       // class rules
-      const rules = JSON.parse(localStorage.getItem('dqb_rules') || '{}');
-      State.settings.names = rules.names !== false; State.settings.approve = !!rules.approve;
-      const sync = () => { $('rule-names').setAttribute('aria-checked', String(State.settings.names)); $('rule-approve').setAttribute('aria-checked', String(State.settings.approve)); };
+      let rules = {}; try { rules = JSON.parse(localStorage.getItem('dqb_rules') || '{}') || {}; } catch (e) { /* ignore */ }
+      State.settings.names = rules.names !== false; State.settings.approve = !!rules.approve; State.settings.anyZone = rules.anyZone !== false;
+      const sync = () => { $('rule-names').setAttribute('aria-checked', String(State.settings.names)); $('rule-approve').setAttribute('aria-checked', String(State.settings.approve)); $('rule-anyzone').setAttribute('aria-checked', String(State.settings.anyZone)); };
       sync();
-      const save = () => { localStorage.setItem('dqb_rules', JSON.stringify(State.settings)); sync(); Network.broadcast({ type: 'RULES', rules: { names: State.settings.names, approve: State.settings.approve } }); };
+      const save = () => { try { localStorage.setItem('dqb_rules', JSON.stringify(State.settings)); } catch (e) { /* ignore */ } sync(); Network.broadcast({ type: 'RULES', rules: { names: State.settings.names, approve: State.settings.approve } }); };
       on($('rule-names'), 'click', () => { State.settings.names = !State.settings.names; save(); });
       on($('rule-approve'), 'click', () => { State.settings.approve = !State.settings.approve; save(); if (State.settings.approve) Toast.info('New notes will wait in Approvals until you accept them'); else if (State.pending.length) Toast.info(`${State.pending.length} notes are still waiting in Approvals`); });
+      on($('rule-anyzone'), 'click', () => { State.settings.anyZone = !State.settings.anyZone; save(); Network.pushZones(); });
+      on($('btn-groups'), 'click', () => Shell.Groups.open());
+      on($('act-results'), 'click', (e) => {
+        const b = e.target.closest('[data-oz]'); if (!b) return;
+        if (b.dataset.oz === 'assign') Network.assignUnplaced();
+        else if (b.dataset.oz === 'groups') Shell.Groups.open();
+        else if (b.dataset.oz === 'close') Network.closeZones([b.dataset.id]);
+        else if (b.dataset.oz === 'show') { const it = State.items.find(i => i.id === b.dataset.id); if (it) { Actions.sel(it.id); Viewport.centerOn(it); } }
+      });
       Shell.Panel.showTab('students'); Shell.syncQueue();
     }
   };
@@ -611,7 +695,8 @@
       { label: 'New zone here', icon: 'zone', onClick: () => Actions.create('zone', null, { x: w.x + 160, y: w.y + 160 }) },
       { label: 'Add…', icon: 'plus', onClick: () => Shell.Insert.open($('rail-add')) },
       { separator: true },
-      { label: 'Select all', icon: 'select', kbd: '⌘A', onClick: () => StateManager.setSelection(State.items.map(i => i.id)) },
+      { label: 'Select all', icon: 'select', kbd: '⌘A', onClick: () => Actions.selectAll() },
+      ...(State.ink.length ? [{ label: 'Select all ink', icon: 'pen', onClick: () => { StateManager.setSelection([]); InkSel.board.selectAll(); } }] : []),
       { label: 'Fit board to screen', icon: 'fit', kbd: '⇧1', onClick: () => Viewport.fit() }
     ] });
   };

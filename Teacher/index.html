@@ -83,6 +83,7 @@
         <svg id="consensus-ink-layer" style="overflow:visible"><defs><marker id="cm-arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="currentColor"/></marker></defs></svg>
       </div>
       <svg id="cm-temp-ink" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible"></svg>
+      <div class="ws-marquee" id="cm-marquee"></div>
     </div>
   </div>
 
@@ -95,6 +96,7 @@
         <div id="breakout-items-layer"></div>
         <svg id="bk-temp-ink" style="overflow:visible;position:absolute;inset:0;pointer-events:none;z-index:3"></svg>
       </div>
+      <div class="ws-marquee" id="bk-marquee"></div>
     </div>
   </div>
 
@@ -305,13 +307,14 @@
           </div>
         </div>
 
-        <div class="section-label">Connected students <span id="roster-count2" class="muted"></span></div>
+        <div class="row roster-head"><div class="section-label grow">Connected students <span id="roster-count2" class="muted"></span></div><button type="button" class="btn btn-ghost btn-sm" id="btn-groups"><i data-i="users" class="sm"></i>Groups</button></div>
         <div id="roster"></div>
 
         <div class="section-label">Class rules</div>
         <div class="card rules">
           <div class="rule-row"><div class="grow"><div class="t">Show student names</div><div class="s">Notes display who wrote them.</div></div><button type="button" class="switch" role="switch" id="rule-names" aria-checked="true" aria-label="Show student names on notes"></button></div>
           <div class="rule-row"><div class="grow"><div class="t">Approve notes first</div><div class="s">New notes wait in Approvals.</div></div><button type="button" class="switch" role="switch" id="rule-approve" aria-checked="false" aria-label="Require approval for student notes"></button></div>
+          <div class="rule-row"><div class="grow"><div class="t">Students without a group pick a zone</div><div class="s">When only colour zones are open. Off: they wait until you put them in a group.</div></div><button type="button" class="switch" role="switch" id="rule-anyzone" aria-checked="true" aria-label="Students without a group can pick any open zone"></button></div>
         </div>
       </section>
 

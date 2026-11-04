@@ -20,6 +20,13 @@ window.TYPES = {
     reasoning: { col: '#f0fdf4', bor: '#166534', ink: '#14532d', icon: '🔗', lbl: 'Reasoning' }
 };
 
+/* Colour groups: a student in a group writes into zones of the same colour. */
+window.GROUPS = [
+    { color: '#ef4444', name: 'Red' }, { color: '#f97316', name: 'Orange' }, { color: '#10b981', name: 'Green' },
+    { color: '#3b82f6', name: 'Blue' }, { color: '#8b5cf6', name: 'Purple' }, { color: '#ec4899', name: 'Pink' }
+];
+window.groupName = (c) => { const g = GROUPS.find(x => x.color === String(c || '').toLowerCase()); return g ? g.name : (c ? 'Colour' : ''); };
+
 /* --- STATE & HISTORY --- */
 window.State = {
     id: null, name: 'My Board',
@@ -49,21 +56,34 @@ window.State = {
     touch: { dist: 0 },
     draw: { color: '#ef4444', width: 4 },
     isCoHost: false,
-    // class rules (persisted per device, not per board)
-    settings: { names: true, approve: false },
+    // class rules (persisted per device, not per board). anyZone: students without a zone of their own may pick any open zone
+    settings: { names: true, approve: false, anyZone: true },
     pending: [],            // student notes waiting for teacher approval
     votes: {}, blocked: {}, spaceDown: false, multiSelect: false, hasEntered: false,
     muted: {},              // student id (sid) -> true
+    groupOf: {},            // student id (sid) -> group colour, so a group survives a dropped connection
     timer: { endsAt: 0, running: false, remainingMs: 0, totalMs: 0 }
 };
 
 /* --- STATE MANAGER with EVENTS --- */
 window.StateManager = {
+    _queue: null,
     _notify: (action, payload) => {
+        if (StateManager._queue) { StateManager._queue.push([action, payload]); return; }
         const event = new CustomEvent('statechange', { detail: { action, payload } });
         window.dispatchEvent(event);
     },
-    
+    /** Runs fn with change events held back, then sends them all: a composite edit (move notes and ink,
+        turn strokes into a note) becomes one undo step, because history is snapshotted on the first event. */
+    batch: (fn) => {
+        const outer = !StateManager._queue;
+        if (outer) StateManager._queue = [];
+        try { return fn(); }
+        finally {
+            if (outer) { const q = StateManager._queue; StateManager._queue = null; q.forEach(([a, p]) => StateManager._notify(a, p)); }
+        }
+    },
+
     // Full State
     setFullState: (newState, options = { silent: false }) => {
         State.items = newState.items || [];
@@ -106,9 +126,10 @@ window.StateManager = {
         if (!options.silent) StateManager._notify('items:delete', { ids });
     },
 
-    // Selection
+    // Selection (items). A new item selection also drops selected ink unless keepInk is set (shift-click, box select).
     setSelection: (ids, options = { silent: false }) => {
         State.selection = ids;
+        if (!options.keepInk && window.InkSel && InkSel.board) InkSel.board.clear(true);
         if (!options.silent) StateManager._notify('selection:set', { ids });
     },
 
@@ -147,6 +168,8 @@ window.addEventListener('statechange', (e) => {
         ActionHistory.push();
         Board.save(true);
     }
+    // an open zone was renamed, recoloured or removed: students see what they can write into now
+    if (Network.zonesWatch(action, payload)) Network._zonesChanged();
 
     // Handle rendering
     if (action.startsWith('items:') || action.startsWith('selection:') || action === 'state:fullsync') {
@@ -170,9 +193,19 @@ window.addEventListener('statechange', (e) => {
 window.ActionHistory = {
     stack: [], index: -1,
     MAX: 40, MAX_CHARS: 24000000,        // cap memory: sketches are stored as data-URIs
+    // "is this item live right now" belongs to the running activity, not to the board, so undo never touches it
+    _snap: () => JSON.stringify({ items: State.items, ink: State.ink }, (k, v) => (k === 'isOpen' ? undefined : v)),
+    _restore: (json) => {
+        const s = JSON.parse(json), live = new Set(State.items.filter(i => i.isOpen).map(i => i.id));
+        StateManager.setFullState(s, { silent: true });
+        if (State.isCoHost) State.items.forEach(i => { if (live.has(i.id)) i.isOpen = true; });   // a co-host mirrors the host's live items
+        else Network.syncOpenFlags();
+        State.selection = State.selection.filter(id => State.items.some(i => i.id === id));
+        StateManager._notify('state:fullsync', s);
+    },
     reset: () => { ActionHistory.stack = []; ActionHistory.index = -1; ActionHistory.push(); },
     push: () => {
-        const snapshot = JSON.stringify({ items: State.items, ink: State.ink });
+        const snapshot = ActionHistory._snap();
         if (ActionHistory.index > -1 && ActionHistory.stack[ActionHistory.index] === snapshot) return;
         ActionHistory.stack = ActionHistory.stack.slice(0, ActionHistory.index + 1);
         ActionHistory.stack.push(snapshot);
@@ -188,16 +221,14 @@ window.ActionHistory = {
     undo: () => {
         if (!ActionHistory.canUndo()) return;
         ActionHistory.index--;
-        StateManager.setFullState(JSON.parse(ActionHistory.stack[ActionHistory.index]));
-        State.selection = State.selection.filter(id => State.items.some(i => i.id === id));
+        ActionHistory._restore(ActionHistory.stack[ActionHistory.index]);
         if (window.Shell) { Shell.syncHistory(); Shell.onSelection(); }
         UI.toast("Undone");
     },
     redo: () => {
         if (!ActionHistory.canRedo()) return;
         ActionHistory.index++;
-        StateManager.setFullState(JSON.parse(ActionHistory.stack[ActionHistory.index]));
-        State.selection = State.selection.filter(id => State.items.some(i => i.id === id));
+        ActionHistory._restore(ActionHistory.stack[ActionHistory.index]);
         if (window.Shell) { Shell.syncHistory(); Shell.onSelection(); }
         UI.toast("Redone");
     }
@@ -580,6 +611,11 @@ window.Viewport = {
         const r = Viewport.rect();
         InputController.zoom(factor, r.x + r.w / 2, r.y + r.h / 2);
     },
+    /** Glides the board so an item sits in the middle of the clear area, keeping the zoom. */
+    centerOn: (it) => {
+        const r = Viewport.rect(), z = State.view.z;
+        Viewport.animateTo({ z, x: (r.x + r.w / 2) / z - (it.x + it.w / 2), y: (r.y + r.h / 2) / z - (it.y + it.h / 2) });
+    },
     animateTo: (target, ms) => {
         const from = { x: State.view.x, y: State.view.y, z: State.view.z };
         const dur = ms || 280, t0 = performance.now();
@@ -740,6 +776,7 @@ window.Board = {
     },
     start: (opts) => {
         opts = opts || {};
+        Network.syncOpenFlags();             // a board saved mid-activity must not reopen showing zones as live
         Render.start();
         if (window.Shell) Shell.enterBoard(opts);
         if (!State.isCoHost) Network.host();
@@ -830,8 +867,9 @@ window.Board = {
             ctx.fillStyle = col; ctx.font = '700 15px Inter, sans-serif'; ctx.fillText(z.title || 'Zone', z.x + 12, z.y - 10);
             if (z.zoneType === 'cer') { ctx.fillStyle = '#94a3b8'; ctx.font = '800 11px Inter, sans-serif'; ['CLAIM', 'EVIDENCE', 'REASONING'].forEach((l, i) => ctx.fillText(l, z.x + (z.w / 3) * i + 14, z.y + 24)); }
             if (z.zoneType === 'exit') { ctx.fillStyle = '#334155'; ctx.font = '600 14px Inter, sans-serif'; wrap(z.prompt, z.x + 14, z.y + 56, z.w - 28, 20, '600 14px Inter, sans-serif'); }
+            if (z.zoneType === 'consensus') (z.ink || []).forEach(s => InkTools.draw(ctx, s, -z.x, -z.y, 1));
         }
-        for (const s of State.ink) { if (!s.points || s.points.length < 2) continue; ctx.strokeStyle = safeColor(s.color) || '#111'; ctx.lineWidth = parseFloat(s.width) || 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(s.points[0].x, s.points[0].y); s.points.slice(1).forEach(p => ctx.lineTo(p.x, p.y)); ctx.stroke(); }
+        for (const s of State.ink) InkTools.draw(ctx, s, 0, 0, 1);
         const loadImg = (src) => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
         for (const it of others) {
             if (it.type === 'note') {
@@ -874,15 +912,228 @@ window.Board = {
     }
 };
 
-/* --- INK & DRAWING --- */
+/* --- INK TOOLS: geometry, painting and conversion shared by the board, consensus models and breakout rooms --- */
+window.InkTools = {
+    NS: 'http://www.w3.org/2000/svg',
+    /** Drawn line width (markers are drawn three times wider, at 40% opacity). */
+    width: (s) => (parseFloat(s && s.width) || 4) * (s && s.highlight ? 3 : 1),
+    pathD: (pts) => { if (!pts || !pts.length) return ''; let d = `M ${pts[0].x} ${pts[0].y}`; for (let i = 1; i < pts.length; i++) d += ` L ${pts[i].x} ${pts[i].y}`; return d; },
+    /** The two barbs and tip of an arrow stroke, or null. */
+    arrowHead: (s) => {
+        const p = s && s.points; if (!s.arrow || !p || p.length < 2) return null;
+        const a = p[p.length - 1]; let b = p[0];
+        for (let i = p.length - 2; i >= 0; i--) { if (Math.hypot(a.x - p[i].x, a.y - p[i].y) > 8) { b = p[i]; break; } }
+        const ang = Math.atan2(a.y - b.y, a.x - b.x), L = 10 + (parseFloat(s.width) || 4) * 2;
+        return { tip: a, l: { x: a.x - L * Math.cos(ang - 0.45), y: a.y - L * Math.sin(ang - 0.45) }, r: { x: a.x - L * Math.cos(ang + 0.45), y: a.y - L * Math.sin(ang + 0.45) } };
+    },
+    /** World bounds of strokes, padded by half the line width (and arrow heads). */
+    bounds: (strokes) => {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        (strokes || []).forEach(s => {
+            if (!s || !Array.isArray(s.points)) return;
+            const r = InkTools.width(s) / 2 + (s.arrow ? 10 + (parseFloat(s.width) || 4) * 2 : 0);
+            s.points.forEach(p => { if (p.x - r < minX) minX = p.x - r; if (p.y - r < minY) minY = p.y - r; if (p.x + r > maxX) maxX = p.x + r; if (p.y + r > maxY) maxY = p.y + r; });
+        });
+        return isFinite(minX) ? { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY } : null;
+    },
+    segDist: (px, py, ax, ay, bx, by) => {
+        const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+        const t = l2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2)) : 0;
+        return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+    },
+    /** True when the world point (x, y) is within tol of the stroke's line. */
+    hit: (s, x, y, tol) => {
+        const p = s && s.points; if (!p || !p.length) return false;
+        const r = tol + InkTools.width(s) / 2, b = InkTools.bounds([s]);
+        if (!b || x < b.minX - tol || x > b.maxX + tol || y < b.minY - tol || y > b.maxY + tol) return false;
+        if (p.length === 1) return Math.hypot(p[0].x - x, p[0].y - y) <= r;
+        for (let i = 1; i < p.length; i++) if (InkTools.segDist(x, y, p[i - 1].x, p[i - 1].y, p[i].x, p[i].y) <= r) return true;
+        return false;
+    },
+    /** True when any part of the stroke lies inside the world rectangle {x0, y0, x1, y1}. */
+    inRect: (s, r) => {
+        const p = s && s.points; if (!p || !p.length) return false;
+        const x0 = Math.min(r.x0, r.x1), x1 = Math.max(r.x0, r.x1), y0 = Math.min(r.y0, r.y1), y1 = Math.max(r.y0, r.y1);
+        if (p.some(q => q.x >= x0 && q.x <= x1 && q.y >= y0 && q.y <= y1)) return true;
+        const b = InkTools.bounds([s]);
+        if (!b || b.maxX < x0 || b.minX > x1 || b.maxY < y0 || b.minY > y1) return false;
+        const o = (a, c, d) => Math.sign((c.x - a.x) * (d.y - a.y) - (c.y - a.y) * (d.x - a.x));
+        const cross = (a, c, d, e) => o(a, c, d) !== o(a, c, e) && o(d, e, a) !== o(d, e, c);
+        const edges = [[{ x: x0, y: y0 }, { x: x1, y: y0 }], [{ x: x1, y: y0 }, { x: x1, y: y1 }], [{ x: x1, y: y1 }, { x: x0, y: y1 }], [{ x: x0, y: y1 }, { x: x0, y: y0 }]];
+        for (let i = 1; i < p.length; i++) for (const [e0, e1] of edges) if (cross(p[i - 1], p[i], e0, e1)) return true;
+        return false;
+    },
+    translate: (s, dx, dy) => ({ ...s, points: s.points.map(p => ({ x: p.x + dx, y: p.y + dy })) }),
+    /**
+     * Paints strokes into an <svg>: one <g data-ink="id"> per stroke so a selection can be moved by transform.
+     * o.sel (Set) draws a halo behind selected strokes; o.offset {dx, dy} shifts them (live drag preview).
+     */
+    paint: (svg, strokes, o) => {
+        if (!svg) return;
+        o = o || {};
+        const NS = InkTools.NS, sel = o.sel && o.sel.size ? o.sel : null, off = o.offset;
+        const mk = (tag, attrs) => { const el = document.createElementNS(NS, tag); Object.keys(attrs).forEach(k => el.setAttribute(k, attrs[k])); return el; };
+        svg.textContent = '';
+        const frag = document.createDocumentFragment(), picked = [];
+        (strokes || []).forEach(s => {
+            if (!s || !Array.isArray(s.points) || s.points.length < 2) return;
+            const g = mk('g', { 'data-ink': s.id }), d = InkTools.pathD(s.points), col = safeColor(s.color) || '#000000', w = InkTools.width(s);
+            const isSel = !!(sel && sel.has(s.id));
+            if (isSel) { g.appendChild(mk('path', { d, class: 'ink-halo', 'stroke-width': w + 10, fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })); picked.push(s); }
+            const path = mk('path', { d, stroke: col, 'stroke-width': w, fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+            if (s.highlight) path.setAttribute('opacity', '0.4');
+            g.appendChild(path);
+            const ah = InkTools.arrowHead(s);
+            if (ah) g.appendChild(mk('path', { d: `M ${ah.l.x} ${ah.l.y} L ${ah.tip.x} ${ah.tip.y} L ${ah.r.x} ${ah.r.y} Z`, fill: col, stroke: col, 'stroke-width': Math.max(1, (parseFloat(s.width) || 4) / 2), 'stroke-linejoin': 'round' }));
+            if (isSel && off) g.setAttribute('transform', `translate(${off.dx} ${off.dy})`);
+            frag.appendChild(g);
+        });
+        if (picked.length > 1) {
+            const b = InkTools.bounds(picked), pad = 6;
+            const box = mk('rect', { class: 'ink-selbox', x: b.minX - pad, y: b.minY - pad, width: b.w + pad * 2, height: b.h + pad * 2, rx: 6 });
+            if (off) box.setAttribute('transform', `translate(${off.dx} ${off.dy})`);
+            frag.appendChild(box);
+        }
+        svg.appendChild(frag);
+    },
+    /** Draws one stroke on a 2D canvas; world point p lands at ((p.x - ox) * k, (p.y - oy) * k). */
+    draw: (ctx, s, ox, oy, k) => {
+        const p = s && s.points; if (!p || p.length < 2) return;
+        k = k || 1; ox = ox || 0; oy = oy || 0;
+        const col = safeColor(s.color) || '#000000', X = q => (q.x - ox) * k, Y = q => (q.y - oy) * k;
+        ctx.save();
+        ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.lineWidth = InkTools.width(s) * k;
+        if (s.highlight) ctx.globalAlpha = 0.4;
+        ctx.beginPath(); ctx.moveTo(X(p[0]), Y(p[0])); for (let i = 1; i < p.length; i++) ctx.lineTo(X(p[i]), Y(p[i])); ctx.stroke();
+        const ah = InkTools.arrowHead(s);
+        if (ah) { ctx.lineWidth = Math.max(1, (parseFloat(s.width) || 4) / 2) * k; ctx.beginPath(); ctx.moveTo(X(ah.l), Y(ah.l)); ctx.lineTo(X(ah.tip), Y(ah.tip)); ctx.lineTo(X(ah.r), Y(ah.r)); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+        ctx.restore();
+    },
+    /**
+     * Renders strokes into one transparent PNG, sharp at up to 2x, kept small enough to sync to students.
+     * Returns { src, x, y, w, h } where x/y/w/h is the drawing's box on the board, or null.
+     */
+    toImage: (strokes, o) => {
+        o = o || {};
+        const b = InkTools.bounds(strokes); if (!b) return null;
+        const m = o.margin == null ? 10 : o.margin;
+        const w = Math.max(24, b.w + m * 2), h = Math.max(24, b.h + m * 2), x = (b.minX + b.maxX) / 2 - w / 2, y = (b.minY + b.maxY) / 2 - h / 2;
+        let k = Math.min(2, (o.maxSide || 1800) / Math.max(w, h));
+        for (let attempt = 0; attempt < 5; attempt++) {
+            const cv = document.createElement('canvas');
+            cv.width = Math.max(1, Math.round(w * k)); cv.height = Math.max(1, Math.round(h * k));
+            const ctx = cv.getContext('2d');
+            strokes.forEach(s => InkTools.draw(ctx, s, x, y, k));
+            const src = cv.toDataURL('image/png');
+            if (src.length <= (o.maxBytes || 1400000)) return { src, x, y, w, h };
+            k *= 0.6;
+        }
+        return null;
+    },
+    /** Groups strokes whose boxes touch or sit within `gap` of each other: one group per drawing. */
+    clusters: (strokes, gap) => {
+        gap = gap == null ? 60 : gap;
+        const n = strokes.length, box = strokes.map(s => InkTools.bounds([s])), parent = strokes.map((_, i) => i);
+        const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+        for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+            const a = box[i], c = box[j];
+            if (a && c && a.minX - gap <= c.maxX && c.minX - gap <= a.maxX && a.minY - gap <= c.maxY && c.minY - gap <= a.maxY) parent[find(i)] = find(j);
+        }
+        const groups = new Map();
+        strokes.forEach((s, i) => { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(s); });
+        return [...groups.values()];
+    }
+};
+
+/**
+ * Selected ink on one canvas. Each workspace (board, consensus model, breakout room) creates one with an adapter:
+ *   ink()            current strokes          zoom()     current zoom        svg()   the <svg> the strokes are painted in
+ *   commit(newInk)   store + history + sync   changed()  repaint + toolbar   toNotes(images, keepInk) turn drawings into notes
+ */
+window.InkSel = {
+    THICKNESS: [['Thin', 2], ['Medium', 4], ['Thick', 8], ['Extra thick', 14]],
+    create: (cfg) => {
+        const api = {
+            sel: new Set(),
+            count: () => api.sel.size,
+            has: (id) => api.sel.has(id),
+            ids: () => [...api.sel],
+            strokes: () => cfg.ink().filter(s => api.sel.has(s.id)),
+            prune: () => { if (!api.sel.size) return; const live = new Set(cfg.ink().map(s => s.id)); api.sel.forEach(id => { if (!live.has(id)) api.sel.delete(id); }); },
+            set: (ids, additive) => { if (!additive) api.sel.clear(); (ids || []).forEach(id => api.sel.add(id)); cfg.changed(); },
+            toggle: (id) => { if (api.sel.has(id)) api.sel.delete(id); else api.sel.add(id); cfg.changed(); },
+            clear: (quiet) => { if (!api.sel.size) return; api.sel.clear(); if (!quiet) cfg.changed(); },
+            selectAll: () => { api.sel = new Set(cfg.ink().map(s => s.id)); cfg.changed(); },
+            /** Topmost stroke under a world point, with a tolerance in screen pixels. */
+            hitAt: (x, y, tolPx) => { const ink = cfg.ink(), tol = (tolPx || 10) / (cfg.zoom() || 1); for (let i = ink.length - 1; i >= 0; i--) if (InkTools.hit(ink[i], x, y, tol)) return ink[i].id; return null; },
+            inRect: (r) => cfg.ink().filter(s => InkTools.inRect(s, r)).map(s => s.id),
+            bounds: () => InkTools.bounds(api.strokes()),
+            /** Union of the selected strokes' boxes on screen (for placing the selection toolbar). */
+            screenRect: () => {
+                const svg = cfg.svg(); if (!svg || !api.sel.size) return null;
+                let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+                svg.querySelectorAll('g[data-ink]').forEach(g => { if (!api.sel.has(g.getAttribute('data-ink'))) return; const rc = g.getBoundingClientRect(); if (!rc.width && !rc.height) return; l = Math.min(l, rc.left); t = Math.min(t, rc.top); r = Math.max(r, rc.right); b = Math.max(b, rc.bottom); });
+                return isFinite(l) ? { left: l, top: t, right: r, bottom: b } : null;
+            },
+            /** Live drag preview: shifts the painted selection without touching the data. */
+            preview: (dx, dy) => {
+                const svg = cfg.svg(); if (!svg) return;
+                const t = `translate(${dx} ${dy})`;
+                svg.querySelectorAll('g[data-ink]').forEach(g => { if (api.sel.has(g.getAttribute('data-ink'))) g.setAttribute('transform', t); });
+                const box = svg.querySelector('.ink-selbox'); if (box) box.setAttribute('transform', t);
+            },
+            map: (fn) => { if (!api.sel.size) return; cfg.commit(cfg.ink().map(s => (api.sel.has(s.id) ? fn(s) : s))); },
+            recolor: (c) => { c = safeColor(c); if (c) api.map(s => ({ ...s, color: c })); },
+            setStrokeWidth: (w) => { w = Math.max(1, Math.min(40, parseFloat(w) || 4)); api.map(s => ({ ...s, width: w })); },
+            translate: (dx, dy) => { if (dx || dy) api.map(s => InkTools.translate(s, dx, dy)); },
+            remove: () => {
+                const n = api.sel.size; if (!n) return 0;
+                const keep = cfg.ink().filter(s => !api.sel.has(s.id));
+                api.sel.clear(); cfg.commit(keep); cfg.changed();
+                return n;
+            },
+            duplicate: (dx, dy) => {
+                const copies = api.strokes().map(s => ({ ...InkTools.translate(s, dx == null ? 24 : dx, dy == null ? 24 : dy), id: genId() }));
+                if (!copies.length) return [];
+                api.sel = new Set(copies.map(c => c.id));
+                cfg.commit(cfg.ink().concat(copies)); cfg.changed();
+                return copies;
+            },
+            /** The selected strokes become ONE sketch note (as many images as asked when `each` is set). */
+            combine: (each) => {
+                const strokes = api.strokes(); if (!strokes.length) return null;
+                const images = (each ? strokes.map(s => [s]) : [strokes]).map(g => InkTools.toImage(g)).filter(Boolean);
+                if (!images.length) { UI.toast('That drawing is too large to turn into a note', 'error'); return null; }
+                const keep = cfg.ink().filter(s => !api.sel.has(s.id));
+                api.sel.clear();
+                const made = cfg.toNotes(images, keep);
+                UI.toast(images.length === 1 ? (strokes.length > 1 ? `${strokes.length} strokes combined into one note` : 'Stroke turned into a note') : `${images.length} notes made from your ink`, 'success');
+                return made;
+            },
+            /** Every drawing (strokes that touch or sit close together) becomes its own note. */
+            pinAll: () => {
+                const ink = cfg.ink();
+                if (!ink.length) { UI.toast('There is no ink to pin', 'warn'); return null; }
+                const images = InkTools.clusters(ink).map(g => InkTools.toImage(g)).filter(Boolean);
+                if (!images.length) return null;
+                api.sel.clear();
+                const made = cfg.toNotes(images, []);
+                UI.toast(`Pinned ${ink.length} stroke${ink.length === 1 ? '' : 's'} as ${images.length} note${images.length === 1 ? '' : 's'}`, 'success');
+                return made;
+            }
+        };
+        return api;
+    }
+};
+
+/* --- INK & DRAWING (main board) --- */
 window.InkManager = {
     currentPath: [],
     sketchMode: false,
-    selectedId: null,
-    selPoint: null,
     setColor: (c) => {
         State.draw.color = c;
-        if (InkManager.selectedId) { InkManager.colorSelected(c); return; }
+        if (InkSel.board.count()) { InkSel.board.recolor(c); if (window.Shell) Shell.syncDraw(); return; }
         if (State.tool !== 'draw') window.setTool('draw');
         if (window.Shell) Shell.syncDraw();
     },
@@ -892,40 +1143,18 @@ window.InkManager = {
         if (window.Shell) Shell.syncDraw();
         UI.toast(InkManager.sketchMode ? 'Sketch notes: each stroke becomes a note' : 'Annotate: drawing on the board');
     },
+    /** A sketch note that shows `img` where the ink was (the note's header sits just above the drawing). */
+    noteFromImage: (img) => {
+        const head = 34, caption = 36, w = Math.max(140, Math.round(img.w)), h = Math.max(140, Math.round(img.h + head + caption));
+        const cx = img.x + img.w / 2, cy = img.y + img.h / 2;
+        return { id: genId(), type: 'note', sub: 'sketch', src: img.src, text: '', x: Math.round(cx - w / 2), y: Math.round(cy - (h - head - caption) / 2 - head), w, h, groupId: null };
+    },
     strokeToItem: (pts, color, width) => {
         if (!pts || pts.length < 2) return null;
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        pts.forEach(p => {
-            minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-            maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
-        });
-        const margin = 16;
-        const bx = minX - margin, by = minY - margin;
-        const bw = Math.max(80, maxX - minX + margin * 2);
-        const contentH = Math.max(60, maxY - minY + margin * 2);
-        const bh = contentH;
-        const canvas = document.createElement('canvas');
-        canvas.width = bw; canvas.height = bh;
-        const ctx = canvas.getContext('2d');
-        ctx.strokeStyle = safeColor(color) || State.draw.color;
-        ctx.lineWidth = width || State.draw.width;
-        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        ctx.beginPath();
-        pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x - bx, p.y - by); else ctx.lineTo(p.x - bx, p.y - by); });
-        ctx.stroke();
-        const src = canvas.toDataURL();
-        const uiChrome = 70; // header (34px) + caption (36px)
-        return { id: genId(), type: 'note', sub: 'sketch', src, text: '', x: bx, y: by, w: bw, h: Math.max(140, contentH + uiChrome) };
+        const img = InkTools.toImage([{ id: 'tmp', points: pts, color: safeColor(color) || State.draw.color, width: width || State.draw.width }]);
+        return img ? InkManager.noteFromImage(img) : null;
     },
-    pinToItems: () => {
-        if (State.ink.length === 0) { UI.toast("There is no ink to pin", 'warn'); return; }
-        const newItems = State.ink.map(s => InkManager.strokeToItem(s.points, s.color, s.width)).filter(Boolean);
-        if (newItems.length > 0) {
-            StateManager.setInk([]);
-            StateManager.addItems(newItems);
-            UI.toast(`Pinned ${newItems.length} drawing${newItems.length > 1 ? 's' : ''} as notes`, 'success');
-        }
-    },
+    pinToItems: () => InkSel.board.pinAll(),
     start: (x, y) => { InkManager.currentPath = [{x,y}]; },
     move: (x, y) => { InkManager.currentPath.push({x,y}); InkManager.renderTemp(); },
     end: () => {
@@ -950,12 +1179,12 @@ window.InkManager = {
         path.setAttribute("fill", "none"); path.setAttribute("stroke-linecap", "round"); path.setAttribute("stroke-linejoin", "round");
         path.id = "temp-ink"; svg.appendChild(path);
     },
-    pointsToPath: (pts) => { if(!pts || pts.length===0) return ""; let d=`M ${pts[0].x} ${pts[0].y}`; for(let i=1;i<pts.length;i++) d+=` L ${pts[i].x} ${pts[i].y}`; return d; },
+    pointsToPath: (pts) => InkTools.pathD(pts),
     clear: async () => {
         if (!State.ink.length) { UI.toast('There is no ink to clear', 'warn'); return; }
         const ok = await DQBUI.Dialog.confirm({ title: 'Clear all ink?', message: 'Every drawing on the board will be removed. You can undo this.', confirmLabel: 'Clear ink', danger: true });
         if (!ok) return;
-        InkManager.selectedId = null; StateManager.setInk([]); if (window.Shell) Shell.onSelection();
+        InkSel.board.clear(true); StateManager.setInk([]); if (window.Shell) Shell.onSelection();
     },
     eraseAt: (x, y, inkArray, zoom) => {
         const thresh = 20 / (zoom || State.view.z);
@@ -963,53 +1192,25 @@ window.InkManager = {
         const filteredInk = inkArray.filter(s => !s.points.some(p => Math.hypot(p.x - x, p.y - y) < thresh));
         if (filteredInk.length !== initLen) return { changed: true, newInk: filteredInk };
         return { changed: false, newInk: inkArray };
-    },
-    selectStroke: (id, e) => {
-        if (State.tool !== 'select' && State.tool !== 'pan') return;
-        e.stopPropagation();
-        InkManager.selectedId = id;
-        InkManager.selPoint = { x: e.clientX, y: e.clientY };
-        State.selection = [];
-        Render.ink(); Render.all();
-        if (window.Shell) Shell.onSelection();
-    },
-    deselectStroke: () => {
-        if (!InkManager.selectedId) return;
-        InkManager.selectedId = null;
-        Render.ink();
-        if (window.Shell) Shell.onSelection();
-    },
-    hideInkToolbar: () => { if (window.Shell) Shell.onSelection(); },
-    deleteSelected: () => {
-        if (!InkManager.selectedId) return;
-        const newInk = State.ink.filter(s => s.id !== InkManager.selectedId);
-        InkManager.selectedId = null;
-        StateManager.setInk(newInk);
-        if (window.Shell) Shell.onSelection();
-    },
-    colorSelected: (color) => {
-        if (!InkManager.selectedId) return;
-        const sid = InkManager.selectedId;
-        const newInk = State.ink.map(s => s.id === sid ? { ...s, color } : s);
-        StateManager.setInk(newInk);
-        InkManager.selectedId = sid;
-        Render.ink();
-    },
-    pinSelected: () => {
-        if (!InkManager.selectedId) return;
-        const stroke = State.ink.find(s => s.id === InkManager.selectedId);
-        if (!stroke) return;
-        const item = InkManager.strokeToItem(stroke.points, stroke.color, stroke.width);
-        if (item) {
-            const newInk = State.ink.filter(s => s.id !== InkManager.selectedId);
-            InkManager.selectedId = null;
-            StateManager.setInk(newInk);
-            StateManager.addItem(item);
-            if (window.Shell) Shell.onSelection();
-            UI.toast("Stroke pinned as a note", 'success');
-        }
     }
 };
+
+InkSel.board = InkSel.create({
+    ink: () => State.ink,
+    zoom: () => State.view.z,
+    svg: () => $('ink-layer'),
+    commit: (ink) => StateManager.setInk(ink),
+    changed: () => { Render.ink(); if (window.Shell) Shell.onSelection(); },
+    toNotes: (images, keep) => {
+        const notes = images.map(InkManager.noteFromImage);
+        StateManager.batch(() => {
+            StateManager.setInk(keep);
+            StateManager.addItems(notes);
+            StateManager.setSelection(notes.map(n => n.id));
+        });
+        return notes;
+    }
+});
 
 /* --- RENDER --- */
 window.Render = {
@@ -1081,6 +1282,7 @@ window.Render = {
         const layer = $('items-layer');
         State.items.sort((a, b) => (a.type === 'zone' ? -1 : 1) - (b.type === 'zone' ? -1 : 1));
         const hasActiveZone = (State.activity.type === 'ZONE_ACT' || State.activity.type === 'EXIT_TICKET' || State.activity.type === 'WIDGET_ACT');
+        const openSet = new Set(Network.openZoneIds());
 
         State.items.forEach(i => {
             let el = document.getElementById(i.id);
@@ -1106,6 +1308,7 @@ window.Render = {
                     if (!liveBadge && iHead) { liveBadge = document.createElement('span'); liveBadge.className = 'live-badge'; liveBadge.textContent = 'Live'; iHead.querySelector('.hd-l').appendChild(liveBadge); }
                 } else if (liveBadge) liveBadge.remove();
                 const col = safeColor(i.color);
+                if (col) el.style.setProperty('--zc', col); else el.style.removeProperty('--zc');
                 if (wrapper) {
                     wrapper.style.borderColor = col || (i.zoneType === 'breakout' ? (safeColor(i.roomColor) || '#8b5cf6') : '');
                     wrapper.style.borderStyle = col ? 'solid' : '';
@@ -1126,7 +1329,7 @@ window.Render = {
             // header action button text
             const zbtn = el.querySelector('[data-act="zone-toggle"]');
             if (zbtn) {
-                const txt = (i.type === 'poll' || i.type === 'graph' || i.zoneType === 'exit') ? (i.isOpen ? 'Stop' : 'Broadcast') : (i.isOpen ? 'Open ●' : 'Open');
+                const txt = (i.type === 'poll' || i.type === 'graph' || i.zoneType === 'exit') ? (i.isOpen ? 'Stop' : 'Broadcast') : (i.isOpen ? (openSet.has(i.id) ? 'Close' : 'Stop') : 'Open');
                 if (zbtn.textContent !== txt) zbtn.textContent = txt;
                 zbtn.classList.toggle('active', !!i.isOpen);
             }
@@ -1166,37 +1369,13 @@ window.Render = {
         Render._mmDirty = true; Render._selDirty = true;
         if (window.Shell) Shell.afterRender();
     },
-    _fillInk: (svg, ink) => {
-        svg.textContent = '';
-        (ink || []).forEach(s => {
-            if (!s || !s.points) return;
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('d', InkManager.pointsToPath(s.points)); path.setAttribute('stroke', safeColor(s.color) || '#000');
-            path.setAttribute('stroke-width', parseFloat(s.width) || 4); path.setAttribute('fill', 'none'); path.setAttribute('stroke-linecap', 'round');
-            svg.appendChild(path);
-        });
-    },
+    _fillInk: (svg, ink) => { InkTools.paint(svg, ink); },
+    /** Board ink. Strokes are picked by geometry (see InputController), so the painted paths take no pointer events. */
     ink: () => {
-        const sel = InkManager.selectedId;
-        const svg = $('ink-layer'); svg.textContent = '';
-        State.ink.forEach(s => {
-            if (!s || !s.points) return;
-            const d = InkManager.pointsToPath(s.points);
-            const col = safeColor(s.color) || '#000';
-            if (sel === s.id) {
-                const halo = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                halo.setAttribute('d', d); halo.setAttribute('stroke', 'rgba(37,99,235,0.3)'); halo.setAttribute('stroke-width', (parseFloat(s.width) || 4) + 10);
-                halo.setAttribute('fill', 'none'); halo.setAttribute('stroke-linecap', 'round'); halo.setAttribute('pointer-events', 'none'); svg.appendChild(halo);
-            }
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('d', d); path.setAttribute('stroke', col); path.setAttribute('stroke-width', parseFloat(s.width) || 4);
-            path.setAttribute('fill', 'none'); path.setAttribute('stroke-linecap', 'round'); path.setAttribute('stroke-linejoin', 'round');
-            path.style.pointerEvents = 'stroke'; path.style.cursor = 'pointer';
-            // fat invisible hit area helps on touch screens
-            path.addEventListener('click', ev => InkManager.selectStroke(s.id, ev));
-            svg.appendChild(path);
-        });
-        Render._mmDirty = true;
+        InkSel.board.prune();
+        const d = State.drag, live = d && d.mode === 'move' && d.moved && d.inkIds && d.inkIds.length;
+        InkTools.paint($('ink-layer'), State.ink, { sel: InkSel.board.sel, offset: live ? { dx: d.dx || 0, dy: d.dy || 0 } : null });
+        Render._mmDirty = true; Render._selDirty = true;
     },
     minimap: () => {
         const canvas = $('minimap'), cont = $('minimap-container');
@@ -1331,6 +1510,10 @@ window.Render = {
             });
             ta.addEventListener('blur', () => { if (ta._t) { clearTimeout(ta._t); ta._t = null; StateManager.updateItem(d.id, { text: clampStr(ta.value, 2000) }); } });
         }
+        // start where it belongs: otherwise the transform transition flies a new item in from the board's origin
+        el.style.transform = `translate(${Number(d.x) || 0}px, ${Number(d.y) || 0}px)`;
+        if (d.w) el.style.width = d.w + 'px';
+        if (d.h) el.style.height = d.h + 'px';
         return el;
     },
 
@@ -1484,9 +1667,15 @@ window.Actions = {
         const inGroup = !!(selection[0] || item).groupId;
         const items = [];
         if (multi) {
+            const ids = selection.map(i => i.id), zones = selection.filter(Network.openableZone), allLocked = selection.every(i => i.locked);
             items.push({ label: inGroup ? 'Ungroup' : 'Group items', icon: 'group', onClick: inGroup ? Actions.ungroupSelection : Actions.groupSelection });
             items.push({ label: 'Arrange…', icon: 'grid', onClick: () => Shell.Arrange.open() });
             if (selection.some(i => i.type === 'note')) items.push({ label: 'Move to zone…', icon: 'zone', onClick: () => Actions.showZoneList() });
+            if (zones.length) {
+                const open = Network.openZoneIds(), allOpen = zones.every(z => open.includes(z.id));
+                items.push({ label: allOpen ? 'Close these zones' : `Open ${zones.length > 1 ? zones.length + ' zones' : 'zone'} for students`, icon: allOpen ? 'stop' : 'broadcast', onClick: () => (allOpen ? Network.closeZones(zones.map(z => z.id)) : Network.openZones(zones.map(z => z.id))) });
+            }
+            items.push({ label: allLocked ? 'Unlock all' : 'Lock all in place', icon: allLocked ? 'unlock' : 'lock', onClick: () => Actions.lockMany(ids, !allLocked) });
             items.push({ label: 'Duplicate', icon: 'copy', kbd: '⌘D', onClick: Actions.duplicate });
             items.push({ label: 'Save as template', icon: 'template', onClick: () => Actions.saveSelectionAsTemplate() });
             items.push({ separator: true });
@@ -1583,6 +1772,27 @@ window.Actions = {
         Actions.sel(z.id);
         setTimeout(() => { sel.forEach(i => { const el = $(i.id); if (el) el.classList.add('snap-anim'); }); }, 50);
     },
+    /** Adds a colour zone for each of the first n groups that has none yet, in a row near the middle of the screen,
+        and selects every zone of those groups so they can be opened together. */
+    createGroupZones: (n) => {
+        const groups = Network.groupColors(n).map(c => GROUPS.find(g => g.color === c));
+        const has = (c) => State.items.some(i => Network.openableZone(i) && i.color === c);
+        const missing = groups.filter(g => !has(g.color));
+        const w = 320, h = 360, gap = 40;
+        let zones = [];
+        if (missing.length) {
+            const total = missing.length * w + (missing.length - 1) * gap, c = Viewport.centerWorld();
+            const pos = Board.getFreeSpace(c.x - total / 2, c.y - h / 2, total, h);
+            zones = missing.map((g, k) => ({ id: genId(), type: 'zone', title: `${g.name} group`, color: g.color, x: pos.x + k * (w + gap), y: pos.y, w, h, children: [], groupId: null }));
+        }
+        const colors = new Set(groups.map(g => g.color));
+        StateManager.batch(() => {
+            if (zones.length) StateManager.addItems(zones);
+            StateManager.setSelection(State.items.filter(i => Network.openableZone(i) && colors.has(i.color)).map(i => i.id));
+        });
+        if (zones.length) Viewport.centerOn({ x: zones[0].x, y: zones[0].y, w: zones[zones.length - 1].x + w - zones[0].x, h });
+        return zones;
+    },
     groupSelection: () => {
         if (State.selection.length < 2) return;
         const groupId = genId();
@@ -1597,19 +1807,55 @@ window.Actions = {
         UI.toast("Items ungrouped");
     },
     setType: (id, sub) => { StateManager.updateItem(id, { sub }); },
+    setTypeMany: (ids, sub) => {
+        const notes = ids.map(id => State.items.find(i => i.id === id)).filter(i => i && i.type === 'note' && !i.src);
+        if (!notes.length || !TYPES[sub]) return;
+        StateManager.updateItems(notes.map(n => ({ id: n.id, props: { sub } })));
+        UI.toast(`${notes.length} note${notes.length === 1 ? '' : 's'} changed to ${TYPES[sub].lbl}`, 'success');
+    },
+    lockMany: (ids, lock) => {
+        const items = ids.map(id => State.items.find(i => i.id === id)).filter(Boolean);
+        if (!items.length) return;
+        StateManager.updateItems(items.map(i => ({ id: i.id, props: { locked: !!lock } })));
+        UI.toast(lock ? `${items.length} item${items.length === 1 ? '' : 's'} locked in place` : `${items.length} item${items.length === 1 ? '' : 's'} unlocked`);
+    },
+    /** Deletes item `id`, or everything selected — notes and ink together, as one undo step. */
     delete: (id) => {
         const targets = id ? [id] : State.selection.slice();
-        if (targets.length === 0) return;
-        const n = targets.length;
-        HierarchyManager.delete(targets);
+        const strokes = id ? 0 : InkSel.board.count();
+        if (targets.length === 0 && !strokes) return;
+        StateManager.batch(() => {
+            if (strokes) InkSel.board.remove();
+            if (targets.length) HierarchyManager.delete(targets);
+        });
         UI.closeAllMenus();
-        DQBUI.Toast.show(n > 1 ? `${n} items deleted` : 'Deleted', { action: { label: 'Undo', onClick: () => ActionHistory.undo() } });
+        const n = targets.length, what = n && strokes ? `${n} item${n === 1 ? '' : 's'} and ${strokes} stroke${strokes === 1 ? '' : 's'} deleted`
+            : (strokes ? (strokes > 1 ? `${strokes} strokes deleted` : 'Stroke deleted') : (n > 1 ? `${n} items deleted` : 'Deleted'));
+        DQBUI.Toast.show(what, { action: { label: 'Undo', onClick: () => ActionHistory.undo() } });
+    },
+    selectAll: () => {
+        InkSel.board.sel = new Set(State.ink.map(s => s.id));
+        StateManager.setSelection(State.items.map(i => i.id), { keepInk: true });
+    },
+    /** Menu for selected ink (right-click on a stroke, or ⋯ in the selection toolbar). */
+    inkMenuItems: () => {
+        const ink = Workspace.ink(), n = ink.count(), caps = Workspace.caps(), strokes = ink.strokes();
+        const items = [];
+        if (caps.combine) items.push({ label: n > 1 ? 'Make one note' : 'Make a note', icon: 'note', kbd: 'J', onClick: () => ink.combine() });
+        if (caps.combine && n > 1) items.push({ label: `Make ${n} separate notes`, icon: 'files', onClick: () => ink.combine(true) });
+        items.push({ label: 'Duplicate', icon: 'copy', kbd: '⌘D', onClick: () => Workspace.duplicateSelection() });
+        items.push({ header: 'Thickness' });
+        InkSel.THICKNESS.forEach(([lbl, px]) => items.push({ label: lbl, checked: strokes.length > 0 && strokes.every(s => (parseFloat(s.width) || 4) === px), onClick: () => ink.setStrokeWidth(px) }));
+        items.push({ separator: true });
+        items.push({ label: 'Select all ink', icon: 'select', onClick: () => ink.selectAll() });
+        items.push({ label: n > 1 ? `Delete ${n} strokes` : 'Delete stroke', icon: 'trash', danger: true, kbd: '⌫', onClick: () => Workspace.deleteSelection() });
+        return items;
     },
     sel: (id) => {
         StateManager.setSelection([id]);
         const i = State.items.find(x => x.id === id);
         if (i && i.type === 'zone') {
-            if (State.activeSorts[i.id] || State.activity && State.activity.targetId === i.id) {
+            if (State.activeSorts[i.id] || (State.activity && State.activity.targetId === i.id && !Network._openZonesRunning())) {
                 if (window.Shell && Shell.Panel.isOpen()) Shell.Panel.showTab('activity');
                 Network.updateResults(i.id);
             }
@@ -1784,9 +2030,12 @@ window.Actions = {
         }).filter(Boolean);
         StateManager.updateItems(updates);
     },
+    /** Duplicates the selection: items (with what is inside zones) and selected ink, shifted by the same amount. */
     duplicate: () => {
         const sel = State.selection.map(id => State.items.find(x => x.id === id)).filter(Boolean);
-        if (!sel.length) return;
+        const strokes = InkSel.board.count();
+        if (!sel.length && !strokes) return;
+        if (!sel.length) { InkSel.board.duplicate(); return; }
         const ids = new Set(sel.map(i => i.id));
         sel.forEach(i => { if (i.type === 'zone' && i.children) i.children.forEach(cid => ids.add(cid)); });
         const originals = [...ids].map(id => State.items.find(x => x.id === id)).filter(Boolean);
@@ -1802,8 +2051,12 @@ window.Actions = {
             if (c.parentZone) { if (map[c.parentZone]) c.parentZone = map[c.parentZone]; else delete c.parentZone; }
             return c;
         });
-        StateManager.addItems(copies);
-        StateManager.setSelection(sel.map(o => map[o.id]));
+        StateManager.batch(() => {
+            const inkCopies = strokes ? InkSel.board.duplicate(dx, dy) : [];
+            StateManager.addItems(copies);
+            if (inkCopies.length) InkSel.board.sel = new Set(inkCopies.map(c => c.id));
+            StateManager.setSelection(sel.map(o => map[o.id]), { keepInk: true });
+        });
     }
 };
 
@@ -1815,9 +2068,12 @@ window.Modes = {
         up: () => { $('viewport').classList.remove('panning'); }
     },
     Move: {
-        down: (e, id) => {
-            const item = State.items.find(i => i.id === id);
-            if (!item || item.locked) return;
+        /** Starts dragging item `id`, or — when only `inkId` is given — the selected ink led by that stroke.
+            Selected strokes travel with selected items, so a mixed selection moves as one. */
+        down: (e, id, inkId) => {
+            const item = id ? State.items.find(i => i.id === id) : null;
+            if (id && (!item || item.locked)) return;
+            if (!id && !inkId) return;
 
             AutoScroll.start();
 
@@ -1826,7 +2082,9 @@ window.Modes = {
             const wy = (e.clientY - r.top) / State.view.z - State.view.y;
 
             const moveTargetIds = new Set();
-            if (item.groupId) {
+            if (!item) {
+                State.selection.forEach(selId => { const s = State.items.find(i => i.id === selId); if (s && !s.locked) moveTargetIds.add(selId); });
+            } else if (item.groupId) {
                 State.items.forEach(i => { if (i.groupId === item.groupId) moveTargetIds.add(i.id); });
             } else if (State.selection.includes(id) && State.selection.length > 1) {
                 State.selection.forEach(selId => moveTargetIds.add(selId));
@@ -1841,10 +2099,12 @@ window.Modes = {
 
             const moveTargets = Array.from(finalTargetIds)
                 .map(iId => State.items.find(i => i.id === iId)).filter(Boolean);
+            const carriesInk = !!inkId || (!!item && State.selection.includes(id));
 
             State.drag = {
-                mode: 'move', primaryId: id,
+                mode: 'move', primaryId: item ? id : null, primaryInk: inkId || null,
                 moveTargets: moveTargets.map(i => ({ id: i.id, startX: i.x, startY: i.y })),
+                inkIds: carriesInk ? InkSel.board.ids() : [], dx: 0, dy: 0,
                 mouseStartX: wx, mouseStartY: wy, sx0: e.clientX, sy0: e.clientY, moved: false,
                 hoverZoneId: null, targetIndex: -1
             };
@@ -1864,8 +2124,8 @@ window.Modes = {
 
             AutoScroll.check(e);
 
-            const primaryItem = State.items.find(i => i.id === d.primaryId);
-            if (!primaryItem) return;
+            const primaryItem = d.primaryId ? State.items.find(i => i.id === d.primaryId) : null;
+            if (d.primaryId && !primaryItem) return;
 
             const r = $('viewport').getBoundingClientRect();
             const wx = (e.clientX - r.left) / State.view.z - State.view.x;
@@ -1873,22 +2133,23 @@ window.Modes = {
             let dx = wx - d.mouseStartX;
             let dy = wy - d.mouseStartY;
 
-            const primaryTarget = d.moveTargets.find(t => t.id === d.primaryId);
-            
-            const potentialX = primaryTarget.startX + dx;
-            const potentialY = primaryTarget.startY + dy;
+            const primaryTarget = primaryItem && d.moveTargets.find(t => t.id === d.primaryId);
+            if (primaryTarget) {
+                const potentialX = primaryTarget.startX + dx;
+                const potentialY = primaryTarget.startY + dy;
 
-            const cx = potentialX + primaryItem.w / 2;
-            const cy = potentialY + primaryItem.h / 2;
-            const hitZone = (primaryItem.type !== 'zone') && State.items.find(z => z.type === 'zone' && z.id !== primaryItem.id && cx > z.x && cx < z.x + z.w && cy > z.y && cy < z.y + z.h);
+                const cx = potentialX + primaryItem.w / 2;
+                const cy = potentialY + primaryItem.h / 2;
+                const hitZone = (primaryItem.type !== 'zone') && State.items.find(z => z.type === 'zone' && z.id !== primaryItem.id && cx > z.x && cx < z.x + z.w && cy > z.y && cy < z.y + z.h);
 
-            if (hitZone) {
-                SnapSystem.clearGuides();
-            } else {
-                const snapResult = SnapSystem.getSnap(primaryItem, potentialX, potentialY);
-                dx = snapResult.x - primaryTarget.startX;
-                dy = snapResult.y - primaryTarget.startY;
-                SnapSystem.drawGuides();
+                if (hitZone) {
+                    SnapSystem.clearGuides();
+                } else {
+                    const snapResult = SnapSystem.getSnap(primaryItem, potentialX, potentialY);
+                    dx = snapResult.x - primaryTarget.startX;
+                    dy = snapResult.y - primaryTarget.startY;
+                    SnapSystem.drawGuides();
+                }
             }
 
             d.moveTargets.forEach(target => {
@@ -1900,8 +2161,10 @@ window.Modes = {
                     if (el) el.style.transform = `translate(${item.x}px, ${item.y}px)`;
                 }
             });
+            d.dx = dx; d.dy = dy;
+            if (d.inkIds.length) InkSel.board.preview(dx, dy);
 
-            if (primaryItem.type !== 'zone') {
+            if (primaryItem && primaryItem.type !== 'zone') {
                 const currentCx = primaryItem.x + primaryItem.w / 2;
                 const currentCy = primaryItem.y + primaryItem.h / 2;
                 const currentHitZone = State.items.find(z => z.type === 'zone' && z.id !== primaryItem.id && currentCx > z.x && currentCx < z.x + z.w && currentCy > z.y && currentCy < z.y + z.h);
@@ -1972,8 +2235,13 @@ window.Modes = {
                 }
             });
 
+            State.drag = null;
+            StateManager.batch(() => Modes.Move._commit(d));
+        },
+        _commit: (d) => {
             const updatedItems = d.moveTargets.map(t => State.items.find(i => i.id === t.id)).filter(Boolean);
             const primaryItem = updatedItems.find(i => i.id === d.primaryId);
+            if (d.inkIds.length && (d.dx || d.dy)) InkSel.board.translate(d.dx, d.dy);
 
             if (primaryItem && primaryItem.type !== 'zone' && !d.hoverZoneId) {
                 const cx = primaryItem.x + primaryItem.w / 2;
@@ -2005,6 +2273,18 @@ window.Modes = {
                     // Reflow any zones items were moved away from
                     oldZoneIds.forEach(id => { if (id !== d.hoverZoneId) LayoutSystem.update(id); });
                 }
+            } else if (!primaryItem) {
+                // led by ink: a selected note stays in its zone while it is still inside it
+                const touched = new Set();
+                d.moveTargets.forEach(target => {
+                    const item = State.items.find(i => i.id === target.id);
+                    if (!item || !item.parentZone || d.moveTargets.some(t => t.id === item.parentZone)) return;
+                    const z = State.items.find(i => i.id === item.parentZone); if (!z) return;
+                    const cx = item.x + item.w / 2, cy = item.y + item.h / 2;
+                    touched.add(z.id);
+                    if (!(cx > z.x && cx < z.x + z.w && cy > z.y && cy < z.y + z.h)) HierarchyManager.unlink(item.id);
+                });
+                touched.forEach(id => LayoutSystem.update(id));
             } else {
                 d.moveTargets.forEach(target => {
                     const item = State.items.find(i => i.id === target.id);
@@ -2021,8 +2301,6 @@ window.Modes = {
             
             const updates = updatedItems.map(i => ({ id: i.id, props: { x: i.x, y: i.y } }));
             StateManager.updateItems(updates);
-
-            State.drag = null;
         }
     },
     Resize: {
@@ -2070,8 +2348,9 @@ window.Modes = {
     Marquee: {
         down: (e) => {
             const r = $('viewport').getBoundingClientRect();
-            State.drag = { mode:'box', sx: e.clientX - r.left, sy: e.clientY - r.top };
-            if(!e.shiftKey) { StateManager.setSelection([]); UI.closeAllMenus(); }
+            const additive = e.shiftKey || e.metaKey || e.ctrlKey;
+            State.drag = { mode:'box', sx: e.clientX - r.left, sy: e.clientY - r.top, baseItems: additive ? State.selection.slice() : [], baseInk: additive ? InkSel.board.ids() : [] };
+            if (!additive) { StateManager.setSelection([]); UI.closeAllMenus(); }
         },
         move: (e) => {
             const r = $('viewport').getBoundingClientRect();
@@ -2081,7 +2360,7 @@ window.Modes = {
             const m = $('marquee');
             m.style.left = l + 'px'; m.style.top = t + 'px'; m.style.width = w + 'px'; m.style.height = h + 'px'; m.style.display='block';
             const globalL = l + r.left, globalT = t + r.top, globalR = globalL + w, globalB = globalT + h;
-            
+
             const newlySelected = [];
             State.items.forEach(i => {
                 const el = document.getElementById(i.id); if(!el) return;
@@ -2090,7 +2369,10 @@ window.Modes = {
                     newlySelected.push(i.id);
                 }
             });
-            StateManager.setSelection([...new Set([...(e.shiftKey ? State.selection : []), ...newlySelected])]);
+            // ink inside the box, in world coordinates
+            const z = State.view.z, wr = { x0: l / z - State.view.x, y0: t / z - State.view.y, x1: (l + w) / z - State.view.x, y1: (t + h) / z - State.view.y };
+            InkSel.board.sel = new Set([...d.baseInk, ...InkSel.board.inRect(wr)]);
+            StateManager.setSelection([...new Set([...d.baseItems, ...newlySelected])], { keepInk: true });
         },
         up: (e) => { $('marquee').style.display='none'; State.drag = null; }
     },
@@ -2168,28 +2450,42 @@ window.InputController = {
         // leaving text editing mode when pressing elsewhere
         document.querySelectorAll('.item.editing').forEach(n => { if (!t.closest('.item.editing')) { n.classList.remove('editing'); const ta = n.querySelector('textarea'); if (ta) ta.blur(); } });
 
-        if (InkManager.selectedId && !t.closest('#ink-layer')) InkManager.deselectStroke();
         const itemEl = t.closest('.item');
         const handle = t.closest('.resize-h');
         const tool = InputController.tool();
         const evt = e;
+        const additive = e.shiftKey || e.metaKey || e.ctrlKey;
         const capture = () => { try { $('viewport').setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } };
+        // strokes are picked by distance (a fixed number of screen pixels, wider for fingers), never by their thin painted path
+        const inkAt = () => { if (itemEl) return null; const w = Viewport.toWorld(e.clientX, e.clientY); return InkSel.board.hitAt(w.x, w.y, e.pointerType === 'touch' ? 18 : 9); };
 
         if (e.button === 1 || e.button === 2) {
-            Modes.Pan.down(evt); State.drag.secondary = e.button === 2; State.drag.itemId = itemEl ? itemEl.id : null; capture(); return;
+            Modes.Pan.down(evt); State.drag.secondary = e.button === 2; State.drag.itemId = itemEl ? itemEl.id : null; State.drag.inkId = e.button === 2 ? inkAt() : null; capture(); return;
         }
         if (tool === 'pan' || tool === 'select') {
             if (handle && itemEl) { Modes.Resize.down(evt, itemEl.id); capture(); return; }
             if (itemEl) {
                 const wasSelected = State.selection.includes(itemEl.id);
-                if (!e.shiftKey && !e.metaKey && !e.ctrlKey) { if (!wasSelected) StateManager.setSelection([itemEl.id]); }
+                if (!additive) { if (!wasSelected) StateManager.setSelection([itemEl.id]); }
                 else {
                     const newSel = wasSelected ? State.selection.filter(id => id !== itemEl.id) : [...State.selection, itemEl.id];
-                    StateManager.setSelection(newSel);
+                    StateManager.setSelection(newSel, { keepInk: true });
                 }
                 Modes.Move.down(evt, itemEl.id);
-                if (State.drag) { State.drag.wasSelected = wasSelected && State.selection.length === 1; capture(); }
+                if (State.drag) { State.drag.wasSelected = wasSelected && State.selection.length === 1 && !InkSel.board.count(); capture(); }
                 return;
+            }
+            const inkId = inkAt();
+            if (inkId) {
+                const ink = InkSel.board, was = ink.has(inkId);
+                if (additive) {
+                    ink.toggle(inkId);
+                    if (ink.has(inkId)) { Modes.Move.down(evt, null, inkId); capture(); }
+                    return;
+                }
+                if (!was && (tool === 'pan' || e.pointerType === 'touch')) { Modes.Pan.down(evt); State.drag.inkTap = inkId; capture(); return; }   // a tap selects it, a drag pans
+                if (!was) { ink.sel = new Set([inkId]); StateManager.setSelection([], { keepInk: true }); }
+                Modes.Move.down(evt, null, inkId); capture(); return;
             }
             const useBox = tool === 'select' && (e.pointerType !== 'touch' || State.multiSelect);
             if (useBox) Modes.Marquee.down(evt); else Modes.Pan.down(evt);
@@ -2230,7 +2526,7 @@ window.InputController = {
             StateManager.updateView({ z: nz, x: (cx - r.left) / nz - p.wx, y: (cy - r.top) / nz - p.wy });
             return;
         }
-        if (!State.drag) return;
+        if (!State.drag) { if (e.pointerType === 'mouse') InputController.hover(e); return; }
         if (e.cancelable) e.preventDefault();
         const m = State.drag.mode;
         if (m === 'pan') Modes.Pan.move(e);
@@ -2252,8 +2548,10 @@ window.InputController = {
             if (dist < 5) {
                 if (d.secondary) {
                     if (d.itemId) { if (!State.selection.includes(d.itemId)) Actions.sel(d.itemId); DQBUI.Menu.open({ anchor: { clientX: e.clientX, clientY: e.clientY }, items: Actions.menuItems(d.itemId) }); }
+                    else if (d.inkId) { if (!InkSel.board.has(d.inkId)) { InkSel.board.sel = new Set([d.inkId]); StateManager.setSelection([], { keepInk: true }); } DQBUI.Menu.open({ anchor: { clientX: e.clientX, clientY: e.clientY }, items: Actions.inkMenuItems(), title: 'Ink' }); }
                     else Shell.canvasMenu(e);
-                } else { StateManager.setSelection([]); InkManager.deselectStroke(); UI.closeAllMenus(); }
+                } else if (d.inkTap) { InkSel.board.sel = new Set([d.inkTap]); StateManager.setSelection([], { keepInk: true }); UI.closeAllMenus(); }
+                else { StateManager.setSelection([]); UI.closeAllMenus(); }
             }
             Modes.Pan.up();
         }
@@ -2270,6 +2568,15 @@ window.InputController = {
         else if (m === 'laser') Modes.Laser.up();
         if (State.drag) State.drag = null;
     },
+    /** Pointer cursor over a stroke, so it is clear that ink can be picked up. */
+    hover: DQBUI.throttle((e) => {
+        const v = $('viewport'), tool = InputController.tool();
+        let on = false;
+        if ((tool === 'select' || tool === 'pan') && !State.drag && e.target && e.target.closest && e.target.closest('#viewport') && !e.target.closest('.item')) {
+            const w = Viewport.toWorld(e.clientX, e.clientY); on = !!InkSel.board.hitAt(w.x, w.y, 9);
+        }
+        if (v.classList.contains('ink-hover') !== on) v.classList.toggle('ink-hover', on);
+    }, 60),
     dblclick: (e) => {
         if (Workspace.mode !== 'board') return;
         const itemEl = e.target.closest('.item');
@@ -2307,10 +2614,13 @@ window.InputController = {
         StateManager.updateView({ x: (px / nz) - wx, y: (py / nz) - wy, z: nz });
     },
     nudge: (dx, dy) => {
-        if (!State.selection.length) return;
+        if (!State.selection.length && !InkSel.board.count()) return;
         const ids = new Set(State.selection);
         State.selection.forEach(id => HierarchyManager.getDescendants(id).forEach(c => ids.add(c)));
-        StateManager.updateItems([...ids].map(id => { const i = State.items.find(x => x.id === id); return i && !i.locked ? { id, props: { x: i.x + dx, y: i.y + dy } } : null; }).filter(Boolean));
+        StateManager.batch(() => {
+            StateManager.updateItems([...ids].map(id => { const i = State.items.find(x => x.id === id); return i && !i.locked ? { id, props: { x: i.x + dx, y: i.y + dy } } : null; }).filter(Boolean));
+            InkSel.board.translate(dx, dy);
+        });
     },
     keydown: (e) => {
         const tag = e.target && e.target.tagName;
@@ -2328,21 +2638,21 @@ window.InputController = {
         if (mod && k === 'z') { e.preventDefault(); if (e.shiftKey) ActionHistory.redo(); else ActionHistory.undo(); return; }
         if (mod && k === 'y') { e.preventDefault(); ActionHistory.redo(); return; }
         if (mod && k === 'd') { e.preventDefault(); Actions.duplicate(); return; }
-        if (mod && k === 'a') { e.preventDefault(); StateManager.setSelection(State.items.map(i => i.id)); return; }
+        if (mod && k === 'a') { e.preventDefault(); Actions.selectAll(); return; }
         if (mod && k === 'g') { e.preventDefault(); if (e.shiftKey) Actions.ungroupSelection(); else Actions.groupSelection(); return; }
         if (mod) return;
         if (e.key === 'Escape') {
-            if (InkManager.selectedId) InkManager.deselectStroke();
-            else if (State.selection.length) StateManager.setSelection([]);
+            if (State.selection.length || InkSel.board.count()) StateManager.setSelection([]);
             else if (State.tool === 'draw' || State.tool === 'eraser' || State.tool === 'laser') window.setTool(Shell.defaultTool());
             return;
         }
         if (e.key === 'Backspace' || e.key === 'Delete') {
             e.preventDefault();
-            if (InkManager.selectedId) InkManager.deleteSelected(); else Actions.delete();
+            Actions.delete();
             return;
         }
-        if (e.key.startsWith('Arrow') && State.selection.length) {
+        if (k === 'j' && InkSel.board.count()) { InkSel.board.combine(); return; }
+        if (e.key.startsWith('Arrow') && (State.selection.length || InkSel.board.count())) {
             e.preventDefault(); const s = e.shiftKey ? 50 : 10;
             InputController.nudge(e.key === 'ArrowLeft' ? -s : e.key === 'ArrowRight' ? s : 0, e.key === 'ArrowUp' ? -s : e.key === 'ArrowDown' ? s : 0); return;
         }
@@ -2481,6 +2791,7 @@ window.Sanitize = {
         const o = { id, type, x: Sanitize.num(r.x), y: Sanitize.num(r.y), w: Math.min(4000, Math.max(40, Sanitize.num(r.w, 200, 4000))), h: Math.min(4000, Math.max(40, Sanitize.num(r.h, 150, 4000))), groupId: safeId(r.groupId) || null };
         if (safeId(r.parentZone)) o.parentZone = r.parentZone;
         if (r.locked) o.locked = true;
+        if (type === 'zone' || type === 'poll' || type === 'graph') o.isOpen = !!r.isOpen;   // explicit false, so a zone closing reaches co-hosts
         if (Number.isFinite(r.z)) o.z = Math.max(1, Math.min(9999, r.z | 0));
         if (type === 'note') {
             o.sub = ['notice', 'wonder', 'idea', 'test', 'meta', 'sketch', 'claim', 'evidence', 'reasoning'].includes(r.sub) ? r.sub : 'notice';
@@ -2493,7 +2804,6 @@ window.Sanitize = {
             o.children = (Array.isArray(r.children) ? r.children : []).map(safeId).filter(Boolean).slice(0, 500);
             if (['cer', 'consensus', 'exit', 'breakout'].includes(r.zoneType)) o.zoneType = r.zoneType;
             if (safeColor(r.color)) o.color = r.color;
-            if (r.isOpen) o.isOpen = true;
             if (o.zoneType === 'exit') {
                 const m = r.exitMode || r.mode; o.exitMode = ['short', 'smiley', 'mc', 'multi', 'lw'].includes(m) ? m : 'short';
                 o.prompt = clampStr(r.prompt, 300); o.opts = Array.isArray(r.opts) ? r.opts.map(x => clampStr(x, 80)).filter(Boolean).slice(0, 12) : null;
@@ -2692,30 +3002,112 @@ window.Network = {
     transitionTo: (type, targetId, payload) => {
         targetId = targetId || null; payload = payload ? { ...payload, rid: genId() } : null;   // rid: lets students answer again when an item is re-run
         State.votes = {};                       // one response per student per activity
-        const updates = State.items.map(i => ({ id: i.id, props: { isOpen: false } }));
-        StateManager.updateItems(updates, { silent: true });
 
         Network.broadcast({ type: 'STOP_ACT' });
         if (type !== 'OPEN') Network.broadcast({ type: 'MODE', val: 'LOCKED' });
 
-        StateManager.setActivity({ type, targetId, payload });
+        State.activity = { type, targetId, payload };
+        Network.syncOpenFlags();
+        StateManager.setActivity(State.activity);
 
+        const openZones = type === 'ZONE_ACT' && payload && payload.subType === 'OPEN_ZONE';
         if (type === 'OPEN') {
             Network.broadcast({ type: 'MODE', val: 'OPEN' });
         } else if (targetId) {
-            StateManager.updateItem(targetId, { isOpen: true });
-            if (type === 'ZONE_ACT') {
+            if (openZones) Network.pushZones();                // every student gets the zones they may write into
+            else if (type === 'ZONE_ACT') {
                 Network.broadcast({ ...payload, type: payload.subType });
                 const modeLabel = payload.subType === 'ACT_DISCUSS' ? 'Discussion' : 'Results';
                 const zContainer = $(`zr-${targetId}`);
-                if (zContainer && payload.subType !== 'OPEN_ZONE') { zContainer.innerHTML = `<h4>${modeLabel}</h4><div class="muted">Waiting for responses…</div>`; zContainer.classList.add('active'); }
+                if (zContainer) { zContainer.innerHTML = `<h4>${modeLabel}</h4><div class="muted">Waiting for responses…</div>`; zContainer.classList.add('active'); }
             } else if (type === 'WIDGET_ACT' || type === 'EXIT_TICKET') {
                 Network.broadcast(payload);
             }
         }
         if (window.Shell) Shell.syncActivity();
-        UI.toast(type === 'LOCKED' ? 'Board locked' : (type === 'OPEN' ? 'Board open — students can add notes' : 'Activity started'), type === 'LOCKED' ? '' : 'success');
+        const n = openZones ? (payload.zones || []).length : 0;
+        UI.toast(type === 'LOCKED' ? 'Board locked' : (type === 'OPEN' ? 'Board open — students can add notes' : (openZones ? (n > 1 ? `${n} zones open — students can add notes` : 'Zone open — students can add notes') : 'Activity started')), type === 'LOCKED' ? '' : 'success');
     },
+
+    /* ---------- open zones (several can be open at once; each student writes into the ones meant for them) ---------- */
+    openableZone: (z) => !!z && z.type === 'zone' && !['consensus', 'breakout', 'exit'].includes(z.zoneType),
+    _openZonesRunning: () => { const a = State.activity; return a.type === 'ZONE_ACT' && !!a.payload && a.payload.subType === 'OPEN_ZONE'; },
+    /** Ids of the zones students can add notes to right now, in the order they were opened. */
+    openZoneIds: () => {
+        if (!Network._openZonesRunning()) return [];
+        const a = State.activity, ids = Array.isArray(a.payload.zones) ? a.payload.zones : [a.targetId];
+        return ids.filter(id => Network.openableZone(State.items.find(i => i.id === id)));
+    },
+    openZoneItems: () => Network.openZoneIds().map(id => State.items.find(i => i.id === id)),
+    /** Mirrors the running activity onto items' isOpen flags (they drive the Live badge and Stop buttons). */
+    syncOpenFlags: () => {
+        const a = State.activity, live = a.type !== 'OPEN' && a.type !== 'LOCKED';
+        const open = new Set(live ? [a.targetId].concat(Network.openZoneIds()).filter(Boolean) : []);
+        const changed = [];
+        State.items.forEach(i => { const v = open.has(i.id); if (!!i.isOpen !== v) { if (v) i.isOpen = true; else delete i.isOpen; changed.push({ id: i.id }); } });
+        if (changed.length && Network.peer && !State.isCoHost) Network.relay('items:update', { items: changed });
+        return changed.length;
+    },
+    /** Sets exactly which zones are open. Starts an open-zones round if something else was running; [] locks the board. */
+    setOpenZones: (ids) => {
+        ids = [...new Set(ids)].filter(id => Network.openableZone(State.items.find(i => i.id === id)));
+        const running = Network._openZonesRunning();
+        if (!ids.length) { if (running) Network.transitionTo('LOCKED'); return; }
+        if (!running) { Network.transitionTo('ZONE_ACT', ids[0], { type: 'OPEN_ZONE', subType: 'OPEN_ZONE', actId: ids[0], zones: ids, items: [] }); return; }
+        const before = Network.openZoneIds();
+        const a = State.activity;
+        State.activity = { type: 'ZONE_ACT', targetId: ids[0], payload: { ...a.payload, actId: ids[0], zones: ids } };
+        Network.syncOpenFlags();
+        StateManager.setActivity(State.activity);
+        Network.pushZones();
+        const added = ids.filter(id => !before.includes(id)), removed = before.filter(id => !ids.includes(id));
+        const title = (id) => ((State.items.find(i => i.id === id) || {}).title || 'Zone');
+        if (added.length === 1 && !removed.length) UI.toast(`${title(added[0])} is open too · ${ids.length} zones open`, 'success');
+        else if (removed.length === 1 && !added.length) UI.toast(`${title(removed[0])} closed · ${ids.length} still open`);
+        else UI.toast(`${ids.length} zone${ids.length === 1 ? '' : 's'} open`, 'success');
+    },
+    openZones: (ids) => Network.setOpenZones(Network.openZoneIds().concat(ids)),
+    closeZones: (ids) => Network.setOpenZones(Network.openZoneIds().filter(id => !ids.includes(id))),
+    /** What one student may write into: open zones of their colour plus uncoloured ones. Students with none of their own
+        may pick any open zone, or wait to be put in a group (Class rules). */
+    zonesFor: (st) => {
+        const open = Network.openZoneItems();
+        const own = open.filter(z => !safeColor(z.color) || (st && st.color && z.color === st.color));
+        if (own.length || !open.length) return { zones: own, placed: true };
+        return { zones: State.settings.anyZone ? open : [], placed: false };
+    },
+    zoneInfo: (z) => ({ id: z.id, title: clampStr(z.title || 'Zone', 80), zoneType: z.zoneType === 'cer' ? 'cer' : null, color: safeColor(z.color) || null, group: safeColor(z.color) ? groupName(z.color) : null }),
+    /** The OPEN_ZONE message for one student (older student apps read actId/title/zoneType: their first zone). */
+    zoneMsg: (st) => {
+        const a = State.activity, r = Network.zonesFor(st), first = r.zones[0] || null;
+        return {
+            type: 'OPEN_ZONE', subType: 'OPEN_ZONE', rid: a.payload && a.payload.rid, items: [],
+            actId: first ? first.id : null, title: first ? clampStr(first.title || 'Zone', 80) : '', zoneType: first ? first.zoneType || null : null,
+            zones: r.zones.map(Network.zoneInfo), unplaced: !r.placed, waiting: !r.zones.length
+        };
+    },
+    pushZones: () => {
+        if (!Network._openZonesRunning()) return;
+        Object.values(State.students).forEach(s => { if (s.role === 'student') SafeSend(s.conn, Network.zoneMsg(s)); });
+        if (window.Shell) { Shell.syncActivity(); Roster(); }
+    },
+    zonesWatch: (action, payload) => {
+        if (State.isCoHost || !Network._openZonesRunning() || !payload) return false;
+        const raw = State.activity.payload.zones || [State.activity.targetId];
+        if (action === 'items:delete') return (payload.ids || []).some(id => raw.includes(id));
+        if (action === 'items:update') return (payload.items || []).some(u => raw.includes(u.id) && ('title' in u || 'color' in u || 'zoneType' in u));
+        return action === 'state:fullsync';
+    },
+    _zonesChanged: DQBUI.debounce(() => {
+        if (!Network._openZonesRunning()) return;
+        const ids = Network.openZoneIds();
+        if (!ids.length) { Network.transitionTo('LOCKED'); return; }
+        const a = State.activity;
+        if (ids.join() !== (a.payload.zones || []).join()) { State.activity = { ...a, targetId: ids[0], payload: { ...a.payload, actId: ids[0], zones: ids } }; Network.syncOpenFlags(); Render.all(); }
+        Network.pushZones();
+    }, 120),
+    /** Students who have no open zone of their own (no group, or no zone open for their group). */
+    unplaced: () => Object.entries(State.students).filter(([, s]) => s.role === 'student' && !Network.zonesFor(s).placed),
     toggleOpenMode: (isOn) => { if (isOn) Network.transitionTo('OPEN'); else Network.transitionTo('LOCKED'); },
 
     startActivity: (mode) => {
@@ -2751,18 +3143,17 @@ window.Network = {
     stopActivity: () => { Network.transitionTo('LOCKED'); },
 
     toggleZone: (id) => {
-        if (State.activity.targetId === id && State.activity.type !== 'LOCKED') { Network.transitionTo('LOCKED'); return; }
         const item = State.items.find(x => x.id === id);
         if (!item) return;
+        const open = Network.openZoneIds(), a = State.activity;
+        if (open.includes(id)) { Network.closeZones([id]); return; }                                   // close just this zone
+        if (a.targetId === id && a.type !== 'LOCKED' && a.type !== 'OPEN') { Network.transitionTo('LOCKED'); return; }   // stop the vote / poll / ticket it runs
         if (item.zoneType === 'exit') Network.broadcastExit(id);
         else if (item.type === 'poll') Network.broadcastPoll(id);
         else if (item.type === 'graph') Network.broadcastGraph(id);
-        else if (item.type === 'zone' && item.zoneType !== 'consensus' && item.zoneType !== 'breakout') Network.openZone(id);
+        else if (Network.openableZone(item)) Network.openZones([id]);                                 // opens alongside any zones already open
     },
-    openZone: (id) => {
-        const z = State.items.find(x => x.id === id);
-        Network.transitionTo('ZONE_ACT', id, { type: 'OPEN_ZONE', subType: 'OPEN_ZONE', actId: id, title: z.title, zoneType: z.zoneType, items: [] });
-    },
+    openZone: (id) => Network.openZones([id]),
     broadcastPoll: (id) => {
         const p = State.items.find(x => x.id === id);
         Network.transitionTo('WIDGET_ACT', id, { type: 'ACT_POLL', subType: 'ACT_POLL', actId: id, q: p.q, opts: p.opts.map(o => ({ lbl: o.lbl, v: 0 })) });
@@ -2775,13 +3166,62 @@ window.Network = {
         const item = State.items.find(x => x.id === id);
         Network.transitionTo('EXIT_TICKET', id, { type: 'EXIT_TICKET', subType: 'EXIT_TICKET', actId: id, mode: item.exitMode, prompt: item.prompt, opts: item.opts, single: true });
     },
+    /** Picking the student's current group again takes them out of it. */
     assignStudentColor: (pid, color) => {
         const student = State.students[pid];
-        if (student) {
-            student.color = student.color === color ? null : color;
-            SafeSend(student.conn, { type: 'SET_COLOR', color: student.color });
-            Roster();
-        }
+        if (student) Network.setStudentColor(pid, student.color === color ? null : color);
+    },
+    setStudentColor: (pid, color, quiet) => {
+        const s = State.students[pid]; if (!s) return;
+        s.color = safeColor(color) || null;
+        if (s.color) State.groupOf[s.sid] = s.color; else delete State.groupOf[s.sid];
+        SafeSend(s.conn, { type: 'SET_COLOR', color: s.color, name: s.color ? groupName(s.color) : null });
+        if (Network._openZonesRunning()) SafeSend(s.conn, Network.zoneMsg(s));
+        if (!quiet) { Roster(); if (window.Shell) Shell.syncActivity(); }
+    },
+    /** Shares students out across colour groups, filling the smallest group first. */
+    _spread: (list, colors, counts) => {
+        for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+        list.forEach(([pid]) => {
+            const c = colors.reduce((best, x) => (counts[x] < counts[best] ? x : best), colors[0]);
+            counts[c]++; Network.setStudentColor(pid, c, true);
+        });
+    },
+    /** Puts every student without a zone of their own into one of the open colour zones' groups. */
+    assignUnplaced: () => {
+        const colors = [...new Set(Network.openZoneItems().map(z => safeColor(z.color)).filter(Boolean))];
+        const todo = Network.unplaced();
+        if (!colors.length || !todo.length) return 0;
+        const counts = {}; colors.forEach(c => { counts[c] = 0; });
+        Object.values(State.students).forEach(s => { if (s.role === 'student' && s.color in counts) counts[s.color]++; });
+        Network._spread(todo, colors, counts);
+        Roster(); if (window.Shell) Shell.syncActivity();
+        UI.toast(`${todo.length} student${todo.length === 1 ? '' : 's'} put in a group`, 'success');
+        return todo.length;
+    },
+    /** The colours for n groups: colours of zones already on the board first (in reading order), then the rest of the palette. */
+    groupColors: (n) => {
+        const used = [];
+        State.items.filter(i => Network.openableZone(i) && GROUPS.some(g => g.color === i.color))
+            .sort((a, b) => (Math.round(a.y / 200) - Math.round(b.y / 200)) || (a.x - b.x))
+            .forEach(z => { if (!used.includes(z.color)) used.push(z.color); });
+        return used.concat(GROUPS.map(g => g.color).filter(c => !used.includes(c))).slice(0, Math.max(1, Math.min(GROUPS.length, n | 0)));
+    },
+    /** Splits the class into n balanced colour groups (onlyNew: keep existing groups, place the rest). */
+    makeGroups: (n, onlyNew) => {
+        const colors = Network.groupColors(Math.max(2, n | 0));
+        const students = Object.entries(State.students).filter(([, s]) => s.role === 'student');
+        const counts = {}; colors.forEach(c => { counts[c] = 0; });
+        let todo = students;
+        if (onlyNew) { students.forEach(([, s]) => { if (s.color in counts) counts[s.color]++; }); todo = students.filter(([, s]) => !(s.color in counts)); }
+        Network._spread(todo.slice(), colors, counts);
+        Roster(); if (window.Shell) Shell.syncActivity();
+        return todo.length;
+    },
+    clearGroups: () => {
+        Object.keys(State.students).forEach(pid => { if (State.students[pid].role === 'student' && State.students[pid].color) Network.setStudentColor(pid, null, true); });
+        State.groupOf = {};
+        Roster(); if (window.Shell) Shell.syncActivity();
     },
 
     /* ---------- class timer ---------- */
@@ -2831,7 +3271,13 @@ window.Network = {
             case 'FULL_SYNC': {
                 const items = (Array.isArray(d.items) ? d.items : []).map(i => Sanitize.item(i)).filter(Boolean);
                 const first = !State.items.length && !State.id;
-                StateManager.setFullState({ items, ink: Sanitize.strokes(d.ink), activity: d.activity }, fromHostToCohost ? silent : { silent: false });
+                if (!fromHostToCohost) {                      // a co-host's board: which items are live is still the host's call
+                    StateManager.setFullState({ items, ink: Sanitize.strokes(d.ink) }, silent);
+                    Network.syncOpenFlags();
+                    StateManager._notify('state:fullsync', { items, ink: State.ink });
+                    break;
+                }
+                StateManager.setFullState({ items, ink: Sanitize.strokes(d.ink), activity: d.activity }, silent);
                 if (fromHostToCohost) { if (first || !State.hasEntered) { State.hasEntered = true; Shell.enterBoard({ cohost: true }); } nr(); Shell.syncBoardState(); }
                 break;
             }
@@ -2873,6 +3319,8 @@ window.Network = {
             case 'IMG_NOTE': Network._studentNote(pid, st, d, conn); break;
             case 'DELETE_NOTE': {
                 const id = safeId(d.id); if (!id) break;
+                // we are a co-host and the host deleted something: mirror it (the host already re-linked zones and relays those updates)
+                if (fromHostToCohost) { if (State.items.some(i => i.id === id)) { StateManager.deleteItems([id], silent); nr(); } break; }
                 const pend = State.pending.findIndex(p => p.id === id && p.sid === st.sid);
                 if (pend > -1) { State.pending.splice(pend, 1); Shell.syncQueue(); break; }
                 const it = State.items.find(x => x.id === id);
@@ -2955,27 +3403,30 @@ window.Network = {
             if (o.sid === sid && k !== pid && o.role === 'student') { carried = { color: o.color }; try { o.conn.close(); } catch (e) { /* ignore */ } delete State.students[k]; State.consensusMode.participants = State.consensusMode.participants.map(p => p === k ? pid : p); }
         });
         conn._joined = true;
-        State.students[pid] = { name, avatar, sid, conn, role: 'student', color: carried.color || null, joinedAt: Date.now() };
+        // a student who drops off and comes back keeps their group
+        const color = safeColor(carried.color) || safeColor(State.groupOf[sid]) || null;
+        const student = State.students[pid] = { name, avatar, sid, conn, role: 'student', color, joinedAt: Date.now() };
         const a = State.activity;
         let welcomeMode = 'LOCKED', actPayload = null;
         if (a.type === 'OPEN') welcomeMode = 'OPEN';
+        else if (Network._openZonesRunning()) { welcomeMode = 'OPEN_ZONE'; actPayload = Network.zoneMsg(student); }
         else if (a.type === 'ZONE_ACT' || a.type === 'WIDGET_ACT') { welcomeMode = a.payload.subType; actPayload = a.payload; }
         else if (a.type === 'EXIT_TICKET') { welcomeMode = 'EXIT_TICKET'; actPayload = a.payload; }
         const mine = State.items.filter(i => i.type === 'note' && i.sid === sid).map(i => ({ id: i.id, text: i.text, sub: i.sub }));
         const t = State.timer;
         SafeSend(conn, {
             type: 'WELCOME', boardId: State.id, mode: welcomeMode, payload: actPayload, sync: mine, v: 2,
-            rules: { names: State.settings.names, approve: State.settings.approve }, muted: !!State.muted[sid], color: State.students[pid].color,
+            rules: { names: State.settings.names, approve: State.settings.approve }, muted: !!State.muted[sid], color: student.color,
             pending: State.pending.filter(p => p.sid === sid).map(p => p.id),
             timer: { running: t.running, remainingMs: t.running ? Math.max(0, t.endsAt - Date.now()) : t.remainingMs, totalMs: t.totalMs }
         });
-        if (State.students[pid].color) SafeSend(conn, { type: 'SET_COLOR', color: State.students[pid].color });
+        if (color) SafeSend(conn, { type: 'SET_COLOR', color, name: groupName(color) });
         if (State.consensusMode.active) {
             SafeSend(conn, Consensus.startMsg()); SafeSend(conn, Consensus.viewMsg());
             if (State.consensusMode.participants.includes(pid)) SafeSend(conn, { type: 'CONSENSUS_PERMS', canDraw: true });
         }
         Roster(); Consensus.renderParticipants();
-        if (window.Shell) Shell.Panel.flashJoined(State.students[pid]);
+        if (window.Shell) Shell.Panel.flashJoined(student);          // the record may already be gone if the connection dropped while we answered
         else UI.toast(`${name} joined`);
     },
     _authCohost: (pid, d, conn) => {
@@ -2993,11 +3444,14 @@ window.Network = {
         const id = safeId(d.id); if (!id) return;
         if (State.muted[st.sid]) { SafeSend(conn, { type: 'MUTE', on: true }); return reject('muted'); }
         if (!Network._isOpenForNotes()) return reject('locked');
-        // zone targeting (only the currently opened zone is allowed)
-        let zoneId = null;
-        if (State.activity.type === 'ZONE_ACT' && State.activity.payload && State.activity.payload.subType === 'OPEN_ZONE') zoneId = State.activity.targetId;
-        const zone = zoneId ? State.items.find(z => z.id === zoneId) : null;
-        if (zone && zone.color && st.color !== zone.color) return reject('color');
+        // zone targeting: the zone the student picked, if it is one of the zones open to them, otherwise their first one
+        let zone = null;
+        if (Network._openZonesRunning()) {
+            const mine = Network.zonesFor(st).zones;
+            if (!mine.length) return reject(Network.openZoneIds().length ? 'group' : 'locked');
+            const want = safeId(d.zoneId);
+            zone = (want && mine.find(z => z.id === want)) || mine[0];
+        }
 
         const existing = State.items.find(x => x.id === id);
         if (existing && existing.sid !== st.sid) return;                        // can't overwrite someone else's note
@@ -3109,10 +3563,14 @@ window.Workspace = {
         if (window.Shell) Shell.onWorkspace(m);
     },
     caps: () => ({
-        board:     { insert: true,  select: true, laser: true,  brush: false, sketch: true,  pin: true,  minimap: true,  templates: true },
-        consensus: { insert: false, select: true, laser: false, brush: true,  sketch: false, pin: false, minimap: false, templates: false },
-        breakout:  { insert: true,  select: true, laser: true,  brush: false, sketch: true,  pin: true,  minimap: false, templates: true }
+        board:     { insert: true,  select: true, laser: true,  brush: false, sketch: true,  pin: true,  combine: true, minimap: true,  templates: true },
+        consensus: { insert: false, select: true, laser: false, brush: true,  sketch: false, pin: false, combine: true, minimap: false, templates: false },
+        breakout:  { insert: true,  select: true, laser: true,  brush: false, sketch: true,  pin: true,  combine: true, minimap: false, templates: true }
     })[Workspace.mode],
+    /** The ink selection of the canvas in front of the teacher. */
+    ink: () => InkSel[Workspace.mode] || InkSel.board,
+    duplicateSelection: () => { if (Workspace.mode === 'board') Actions.duplicate(); else if (Workspace.mode === 'consensus') InkSel.consensus.duplicate(); else Breakout.duplicateSelected(); },
+    deleteSelection: () => { if (Workspace.mode === 'board') Actions.delete(); else if (Workspace.mode === 'consensus') Consensus.deleteSelection(); else Breakout.deleteSelected(); },
     tool: () => Workspace.mode === 'board' ? State.tool : (Workspace.mode === 'consensus' ? State.consensusMode.tool : Breakout._state.tool),
     setTool: (t) => { if (Workspace.mode === 'board') window.setTool(t); else if (Workspace.mode === 'consensus') Consensus.setTool(t); else Breakout.setTool(t); },
     undo: () => { if (Workspace.mode === 'board') ActionHistory.undo(); else if (Workspace.mode === 'consensus') Consensus.undo(); else Breakout.undo(); },
@@ -3201,7 +3659,7 @@ window.Consensus = {
             getView: () => State.consensusMode.view,
             setView: (v) => { Object.assign(State.consensusMode.view, v); Consensus._viewChanged(); },
             down: Consensus.inputStart, move: Consensus.inputMove, up: Consensus.inputEnd,
-            cancel: () => { Consensus.currentPath = []; Consensus.drag = null; const t = $('cm-temp-ink'); if (t) t.innerHTML = ''; }
+            cancel: () => { Consensus.currentPath = []; Consensus.drag = null; const t = $('cm-temp-ink'); if (t) t.innerHTML = ''; $('cm-marquee').style.display = 'none'; Consensus.renderInk(); }
         });
     },
     _viewChanged: () => {
@@ -3224,6 +3682,7 @@ window.Consensus = {
         cm.items = (zone.children || []).map(id => State.items.find(i => i.id === id)).filter(Boolean).map(item => {
             const clone = JSON.parse(JSON.stringify(item)); clone.x -= zone.x; clone.y -= zone.y; return clone;
         });
+        InkSel.consensus.clear(true);
         UI.closeAllMenus();
         Workspace.set('consensus');
         Consensus._hist = []; Consensus._hi = -1; Consensus._pushHistory();
@@ -3237,7 +3696,7 @@ window.Consensus = {
     /** What a student needs to join the shared model (also sent to students who join or reconnect mid-session). */
     startMsg: () => {
         const cm = State.consensusMode;
-        return { type: 'CONSENSUS_START', zoneId: cm.zoneId, ink: cm.ink, items: cm.items.map(i => ({ id: i.id, type: i.type, sub: i.sub, text: clampStr(i.text, 500), src: i.src ? safeImg(i.src, 1500000) : undefined, x: i.x, y: i.y, w: i.w, h: i.h })), title: cm.title };
+        return { type: 'CONSENSUS_START', zoneId: cm.zoneId, ink: cm.ink, items: Consensus.itemsPayload(), title: cm.title };
     },
     viewMsg: () => {
         const cm = State.consensusMode, r = $('consensus-main').getBoundingClientRect();
@@ -3257,10 +3716,13 @@ window.Consensus = {
         if (!cm.active) return;
         const zone = State.items.find(i => i.id === cm.zoneId);
         if (zone) {
-            const updates = cm.items.map(c => ({ id: c.id, props: { x: c.x + zone.x, y: c.y + zone.y } }));
-            updates.push({ id: zone.id, props: { ink: JSON.parse(JSON.stringify(cm.ink)) } });
-            StateManager.updateItems(updates);
+            // notes made from ink during the session join the model zone; the rest keep their new places
+            const added = cm.items.filter(c => !State.items.some(i => i.id === c.id)).map(c => ({ ...JSON.parse(JSON.stringify(c)), x: c.x + zone.x, y: c.y + zone.y, parentZone: zone.id }));
+            const updates = cm.items.filter(c => !added.some(a => a.id === c.id)).map(c => ({ id: c.id, props: { x: c.x + zone.x, y: c.y + zone.y } }));
+            updates.push({ id: zone.id, props: { ink: JSON.parse(JSON.stringify(cm.ink)), children: (zone.children || []).concat(added.map(a => a.id)) } });
+            StateManager.batch(() => { if (added.length) StateManager.addItems(added); StateManager.updateItems(updates); });
         }
+        InkSel.consensus.clear(true);
         cm.active = false; cm.participants = [];
         $('consensus-items-layer').innerHTML = '';
         if (Consensus._animationFrame) cancelAnimationFrame(Consensus._animationFrame);
@@ -3273,6 +3735,7 @@ window.Consensus = {
         const v = State.consensusMode.view;
         $('consensus-world').style.transform = `scale(${v.z}) translate(${v.x}px, ${v.y}px)`;
         Consensus.renderTempInk();
+        if (window.Shell && InkSel.consensus.count()) Shell.positionSelBar();
         Consensus._animationFrame = requestAnimationFrame(Consensus.loop);
     },
     renderTempInk: () => {
@@ -3308,37 +3771,20 @@ window.Consensus = {
         const s = State.students[pid]; if (s) SafeSend(s.conn, { type: 'CONSENSUS_PERMS', canDraw: idx === -1 });
     },
     renderInk: () => {
-        const svg = $('consensus-ink-layer');
-        const defs = svg.querySelector('defs');
-        svg.textContent = ''; if (defs) svg.appendChild(defs);
-        const NS = 'http://www.w3.org/2000/svg';
-        State.consensusMode.ink.forEach(s => {
-            const col = safeColor(s.color) || '#000';
-            const path = document.createElementNS(NS, 'path');
-            path.setAttribute('d', InkManager.pointsToPath(s.points)); path.setAttribute('stroke', col);
-            path.setAttribute('stroke-width', s.highlight ? (parseFloat(s.width) || 4) * 3 : (parseFloat(s.width) || 4));
-            path.setAttribute('fill', 'none'); path.setAttribute('stroke-linecap', 'round'); path.setAttribute('stroke-linejoin', 'round');
-            if (s.highlight) path.setAttribute('opacity', '0.4');
-            if (s.arrow) {
-                const markerId = `cm-arrow-${col.replace('#', '')}`;
-                if (!svg.querySelector(`#${markerId}`)) {
-                    const d2 = svg.querySelector('defs') || svg.insertBefore(document.createElementNS(NS, 'defs'), svg.firstChild);
-                    const marker = document.createElementNS(NS, 'marker');
-                    marker.setAttribute('id', markerId); marker.setAttribute('markerWidth', '10'); marker.setAttribute('markerHeight', '7'); marker.setAttribute('refX', '9'); marker.setAttribute('refY', '3.5'); marker.setAttribute('orient', 'auto');
-                    const poly = document.createElementNS(NS, 'polygon'); poly.setAttribute('points', '0 0, 10 3.5, 0 7'); poly.setAttribute('fill', col);
-                    marker.appendChild(poly); d2.appendChild(marker);
-                }
-                path.setAttribute('marker-end', `url(#${markerId})`);
-            }
-            svg.appendChild(path);
-        });
+        InkSel.consensus.prune();
+        const d = Consensus.drag, live = d && d.mode === 'move-ink' && d.moved;
+        InkTools.paint($('consensus-ink-layer'), State.consensusMode.ink, { sel: InkSel.consensus.sel, offset: live ? { dx: d.dx, dy: d.dy } : null });
     },
     handleInk: (ink) => {
         State.consensusMode.ink.push(ink);
         Consensus.renderInk(); Consensus._pushHistory();
         Network.broadcast({ type: 'CONSENSUS_INK', ink });
     },
-    _snapshot: () => JSON.stringify(State.consensusMode.ink),
+    /** What students see of the model's notes (also part of CONSENSUS_START). */
+    itemsPayload: () => State.consensusMode.items.map(i => ({ id: i.id, type: i.type, sub: i.sub, text: clampStr(i.text, 500), src: i.src ? safeImg(i.src, 1500000) : undefined, x: i.x, y: i.y, w: i.w, h: i.h })),
+    broadcastItems: () => Network.broadcast({ type: 'CONSENSUS_ITEMS', items: Consensus.itemsPayload() }),
+    // history covers the drawing and the notes on the model (notes made from ink, notes moved)
+    _snapshot: () => JSON.stringify({ ink: State.consensusMode.ink, items: State.consensusMode.items }),
     _pushHistory: () => {
         const snap = Consensus._snapshot();
         if (Consensus._hist[Consensus._hi] === snap) return;
@@ -3349,9 +3795,16 @@ window.Consensus = {
     },
     canUndo: () => Consensus._hi > 0, canRedo: () => Consensus._hi < Consensus._hist.length - 1,
     _applyHistory: () => {
-        State.consensusMode.ink = JSON.parse(Consensus._hist[Consensus._hi]);
-        Consensus.renderInk(); Network.broadcast({ type: 'CONSENSUS_SET_INK', ink: State.consensusMode.ink });
-        if (window.Shell) Shell.syncHistory();
+        const cm = State.consensusMode, snap = JSON.parse(Consensus._hist[Consensus._hi]);
+        const itemsChanged = JSON.stringify(cm.items) !== JSON.stringify(snap.items);
+        cm.ink = snap.ink; cm.items = snap.items;
+        Consensus.renderInk(); Network.broadcast({ type: 'CONSENSUS_SET_INK', ink: cm.ink });
+        if (itemsChanged) { Consensus.renderItems(); Consensus.broadcastItems(); }
+        if (window.Shell) { Shell.syncHistory(); Shell.onSelection(); }
+    },
+    deleteSelection: () => {
+        const n = InkSel.consensus.remove();
+        if (n) DQBUI.Toast.show(n > 1 ? `${n} strokes deleted` : 'Stroke deleted', { action: { label: 'Undo', onClick: () => Consensus.undo() } });
     },
     undo: () => { if (!Consensus.canUndo()) return; Consensus._hi--; Consensus._applyHistory(); },
     redo: () => { if (!Consensus.canRedo()) return; Consensus._hi++; Consensus._applyHistory(); },
@@ -3362,6 +3815,7 @@ window.Consensus = {
         if (tool === 'highlight' || tool === 'arrow') { cm.brush = tool; tool = 'draw'; }
         else if (tool === 'draw') { if (!['draw', 'highlight', 'arrow'].includes(cm.brush)) cm.brush = 'draw'; }
         cm.tool = tool;
+        if (tool !== 'pan' && tool !== 'select') InkSel.consensus.clear();
         const main = $('consensus-main');
         main.className = tool === 'pan' ? 'cm-pan' : (tool === 'draw' || tool === 'eraser' ? 'cm-draw' : '');
         if (window.Shell) Shell.syncTools();
@@ -3369,6 +3823,7 @@ window.Consensus = {
     setBrush: (b) => { State.consensusMode.brush = b; Consensus.setTool('draw'); },
     setColor: (color) => {
         State.consensusMode.color = color;
+        if (InkSel.consensus.count()) { InkSel.consensus.recolor(color); if (window.Shell) Shell.syncDraw(); return; }
         if (State.consensusMode.tool !== 'draw') Consensus.setTool('draw'); else if (window.Shell) Shell.syncDraw();
     },
     setWidth: (w) => { State.consensusMode.width = Math.max(1, Math.min(40, parseInt(w) || 4)); if (window.Shell) Shell.syncDraw(); },
@@ -3395,13 +3850,32 @@ window.Consensus = {
     },
     inputStart: (e) => {
         const cm = State.consensusMode, tool = cm.tool, coords = Consensus.screenToWorld(e);
-        const itemEl = e.target.closest('.item');
-        if (e.button === 1 || e.button === 2 || tool === 'pan' || (tool === 'select' && !itemEl)) {
-            Consensus.drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: cm.view.x, vy: cm.view.y }; return true;
+        const itemEl = e.target.closest('.item'), ink = InkSel.consensus, additive = e.shiftKey || e.metaKey || e.ctrlKey;
+        const pan = (extra) => { Consensus.drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: cm.view.x, vy: cm.view.y, ...extra }; return true; };
+        if (e.button === 1 || e.button === 2) return pan();
+        if ((tool === 'select' || tool === 'pan') && !itemEl) {
+            const hit = ink.hitAt(coords.x, coords.y, e.pointerType === 'touch' ? 18 : 9);
+            if (hit) {
+                if (additive) { ink.toggle(hit); if (!ink.has(hit)) return false; }
+                else if (!ink.has(hit)) {
+                    if (tool === 'pan' || e.pointerType === 'touch') return pan({ inkTap: hit });       // tap selects, drag pans
+                    ink.set([hit]);
+                }
+                Consensus.drag = { mode: 'move-ink', sx: coords.x, sy: coords.y, sx0: e.clientX, sy0: e.clientY, dx: 0, dy: 0, moved: false };
+                return true;
+            }
+            if (tool === 'select' && e.pointerType !== 'touch') {
+                const r = $('consensus-main').getBoundingClientRect();
+                Consensus.drag = { mode: 'box', sx: e.clientX - r.left, sy: e.clientY - r.top, base: additive ? ink.ids() : [] };
+                if (!additive) ink.clear();
+                return true;
+            }
+            return pan({ tapClear: true });
         }
+        if (tool === 'pan') return pan();
         if (tool === 'select' && itemEl) {
             const item = cm.items.find(i => i.id === itemEl.id);
-            if (item) { Consensus.drag = { mode: 'move', item, sx: coords.x, sy: coords.y, ix: item.x, iy: item.y }; return true; }
+            if (item) { ink.clear(); Consensus.drag = { mode: 'move', item, sx: coords.x, sy: coords.y, ix: item.x, iy: item.y }; return true; }
             return false;
         }
         if (tool === 'draw') { Consensus.drag = { mode: 'draw' }; Consensus.currentPath = [coords]; return true; }
@@ -3414,6 +3888,17 @@ window.Consensus = {
         const cm = State.consensusMode, view = cm.view, coords = Consensus.screenToWorld(e);
         if (d.mode === 'pan') {
             view.x = d.vx + (e.clientX - d.sx) / view.z; view.y = d.vy + (e.clientY - d.sy) / view.z; Consensus._viewChanged();
+            if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 5) d.moved = true;
+        } else if (d.mode === 'move-ink') {
+            if (!d.moved) { if (Math.hypot(e.clientX - d.sx0, e.clientY - d.sy0) < 5) return; d.moved = true; }
+            d.dx = coords.x - d.sx; d.dy = coords.y - d.sy;
+            InkSel.consensus.preview(d.dx, d.dy);
+        } else if (d.mode === 'box') {
+            const r = $('consensus-main').getBoundingClientRect(), m = $('cm-marquee');
+            const x = e.clientX - r.left, y = e.clientY - r.top, l = Math.min(x, d.sx), t = Math.min(y, d.sy), w = Math.abs(x - d.sx), h = Math.abs(y - d.sy);
+            Object.assign(m.style, { left: l + 'px', top: t + 'px', width: w + 'px', height: h + 'px', display: 'block' });
+            const wr = { x0: l / view.z - view.x, y0: t / view.z - view.y, x1: (l + w) / view.z - view.x, y1: (t + h) / view.z - view.y };
+            InkSel.consensus.set(d.base.concat(InkSel.consensus.inRect(wr)));
         } else if (d.mode === 'move') {
             const item = d.item; item.x = d.ix + (coords.x - d.sx); item.y = d.iy + (coords.y - d.sy);
             const el = document.getElementById(item.id); if (el) el.style.transform = `translate(${item.x}px, ${item.y}px)`;
@@ -3429,26 +3914,61 @@ window.Consensus = {
     inputEnd: () => {
         const d = Consensus.drag; if (!d) return;
         const cm = State.consensusMode;
+        Consensus.drag = null;
         if (d.mode === 'draw' && Consensus.currentPath.length > 1) {
             Consensus.handleInk({ id: genId(), points: [...Consensus.currentPath], color: cm.color, width: cm.width, highlight: cm.brush === 'highlight', arrow: cm.brush === 'arrow' });
         } else if (d.mode === 'eraser' && d.erased) Consensus._pushHistory();
-        else if (d.mode === 'move') Network.broadcast({ type: 'CONSENSUS_ITEM_MOVE', id: d.item.id, x: d.item.x, y: d.item.y });
-        Consensus.drag = null; Consensus.currentPath = [];
+        else if (d.mode === 'move') { Network.broadcast({ type: 'CONSENSUS_ITEM_MOVE', id: d.item.id, x: d.item.x, y: d.item.y }); if (d.item.x !== d.ix || d.item.y !== d.iy) Consensus._pushHistory(); }
+        else if (d.mode === 'move-ink') { if (d.moved && (d.dx || d.dy)) InkSel.consensus.translate(d.dx, d.dy); else Consensus.renderInk(); }
+        else if (d.mode === 'box') { $('cm-marquee').style.display = 'none'; }
+        else if (d.mode === 'pan' && !d.moved) {
+            if (d.inkTap) InkSel.consensus.set([d.inkTap]);
+            else if (d.tapClear) InkSel.consensus.clear();
+        }
+        Consensus.currentPath = [];
         const t = $('cm-temp-ink'); if (t) t.innerHTML = '';
     },
     _keydown: (e) => {
-        const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase();
+        const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase(), ink = InkSel.consensus;
         if (mod && k === 'z') { e.preventDefault(); if (e.shiftKey) Consensus.redo(); else Consensus.undo(); }
         else if (mod && k === 'y') { e.preventDefault(); Consensus.redo(); }
-        else if (e.key === 'Escape') Consensus.stop();
+        else if (mod && k === 'a') { e.preventDefault(); ink.selectAll(); }
+        else if (mod && k === 'd') { e.preventDefault(); ink.duplicate(); }
+        else if ((e.key === 'Delete' || e.key === 'Backspace') && ink.count()) { e.preventDefault(); Consensus.deleteSelection(); }
+        else if (e.key.startsWith('Arrow') && ink.count()) { e.preventDefault(); const s = e.shiftKey ? 50 : 10; ink.translate(e.key === 'ArrowLeft' ? -s : e.key === 'ArrowRight' ? s : 0, e.key === 'ArrowUp' ? -s : e.key === 'ArrowDown' ? s : 0); }
+        else if (k === 'j' && !mod && ink.count()) ink.combine();
+        else if (e.key === 'Escape') { if (ink.count()) ink.clear(); else Consensus.stop(); }
         else if (!mod) { if (k === 'v') Consensus.setTool('select'); else if (k === 'h') Consensus.setTool('pan'); else if (k === 'p') Consensus.setTool('draw'); else if (k === 'e') Consensus.setTool('eraser'); else if (e.key === '+' || e.key === '=') Consensus.zoom(1.2); else if (e.key === '-') Consensus.zoom(1 / 1.2); }
     }
 };
 
+InkSel.consensus = InkSel.create({
+    ink: () => State.consensusMode.ink,
+    zoom: () => State.consensusMode.view.z,
+    svg: () => $('consensus-ink-layer'),
+    commit: (ink) => {
+        State.consensusMode.ink = ink;
+        Consensus.renderInk(); Consensus._pushHistory();
+        Network.broadcast({ type: 'CONSENSUS_SET_INK', ink });
+    },
+    changed: () => { Consensus.renderInk(); if (window.Shell) Shell.onSelection(); },
+    /** A note made from ink sits on the model exactly where the drawing was (model notes have no header). */
+    toNotes: (images, keep) => {
+        const cm = State.consensusMode;
+        const notes = images.map(img => ({ id: genId(), type: 'note', sub: 'sketch', src: img.src, text: '', x: Math.round(img.x), y: Math.round(img.y), w: Math.max(40, Math.round(img.w)), h: Math.max(40, Math.round(img.h)), parentZone: cm.zoneId, groupId: null, votes: 0 }));
+        cm.ink = keep; cm.items.push(...notes);
+        Consensus.renderItems(); Consensus.renderInk(); Consensus._pushHistory();
+        Network.broadcast({ type: 'CONSENSUS_SET_INK', ink: cm.ink }); Consensus.broadcastItems();
+        if (window.Shell) Shell.onSelection();
+        return notes;
+    }
+});
+
 /* --- BREAKOUT BOARD MANAGER --- */
 window.Breakout = {
     drag: null, currentPath: [], _frame: null, _zoneId: null, _thumbTimer: null, _history: [], _historyIdx: -1,
-    _state: { view: { x: 0, y: 0, z: 1 }, tool: 'pan', color: '#ef4444', width: 4, selectedId: null, sketchMode: false },
+    // sel: ids of selected room items (selected ink lives in InkSel.breakout)
+    _state: { view: { x: 0, y: 0, z: 1 }, tool: 'pan', color: '#ef4444', width: 4, sel: new Set(), sketchMode: false },
 
     _getZone: () => State.items.find(i => i.id === Breakout._zoneId),
 
@@ -3456,7 +3976,8 @@ window.Breakout = {
         const zone = State.items.find(i => i.id === zoneId);
         if (!zone) return;
         Breakout._zoneId = zoneId; Breakout.drag = null; Breakout.currentPath = []; Breakout._history = []; Breakout._historyIdx = -1;
-        Breakout._state = { view: { x: 0, y: 0, z: 1 }, tool: 'pan', color: '#ef4444', width: 4, selectedId: null, sketchMode: false };
+        Breakout._state = { view: { x: 0, y: 0, z: 1 }, tool: 'pan', color: '#ef4444', width: 4, sel: new Set(), sketchMode: false };
+        InkSel.breakout.clear(true);
         UI.closeAllMenus();
         Workspace.set('breakout');
         Breakout.setTool('pan');
@@ -3477,11 +3998,18 @@ window.Breakout = {
         Workspace.set('board');
         Render.all();
     },
-    _setSelected: (id) => {
-        Breakout._state.selectedId = id;
-        document.querySelectorAll('#breakout-items-layer .item').forEach(el => el.classList.toggle('selected', !!id && el.id === `bk-${id}`));
+    _setSelected: (id) => Breakout._select(id ? [id] : []),
+    /** Selects room items; a fresh selection drops selected ink unless keepInk (shift-click, box select). */
+    _select: (ids, additive, keepInk) => {
+        const sel = Breakout._state.sel;
+        if (!additive) sel.clear();
+        (ids || []).forEach(id => sel.add(id));
+        if (!keepInk) InkSel.breakout.clear(true);
+        document.querySelectorAll('#breakout-items-layer .item').forEach(el => el.classList.toggle('selected', sel.has(el.id.slice(3))));
+        Breakout.renderInk();
         if (window.Shell) { Shell.syncTools(); Shell.onSelection(); }
     },
+    selectedItems: () => { const z = Breakout._getZone(); return z ? (z.subItems || []).filter(i => Breakout._state.sel.has(i.id)) : []; },
     _loop: () => {
         if (!Breakout._zoneId) return;
         const view = Breakout._state.view;
@@ -3507,7 +4035,7 @@ window.Breakout = {
         const itemType = ['note', 'zone', 'poll', 'graph', 'spin'].includes(item.type) ? item.type : 'note';
         const el = document.createElement('div');
         el.id = `bk-${item.id}`;
-        el.className = `item ${itemType}${item.zoneType ? ' zone-' + String(item.zoneType).replace(/[^a-z]/gi, '') : ''}${Breakout._state.selectedId === item.id ? ' selected' : ''}`;
+        el.className = `item ${itemType}${item.zoneType ? ' zone-' + String(item.zoneType).replace(/[^a-z]/gi, '') : ''}${Breakout._state.sel.has(item.id) ? ' selected' : ''}`;
         el.style.cssText = `position:absolute;transform:translate(${Number(item.x) || 0}px,${Number(item.y) || 0}px);width:${Number(item.w) || 180}px;height:${Number(item.h) || 130}px;`;
         const head = TYPES[item.sub] || TYPES.meta;
         let inner = '', iconHtml = '', title = '';
@@ -3562,21 +4090,27 @@ window.Breakout = {
         const el = e.currentTarget, id = el.id.replace('bk-', '');
         const item = (zone.subItems || []).find(i => i.id === id); if (!item) return;
         e.stopPropagation();
-        Breakout._setSelected(id);
+        const sel = Breakout._state.sel;
+        if (e.shiftKey || e.metaKey || e.ctrlKey) {
+            if (sel.has(id)) { sel.delete(id); Breakout._select([], true, true); return; }
+            Breakout._select([id], true, true);
+        } else if (!sel.has(id)) Breakout._select([id]);
         const coords = Breakout._screenToWorld(e);
         if (e.target.closest('.resize-h')) Breakout.drag = { mode: 'resize-item', item, el, sx: coords.x, sy: coords.y, iw: item.w || 180, ih: item.h || 130 };
-        else Breakout.drag = { mode: 'move-item', item, el, sx: coords.x, sy: coords.y, ix: item.x, iy: item.y, sx0: e.clientX, sy0: e.clientY, moved: false };
+        else Breakout._beginMove(e, coords);
         try { $('breakout-main').setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
         Breakout._activePointer = e.pointerId;
     },
+    /** Drag of the whole selection: selected room items and selected ink move together. */
+    _beginMove: (e, coords) => {
+        const items = Breakout.selectedItems().map(item => ({ item, el: document.getElementById(`bk-${item.id}`), ix: item.x, iy: item.y }));
+        Breakout.drag = { mode: 'move-sel', items, ink: InkSel.breakout.count() > 0, sx: coords.x, sy: coords.y, sx0: e.clientX, sy0: e.clientY, dx: 0, dy: 0, moved: false };
+    },
     renderInk: () => {
         const zone = Breakout._getZone(); if (!zone) return;
-        const svg = $('breakout-ink-layer'); svg.textContent = '';
-        (zone.subInk || []).forEach(s => {
-            const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            p.setAttribute('d', InkManager.pointsToPath(s.points)); p.setAttribute('stroke', safeColor(s.color) || '#000'); p.setAttribute('stroke-width', parseFloat(s.width) || 4);
-            p.setAttribute('fill', 'none'); p.setAttribute('stroke-linecap', 'round'); p.setAttribute('stroke-linejoin', 'round'); svg.appendChild(p);
-        });
+        InkSel.breakout.prune();
+        const d = Breakout.drag, live = d && d.mode === 'move-sel' && d.moved && d.ink;
+        InkTools.paint($('breakout-ink-layer'), zone.subInk || [], { sel: InkSel.breakout.sel, offset: live ? { dx: d.dx, dy: d.dy } : null });
     },
     renderParticipants: () => {
         const zone = Breakout._getZone(); if (!zone) return;
@@ -3601,9 +4135,13 @@ window.Breakout = {
     setTool: (tool) => {
         Breakout._state.tool = tool;
         $('breakout-main').className = tool === 'pan' ? 'bk-pan' : (tool === 'draw' || tool === 'eraser' || tool === 'laser' ? 'bk-draw' : '');
-        if (tool !== 'select') Breakout._setSelected(null); else if (window.Shell) Shell.syncTools();
+        if (tool !== 'select' && tool !== 'pan') Breakout._select([]); else if (window.Shell) Shell.syncTools();
     },
-    setColor: (color) => { Breakout._state.color = color; if (Breakout._state.tool !== 'draw') Breakout.setTool('draw'); else if (window.Shell) Shell.syncDraw(); },
+    setColor: (color) => {
+        Breakout._state.color = color;
+        if (InkSel.breakout.count()) { InkSel.breakout.recolor(color); if (window.Shell) Shell.syncDraw(); return; }
+        if (Breakout._state.tool !== 'draw') Breakout.setTool('draw'); else if (window.Shell) Shell.syncDraw();
+    },
     setWidth: (w) => { Breakout._state.width = Math.max(1, Math.min(40, parseInt(w) || 4)); if (window.Shell) Shell.syncDraw(); },
     zoom: (factor) => {
         const view = Breakout._state.view;
@@ -3633,11 +4171,30 @@ window.Breakout = {
         if (!ok) return;
         zone.subInk = []; Breakout.renderInk(); Breakout._pushHistory(); Breakout._scheduleThumbUpdate();
     },
+    /** Deletes the selected room items and selected ink as one undo step. */
     deleteSelected: () => {
         const zone = Breakout._getZone(); if (!zone) return;
-        const id = Breakout._state.selectedId; if (!id) return;
-        zone.subItems = (zone.subItems || []).filter(i => i.id !== id);
-        Breakout._setSelected(null); Breakout.renderItems(); Breakout._pushHistory(); Breakout._scheduleThumbUpdate();
+        const sel = Breakout._state.sel, ink = InkSel.breakout, n = sel.size, strokes = ink.count();
+        if (!n && !strokes) return;
+        zone.subItems = (zone.subItems || []).filter(i => !sel.has(i.id));
+        if (strokes) zone.subInk = (zone.subInk || []).filter(s => !ink.has(s.id));
+        sel.clear(); ink.clear(true);
+        Breakout.renderItems(); Breakout.renderInk(); Breakout._pushHistory(); Breakout._scheduleThumbUpdate();
+        if (window.Shell) { Shell.syncTools(); Shell.onSelection(); }
+        const what = n && strokes ? `${n} item${n === 1 ? '' : 's'} and ${strokes} stroke${strokes === 1 ? '' : 's'} deleted` : (strokes ? (strokes > 1 ? `${strokes} strokes deleted` : 'Stroke deleted') : (n > 1 ? `${n} items deleted` : 'Deleted'));
+        DQBUI.Toast.show(what, { action: { label: 'Undo', onClick: () => Breakout.undo() } });
+    },
+    duplicateSelected: () => {
+        const zone = Breakout._getZone(); if (!zone) return;
+        const items = Breakout.selectedItems(), ink = InkSel.breakout;
+        if (!items.length && !ink.count()) return;
+        const copies = items.map(i => ({ ...JSON.parse(JSON.stringify(i)), id: genId(), x: i.x + 30, y: i.y + 30 }));
+        const inkCopies = ink.strokes().map(s => ({ ...InkTools.translate(s, 30, 30), id: genId() }));
+        if (!zone.subItems) zone.subItems = [];
+        zone.subItems.push(...copies); zone.subInk = (zone.subInk || []).concat(inkCopies);
+        Breakout._state.sel = new Set(copies.map(c => c.id)); ink.sel = new Set(inkCopies.map(c => c.id));
+        Breakout.renderItems(); Breakout.renderInk(); Breakout._pushHistory(); Breakout._scheduleThumbUpdate();
+        if (window.Shell) { Shell.syncTools(); Shell.onSelection(); }
     },
     _pushHistory: () => {
         const zone = Breakout._getZone(); if (!zone) return;
@@ -3651,16 +4208,20 @@ window.Breakout = {
         const zone = Breakout._getZone(); if (!zone) return;
         const snap = Breakout._history[Breakout._historyIdx]; if (!snap) return;
         zone.subItems = JSON.parse(JSON.stringify(snap.subItems)); zone.subInk = JSON.parse(JSON.stringify(snap.subInk));
-        Breakout._setSelected(null); Breakout.renderItems(); Breakout.renderInk(); Breakout._scheduleThumbUpdate();
-        if (window.Shell) Shell.syncHistory();
+        Breakout._state.sel.clear(); InkSel.breakout.clear(true);
+        Breakout.renderItems(); Breakout.renderInk(); Breakout._scheduleThumbUpdate();
+        if (window.Shell) { Shell.syncHistory(); Shell.onSelection(); }
     },
     canUndo: () => Breakout._historyIdx > 0, canRedo: () => Breakout._historyIdx < Breakout._history.length - 1,
     undo: () => { if (!Breakout.canUndo()) return; Breakout._historyIdx--; Breakout._applyHistory(); },
     redo: () => { if (!Breakout.canRedo()) return; Breakout._historyIdx++; Breakout._applyHistory(); },
     _keydown: (e) => {
-        const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase();
-        if (e.key === 'Escape') { if (Breakout._state.selectedId) Breakout._setSelected(null); else Breakout.close(); }
-        else if ((e.key === 'Delete' || e.key === 'Backspace') && Breakout._state.selectedId) { e.preventDefault(); Breakout.deleteSelected(); }
+        const mod = e.metaKey || e.ctrlKey, k = e.key.toLowerCase(), ink = InkSel.breakout, any = Breakout._state.sel.size || ink.count();
+        if (e.key === 'Escape') { if (any) Breakout._select([]); else Breakout.close(); }
+        else if ((e.key === 'Delete' || e.key === 'Backspace') && any) { e.preventDefault(); Breakout.deleteSelected(); }
+        else if (mod && k === 'a') { e.preventDefault(); const z = Breakout._getZone(); ink.sel = new Set(((z && z.subInk) || []).map(s => s.id)); Breakout._select(((z && z.subItems) || []).map(i => i.id), false, true); }
+        else if (mod && k === 'd') { e.preventDefault(); Breakout.duplicateSelected(); }
+        else if (k === 'j' && !mod && ink.count()) ink.combine();
         else if (mod && !e.shiftKey && k === 'z') { e.preventDefault(); Breakout.undo(); }
         else if (mod && (k === 'y' || (e.shiftKey && k === 'z'))) { e.preventDefault(); Breakout.redo(); }
         else if (!mod) { if (k === 'v') Breakout.setTool('select'); else if (k === 'h') Breakout.setTool('pan'); else if (k === 'p') Breakout.setTool('draw'); else if (k === 'e') Breakout.setTool('eraser'); else if (k === 'l') Breakout.setTool('laser'); else if (e.key === '+' || e.key === '=') Breakout.zoom(1.2); else if (e.key === '-') Breakout.zoom(1 / 1.2); }
@@ -3723,27 +4284,8 @@ window.Breakout = {
         if (Breakout._state.sketchMode && Breakout._state.tool !== 'draw') Breakout.setTool('draw');
         if (window.Shell) Shell.syncDraw();
     },
-    _strokeToItem: (points, color, width) => {
-        if (!points || points.length < 2) return null;
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
-        const margin = 16, bx = minX - margin, by = minY - margin, bw = Math.max(80, maxX - minX + margin * 2), contentH = Math.max(60, maxY - minY + margin * 2);
-        const canvas = document.createElement('canvas'); canvas.width = bw; canvas.height = contentH;
-        const ctx = canvas.getContext('2d'); ctx.strokeStyle = safeColor(color) || '#000'; ctx.lineWidth = width; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        ctx.beginPath(); points.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x - bx, p.y - by); else ctx.lineTo(p.x - bx, p.y - by); }); ctx.stroke();
-        return { id: genId(), type: 'note', sub: 'sketch', src: canvas.toDataURL(), text: '', x: bx, y: by, w: bw, h: Math.max(140, contentH + 70) };
-    },
-    pinInkAsItems: () => {
-        const zone = Breakout._getZone(); if (!zone) return;
-        const ink = zone.subInk || [];
-        if (ink.length === 0) { UI.toast("There is no ink to pin", 'warn'); return; }
-        const newItems = ink.map(s => Breakout._strokeToItem(s.points, s.color, s.width)).filter(Boolean);
-        if (newItems.length > 0) {
-            zone.subInk = []; if (!zone.subItems) zone.subItems = []; zone.subItems.push(...newItems);
-            Breakout.renderItems(); Breakout.renderInk(); Breakout._pushHistory(); Breakout._scheduleThumbUpdate();
-            UI.toast(`Pinned ${newItems.length} drawing${newItems.length > 1 ? 's' : ''} as notes`, 'success');
-        }
-    },
+    _strokeToItem: (points, color, width) => InkManager.strokeToItem(points, color, width),
+    pinInkAsItems: () => { if (Breakout._getZone()) InkSel.breakout.pinAll(); },
     setRoomColor: (color) => {
         const zone = Breakout._getZone(); if (!zone) return;
         zone.roomColor = safeColor(color) || '#8b5cf6';
@@ -3792,18 +4334,39 @@ window.Breakout = {
             getView: () => Breakout._state.view,
             setView: (v) => { Object.assign(Breakout._state.view, v); if (window.Shell) Shell.syncZoom(); },
             down: Breakout._onDown, move: Breakout._onMove, up: Breakout._onEnd,
-            cancel: () => { Breakout.drag = null; Breakout.currentPath = []; }
+            cancel: () => { Breakout.drag = null; Breakout.currentPath = []; $('bk-marquee').style.display = 'none'; Breakout.renderInk(); }
         });
         // item drags start on the item element (it stops propagation), so listen for their move/up on the window too
-        window.addEventListener('pointermove', (e) => { if (Breakout.drag && (Breakout.drag.mode === 'move-item' || Breakout.drag.mode === 'resize-item') && e.pointerId === Breakout._activePointer) { e.preventDefault(); Breakout._onMove(e); } }, { passive: false });
-        window.addEventListener('pointerup', (e) => { if (Breakout.drag && (Breakout.drag.mode === 'move-item' || Breakout.drag.mode === 'resize-item') && e.pointerId === Breakout._activePointer) Breakout._onEnd(e); });
+        const itemDrag = (e) => Breakout.drag && Breakout.drag.fromItem !== false && (Breakout.drag.mode === 'move-sel' || Breakout.drag.mode === 'resize-item') && e.pointerId === Breakout._activePointer;
+        window.addEventListener('pointermove', (e) => { if (itemDrag(e)) { e.preventDefault(); Breakout._onMove(e); } }, { passive: false });
+        window.addEventListener('pointerup', (e) => { if (itemDrag(e)) Breakout._onEnd(e); });
     },
     _onDown: (e) => {
         if (!Breakout._zoneId) return false;
         if (e.target.closest('.item') && ['select', 'pan'].includes(Breakout._state.tool)) return false;
-        Breakout._setSelected(null);
-        const tool = Breakout._state.tool, coords = Breakout._screenToWorld(e);
-        if (tool === 'pan' || tool === 'select' || e.button === 1 || e.button === 2) { const v = Breakout._state.view; Breakout.drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: v.x, vy: v.y }; return true; }
+        const tool = Breakout._state.tool, coords = Breakout._screenToWorld(e), v = Breakout._state.view;
+        const ink = InkSel.breakout, additive = e.shiftKey || e.metaKey || e.ctrlKey;
+        const pan = (extra) => { Breakout.drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: v.x, vy: v.y, ...extra }; return true; };
+        if (e.button === 1 || e.button === 2) return pan();
+        if (tool === 'pan' || tool === 'select') {
+            const hit = ink.hitAt(coords.x, coords.y, e.pointerType === 'touch' ? 18 : 9);
+            if (hit) {
+                if (additive) { ink.toggle(hit); if (!ink.has(hit)) return false; }
+                else if (!ink.has(hit)) {
+                    if (tool === 'pan' || e.pointerType === 'touch') return pan({ inkTap: hit });        // tap selects, drag pans
+                    ink.sel = new Set([hit]); Breakout._select([], false, true);
+                }
+                Breakout._beginMove(e, coords); Breakout.drag.fromItem = false;      // the canvas gesture handler delivers move / up
+                return true;
+            }
+            if (tool === 'select' && e.pointerType !== 'touch') {
+                const r = $('breakout-main').getBoundingClientRect();
+                Breakout.drag = { mode: 'box', sx: e.clientX - r.left, sy: e.clientY - r.top, baseItems: additive ? [...Breakout._state.sel] : [], baseInk: additive ? ink.ids() : [] };
+                if (!additive) Breakout._select([]);
+                return true;
+            }
+            return pan({ tapClear: true });
+        }
         if (tool === 'draw') { Breakout.drag = { mode: 'draw' }; Breakout.currentPath = [coords]; return true; }
         if (tool === 'eraser') { Breakout.drag = { mode: 'eraser' }; return true; }
         if (tool === 'laser') { Breakout.drag = { mode: 'laser' }; return true; }
@@ -3812,12 +4375,21 @@ window.Breakout = {
     _onMove: (e) => {
         const d = Breakout.drag; if (!d) return;
         const coords = Breakout._screenToWorld(e), v = Breakout._state.view;
-        if (d.mode === 'pan') { v.x = d.vx + (e.clientX - d.sx) / v.z; v.y = d.vy + (e.clientY - d.sy) / v.z; }
+        if (d.mode === 'pan') { v.x = d.vx + (e.clientX - d.sx) / v.z; v.y = d.vy + (e.clientY - d.sy) / v.z; if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 5) d.moved = true; }
         else if (d.mode === 'draw') { const last = Breakout.currentPath[Breakout.currentPath.length - 1]; if (!last || Math.hypot(coords.x - last.x, coords.y - last.y) > 0.6) Breakout.currentPath.push(coords); }
-        else if (d.mode === 'move-item') {
+        else if (d.mode === 'move-sel') {
             if (!d.moved) { if (Math.hypot(e.clientX - d.sx0, e.clientY - d.sy0) < 5) return; d.moved = true; }
-            d.item.x = d.ix + (coords.x - d.sx); d.item.y = d.iy + (coords.y - d.sy);
-            d.el.style.transform = `translate(${d.item.x}px,${d.item.y}px)`;
+            d.dx = coords.x - d.sx; d.dy = coords.y - d.sy;
+            d.items.forEach(t => { t.item.x = t.ix + d.dx; t.item.y = t.iy + d.dy; if (t.el) t.el.style.transform = `translate(${t.item.x}px,${t.item.y}px)`; });
+            if (d.ink) InkSel.breakout.preview(d.dx, d.dy);
+        } else if (d.mode === 'box') {
+            const r = $('breakout-main').getBoundingClientRect(), m = $('bk-marquee'), zone = Breakout._getZone(); if (!zone) return;
+            const x = e.clientX - r.left, y = e.clientY - r.top, l = Math.min(x, d.sx), t = Math.min(y, d.sy), w = Math.abs(x - d.sx), h = Math.abs(y - d.sy);
+            Object.assign(m.style, { left: l + 'px', top: t + 'px', width: w + 'px', height: h + 'px', display: 'block' });
+            const wr = { x0: l / v.z - v.x, y0: t / v.z - v.y, x1: (l + w) / v.z - v.x, y1: (t + h) / v.z - v.y };
+            const hitItems = (zone.subItems || []).filter(i => i.x < wr.x1 && i.x + (i.w || 180) > wr.x0 && i.y < wr.y1 && i.y + (i.h || 130) > wr.y0).map(i => i.id);
+            InkSel.breakout.sel = new Set(d.baseInk.concat(InkSel.breakout.inRect(wr)));
+            Breakout._select(d.baseItems.concat(hitItems), false, true);
         } else if (d.mode === 'resize-item') {
             d.item.w = Math.max(140, d.iw + (coords.x - d.sx)); d.item.h = Math.max(100, d.ih + (coords.y - d.sy));
             d.el.style.width = `${d.item.w}px`; d.el.style.height = `${d.item.h}px`;
@@ -3834,6 +4406,19 @@ window.Breakout = {
     _onEnd: () => {
         const d = Breakout.drag; if (!d) return;
         const zone = Breakout._getZone();
+        Breakout.drag = null;
+        if (d.mode === 'move-sel') {
+            if (d.moved && (d.dx || d.dy)) {
+                if (d.ink) InkSel.breakout.translate(d.dx, d.dy);          // stores moved ink and items as one history step
+                else Breakout._pushHistory();
+                Breakout._scheduleThumbUpdate();
+            } else if (d.ink) Breakout.renderInk();
+        }
+        if (d.mode === 'box') $('bk-marquee').style.display = 'none';
+        if (d.mode === 'pan' && !d.moved) {
+            if (d.inkTap) { InkSel.breakout.sel = new Set([d.inkTap]); Breakout._select([], false, true); }
+            else if (d.tapClear) Breakout._select([]);
+        }
         if (d.mode === 'draw' && Breakout.currentPath.length > 1 && zone) {
             if (Breakout._state.sketchMode) {
                 const it = Breakout._strokeToItem(Breakout.currentPath, Breakout._state.color, Breakout._state.width);
@@ -3846,19 +4431,35 @@ window.Breakout = {
             Breakout._pushHistory(); Breakout._scheduleThumbUpdate();
         }
         if (d.mode === 'eraser' && d.erased) { Breakout._pushHistory(); Breakout._scheduleThumbUpdate(); }
-        if (d.mode === 'move-item' && d.moved) { Breakout._pushHistory(); Breakout._scheduleThumbUpdate(); }
         if (d.mode === 'resize-item' && (d.item.w !== d.iw || d.item.h !== d.ih)) { Breakout._pushHistory(); Breakout._scheduleThumbUpdate(); }
-        Breakout.drag = null; Breakout.currentPath = [];
+        Breakout.currentPath = [];
         if ($('bk-temp-ink')) $('bk-temp-ink').innerHTML = '';
     }
 };
+
+InkSel.breakout = InkSel.create({
+    ink: () => { const z = Breakout._getZone(); return (z && z.subInk) || []; },
+    zoom: () => Breakout._state.view.z,
+    svg: () => $('breakout-ink-layer'),
+    commit: (ink) => { const z = Breakout._getZone(); if (!z) return; z.subInk = ink; Breakout.renderInk(); Breakout._pushHistory(); Breakout._scheduleThumbUpdate(); },
+    changed: () => { Breakout.renderInk(); if (window.Shell) { Shell.syncTools(); Shell.onSelection(); } },
+    toNotes: (images, keep) => {
+        const z = Breakout._getZone(); if (!z) return [];
+        const notes = images.map(InkManager.noteFromImage);
+        z.subInk = keep; if (!z.subItems) z.subItems = []; z.subItems.push(...notes);
+        Breakout._state.sel = new Set(notes.map(n => n.id));
+        Breakout.renderItems(); Breakout.renderInk(); Breakout._pushHistory(); Breakout._scheduleThumbUpdate();
+        if (window.Shell) { Shell.syncTools(); Shell.onSelection(); }
+        return notes;
+    }
+});
 
 /* --- TOOL + SMALL GLOBALS --- */
 window.setTool = function (t) {
     if (Workspace.mode !== 'board') { Workspace.setTool(t); return; }
     State.tool = t;
     if (t !== 'select') State.multiSelect = false;
-    if (t !== 'pan' && t !== 'select') { InkManager.deselectStroke(); }
+    if (t !== 'pan' && t !== 'select') InkSel.board.clear();       // a pen colour must not silently recolour selected ink
     $('viewport').className = t === 'pan' ? 'panning' : (t === 'draw' || t === 'eraser' ? 'drawing' : (t === 'laser' ? 'laser' : ''));
     if (window.Shell) Shell.syncTools();
 };

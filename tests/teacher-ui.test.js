@@ -112,6 +112,25 @@ test('desktop: drawing tools, shortcuts, menus and exports', async () => {
   assert.match(await p.textContent('.a11y-list'), /Idea|idea/i);
 });
 
+test('desktop: several selected notes change type and lock together from the selection toolbar', async () => {
+  const p = await env.teacher('desktop');
+  const E = (fn, arg) => p.evaluate(fn, arg);
+  await E(() => {
+    [['m1', 'notice'], ['m2', 'wonder'], ['m3', 'idea']].forEach(([id, sub], i) => StateManager.addItem({ id, type: 'note', sub, text: id, x: 100 + i * 240, y: 120, w: 220, h: 160, groupId: null }));
+    StateManager.setSelection(['m1', 'm2', 'm3']);
+  });
+  await p.click('[data-sb="type"]');
+  await p.click('.menu .menu-item:has-text("Testable")');
+  assert.deepEqual(await E(() => State.items.map((i) => i.sub)), ['test', 'test', 'test']);
+  await p.click('[data-sb="lock"]');
+  assert.deepEqual(await E(() => State.items.map((i) => !!i.locked)), [true, true, true]);
+  assert.equal(await p.getAttribute('[data-sb="lock"]', 'aria-label'), 'Unlock', 'the button now offers to unlock');
+  await p.click('[data-sb="lock"]');
+  assert.deepEqual(await E(() => State.items.map((i) => !!i.locked)), [false, false, false]);
+  await p.keyboard.press('Control+z');
+  assert.deepEqual(await E(() => State.items.map((i) => !!i.locked)), [true, true, true], 'each change is one undo step');
+});
+
 test('desktop: boards persist, and a co-host can join, edit and is refused with the wrong key', async () => {
   const host = await env.teacher('desktop');
   await host.evaluate(() => StateManager.addItem({ id: 'n1', type: 'note', sub: 'idea', text: 'persist me', x: 100, y: 100, w: 200, h: 140, author: 'T', votes: 0, groupId: null }));
@@ -127,6 +146,13 @@ test('desktop: boards persist, and a co-host can join, edit and is refused with 
   await host.waitForFunction(() => State.items.find((i) => i.id === 'n1').text === 'edited by co-host');
   await host.evaluate(() => StateManager.addItem({ id: 'n2', type: 'note', sub: 'wonder', text: 'from host', x: 400, y: 100, w: 200, h: 140, author: 'T', votes: 0, groupId: null }));
   await co.waitForFunction(() => State.items.some((i) => i.id === 'n2'));
+  // which zones are live follows the host, opening and closing alike
+  await host.evaluate(() => { StateManager.addItem({ id: 'zc1', type: 'zone', title: 'Shared', x: 700, y: 100, w: 300, h: 300, children: [], groupId: null }); Network.openZones(['zc1']); });
+  await co.waitForFunction(() => State.items.some((i) => i.id === 'zc1' && i.isOpen));
+  await host.evaluate(() => Network.closeZones(['zc1']));
+  await co.waitForFunction(() => State.items.some((i) => i.id === 'zc1' && !i.isOpen));
+  await host.evaluate(() => HierarchyManager.delete(['zc1']));
+  await co.waitForFunction(() => !State.items.some((i) => i.id === 'zc1'));
 
   const bad = await env.open('desktop', '/Teacher/');
   await bad.click('#btn-join-cohost');

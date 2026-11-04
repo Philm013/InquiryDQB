@@ -9,7 +9,7 @@ const assert = require('node:assert/strict');
 const { boot } = require('./harness');
 
 const AXE = require.resolve('axe-core/axe.min.js');
-let env, code;
+let env, code, host;
 
 async function violations(page) {
   await page.addScriptTag({ path: AXE });             // contexts below use bypassCSP: axe is injected as an inline script
@@ -22,9 +22,13 @@ const clean = async (page, label) => assert.deepEqual(await violations(page), []
 
 before(async () => {
   env = await boot();
-  const t = await env.teacher('desktop');
-  code = await t.evaluate(() => Network.getCode());
-  await t.evaluate(() => Network.transitionTo('OPEN'));
+  host = await env.teacher('desktop');
+  code = await host.evaluate(() => Network.getCode());
+  await host.evaluate(() => {
+    StateManager.addItem({ id: 'za', type: 'zone', title: 'Red team', color: '#ef4444', x: 0, y: 0, w: 320, h: 320, children: [], groupId: null });
+    StateManager.addItem({ id: 'zb', type: 'zone', title: 'Blue team', color: '#3b82f6', x: 400, y: 0, w: 320, h: 320, children: [], groupId: null });
+    Network.transitionTo('OPEN');
+  });
 });
 after(async () => { await env.close(); });
 
@@ -61,7 +65,11 @@ for (const scheme of ['light', 'dark']) {
       await p.evaluate(() => StateManager.setSelection(['a']));
       await p.waitForTimeout(300);
       await clean(p, `teacher selection ${device} ${scheme}`);
-      for (const [label, open] of [['share sheet', () => Shell.Share.open()], ['class panel', () => Shell.Panel.open('students')], ['settings', () => Shell.Settings.open()]]) {
+      await p.evaluate(() => { InkSel.board.clear(); StateManager.setInk([{ id: 'k1', points: [{ x: 700, y: 520 }, { x: 900, y: 560 }], color: '#ef4444', width: 4 }, { id: 'k2', points: [{ x: 700, y: 600 }, { x: 900, y: 610 }], color: '#3b82f6', width: 4 }]); StateManager.setSelection([]); InkSel.board.set(['k1', 'k2']); });
+      await p.waitForTimeout(300);
+      await clean(p, `teacher ink selection ${device} ${scheme}`);
+      const openZones = () => { StateManager.addItem({ id: 'zc', type: 'zone', title: 'Blue team', color: '#3b82f6', x: 40, y: 500, w: 330, h: 300, children: [], groupId: null }); Network.openZones(['z1', 'zc']); Shell.Panel.open('activity'); };
+      for (const [label, open] of [['share sheet', () => Shell.Share.open()], ['class panel', () => Shell.Panel.open('students')], ['settings', () => Shell.Settings.open()], ['groups sheet', () => Shell.Groups.open()], ['open zones activity', openZones]]) {
         await p.evaluate(() => { Shell.Panel.close(); DQBUI.Overlay.closeAll(); StateManager.setSelection([]); });
         await p.waitForTimeout(350);
         await p.evaluate(open);
@@ -83,6 +91,19 @@ for (const scheme of ['light', 'dark']) {
     await s.waitForSelector('.type-tile');
     await s.waitForTimeout(2600);                                                   // let the welcome toast clear
     await clean(s, `student board ${scheme}`);
+    await host.evaluate(() => Network.openZones(['za', 'zb']));                       // a student without a group chooses between two zones
+    await s.waitForSelector('.zone-choice');
+    await s.waitForTimeout(300);
+    await clean(s, `student zone picker ${scheme}`);
+    await s.click('.zone-choice[data-id="zb"]');
+    await s.click('.type-tile.t-wonder');
+    await s.waitForSelector('#w-zone:not([hidden])');
+    await s.waitForTimeout(300);
+    await clean(s, `student write with zone choice ${scheme}`);
+    await s.click('#p-write [data-close]');
+    await s.waitForSelector('#p-write', { state: 'hidden' });
+    await host.evaluate(() => Network.transitionTo('OPEN'));
+    await s.waitForFunction(() => /The board is open/.test(document.getElementById('board-content').textContent));
     await s.click('.type-tile.t-idea');
     await s.waitForSelector('#p-write:not([hidden])');
     await s.fill('#w-txt', 'A thought');

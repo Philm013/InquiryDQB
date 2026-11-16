@@ -14,6 +14,7 @@ and boards loaded from a host are sanitised item by item like anything that arri
 |---|---|---|
 | `assetBase` | string | Folder of `vendor/`, `fonts/`, `icons/` when the pages are not served from the repository layout (default `../`) |
 | `studentUrl` | string | Absolute address of the student page, used in join links and QR codes (default `../Student/`) |
+| `joinPage` | string | The address students are told to type in the Share sheet (a short page with a join form; default the student page) |
 | `swUrl` | string or `null` | The host's service worker (and so its scope); `null` registers none (default `../sw.js`) |
 | `leaveUrl` | string | Where "Leave board" goes (default: back to the boards home) |
 

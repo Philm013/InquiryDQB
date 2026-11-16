@@ -92,7 +92,8 @@
       const ov = Shell.Share.ov; if (!ov) return;
       const wrap = ov.body.firstElementChild; if (!wrap) return;
       const s = Network.status, code = Network.getCode(), n = Network.studentCount();
-      const url = Network.joinUrl(), studentPage = (new URL('../Student/', location.href)).href.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      const hostPage = DQBUI.host().joinPage, url = Network.joinUrl();
+      const studentPage = (typeof hostPage === 'string' && /^https?:\/\//.test(hostPage) ? hostPage : (new URL('../Student/', location.href)).href).replace(/^https?:\/\//, '').replace(/\/$/, '');
       const statusHtml = s === 'ready' ? `<span class="dot ok"></span>Ready · ${n ? `${n} student${n === 1 ? '' : 's'} connected` : 'waiting for students'}`
         : s === 'connecting' ? `<span class="dot warn"></span>Connecting to the class service…`
         : `<span class="dot bad"></span>Offline — students can’t join right now`;

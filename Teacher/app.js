@@ -1742,7 +1742,7 @@ window.Actions = {
     },
     /** Adds a link / resource card (from the Insert menu or a host library). Returns the item, or null. */
     addLink: (card, at, opts) => {
-        const r = Sanitize.item({ ...card, id: genId(), type: 'link', x: 0, y: 0, w: card.thumb ? 280 : 260, h: card.thumb ? 280 : (card.desc ? 200 : 150) });
+        const r = Sanitize.item({ ...card, id: genId(), type: 'link', x: 0, y: 0, w: card.thumb ? 280 : 260, h: card.thumb ? 320 : (card.desc ? 210 : 160) });
         if (!r) { UI.toast('That card can’t be added: its address isn’t a web page.', 'warn'); return null; }
         const c = at || Viewport.centerWorld();
         const pos = Board.getFreeSpace(c.x - r.w / 2, c.y - r.h / 2, r.w, r.h);
@@ -1753,9 +1753,9 @@ window.Actions = {
     },
     /** Adds several cards in a new zone (a whole collection). Returns how many were added. */
     addLinkZone: (title, cards) => {
-        const list = (cards || []).map(c => Sanitize.item({ ...c, id: genId(), type: 'link', x: 0, y: 0, w: 240, h: c.thumb ? 260 : 180 })).filter(Boolean).slice(0, 40);
+        const list = (cards || []).map(c => Sanitize.item({ ...c, id: genId(), type: 'link', x: 0, y: 0, w: 260, h: c.thumb ? 300 : 190 })).filter(Boolean).slice(0, 40);
         if (!list.length) return 0;
-        const cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(list.length)))), cw = 260, ch = 280, pad = 24;
+        const cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(list.length)))), cw = 280, ch = 320, pad = 24;
         const w = cols * cw + pad * 2 - 20, h = Math.ceil(list.length / cols) * ch + pad * 2 + 30;
         const c = Viewport.centerWorld(), pos = Board.getFreeSpace(c.x - w / 2, c.y - h / 2, w, h);
         const zone = { id: genId(), type: 'zone', title: clampStr(title || 'Collection', 80), x: pos.x, y: pos.y, w, h, children: list.map(i => i.id) };

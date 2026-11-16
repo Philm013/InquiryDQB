@@ -781,7 +781,11 @@
     window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); Shell.installPrompt = e; });
     window.addEventListener('appinstalled', () => { Shell.installPrompt = null; Toast.success('InquiryDQB Teacher is installed. Open it from your apps or home screen.', { duration: 6000 }); });
 
-    DB.init().then(() => { Shell.Home.init(); Shell.Home.render(); });
+    DB.init().then(() => {
+      Shell.Home.init(); Shell.Home.render();
+      const open = DQBUI.host().openBoard;                                       // a host link straight to one board
+      if (typeof open === 'string' && DQBUI.safeId(open) && !new URLSearchParams(location.search).get('cohost')) Board.load(open);
+    });
     InputController.init(); Consensus.init(); Breakout.initEvents();
     const cohostParam = new URLSearchParams(location.search).get('cohost');
     if (cohostParam) setTimeout(() => Shell.Join.open(cohostParam), 300);

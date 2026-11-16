@@ -124,3 +124,48 @@ for (const scheme of ['light', 'dark']) {
     await clean(s, `student profile ${scheme}`);
   });
 }
+
+/* Host-integration UI: link cards on the board, the library sheet and a student's "Shared with you" list. */
+function libraryHost() {
+  window.DQB_HOST = { library: { name: 'TestSite', search: async () => [
+    { id: 1, kind: 'resource', title: 'Water cycle simulator', desc: 'Move the sun and watch evaporation.', url: 'https://example.org/sim', thumb: '/icons/icon-192.png', meta: 'Interactive · Science' },
+    { id: 2, kind: 'resource', title: 'Frog life cycle', url: 'https://example.org/frog', meta: 'Video' }
+  ] } };
+}
+for (const scheme of ['light', 'dark']) {
+  test(`link cards, library and shared links (${scheme})`, async () => {
+    for (const device of ['desktop', 'phone']) {
+      const c = await env.context(device, { colorScheme: scheme, bypassCSP: true });
+      await c.addInitScript(libraryHost);
+      const p = await c.newPage();
+      await p.goto(env.origin + '/Teacher/');
+      await p.click('#btn-new-board');
+      await p.waitForFunction(() => window.Network && Network.status === 'ready');
+      await p.evaluate(() => {
+        Actions.addLink({ url: 'https://example.org/sim', title: 'Water cycle simulator', desc: 'Move the sun and watch evaporation.', thumb: '/icons/icon-192.png', kind: 'resource', source: 'TestSite' }, null, { select: false });
+        Actions.addLink({ url: 'https://example.org/read', title: 'Reading for today', kind: 'link' }, null, { select: false });
+        document.activeElement && document.activeElement.blur(); Viewport.fit(false);
+      });
+      await p.waitForTimeout(500);
+      await clean(p, `teacher link cards ${device} ${scheme}`);
+      await p.evaluate(() => { const id = State.items.find((i) => i.type === 'link').id; StateManager.setSelection([id]); Network.toggleShare(id); });
+      await p.waitForTimeout(400);
+      await clean(p, `teacher shared card selected ${device} ${scheme}`);
+      await p.evaluate(() => { StateManager.setSelection([]); Shell.Library.open(); });
+      await p.waitForSelector('.lib-row');
+      await p.waitForTimeout(400);
+      await clean(p, `teacher library sheet ${device} ${scheme}`);
+      if (device === 'phone') {
+        const libCode = await p.evaluate(() => Network.getCode());
+        const s = await (await env.context('phone', { colorScheme: scheme, bypassCSP: true })).newPage();
+        await s.goto(env.origin + '/Student/?join=' + libCode);
+        await s.waitForSelector('body[data-ready="1"]');
+        await s.fill('#inp-name', 'Maya');
+        await s.click('#btn-setup');
+        await s.waitForSelector('.shared-item');
+        await s.waitForTimeout(2600);                                               // let the welcome toast clear
+        await clean(s, `student shared links ${scheme}`);
+      }
+    }
+  });
+}

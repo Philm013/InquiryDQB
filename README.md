@@ -18,6 +18,7 @@ InquiryDQB is a static website: HTML, CSS and vanilla JavaScript, with no build 
 - **Ink tools everywhere:** on the board, the class model and breakout rooms, pick strokes one at a time or with a box, move, recolour, duplicate or delete them, and turn several strokes into one sketch note.
 - **Live activities:** poll, live graph, spinner; vote, rank and discuss on any set of notes; five exit-ticket formats (short answer, rating, multiple choice, multi-select, learn / wonder).
 - **Classroom control:** approve notes before they appear, pause or remove a student, hide names, class timer, co-host on a second device, lock or open the board.
+- **Resources:** put a link card for any web page on the board and share it: it appears on every student's device with an Open button.
 - **Yours to keep:** boards autosave on the device; export as a board file (JSON), a picture (PNG) or a printable outline; text-only accessibility view; templates (See-Think-Wonder, K-W-L, Frayer, Venn, Four Corners, Compass Points) and your own.
 - Desktop feels like a whiteboard app (tool rail, floating bars, docked class panel, keyboard shortcuts: press `?`). On phones it becomes a bottom-navigation app with sheets and a selection toolbar.
 
@@ -52,6 +53,11 @@ npm test
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for what is covered.
+
+### Embedding it in another site
+
+InquiryDQB can run inside a learning platform as a built-in tool, using the platform's accounts, storage and resource library
+(TechieTeaching does this). A host defines `window.DQB_HOST`; see [docs/EMBEDDING.md](docs/EMBEDDING.md).
 
 ### Connection service and school networks
 

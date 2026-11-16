@@ -28,7 +28,8 @@
   /* State + persistence                                                     */
   /* ====================================================================== */
   const State = {
-    me: { sid: '', name: '', av: '😀', color: null, group: '' },
+    me: { sid: '', name: '', av: '😀', color: null, group: '', locked: false },
+    shared: [],              // links the teacher shared with the class ({ id, title, desc, url, thumb, kind, source })
     target: null,            // { peerId, code }
     boardId: null, notes: [],
     // zones: the open zones this student may write into ({ id, title, zoneType, color, group }); zonePick: the one they chose
@@ -45,13 +46,30 @@
   const isDone = () => !!State.responded[actKey()];
   const markDone = () => { State.responded[actKey()] = true; };
 
+  /** A signed-in student's identity from the host site ({ sid, name }): the name is theirs and the sid is issued by the site. */
+  function hostIdentity() {
+    const id = DQBUI.host().identity;
+    if (!id || typeof id !== 'object' || !safeId(String(id.sid || ''))) return null;
+    const name = clampStr(String(id.name || '').replace(/[<>\u0000-\u001f]/g, '').trim(), 24);
+    return name ? { sid: String(id.sid), name } : null;
+  }
+  /** Notes written on this device by the person using it now (a shared school device keeps each student's notes apart). */
+  const isMine = (n) => (State.me.locked ? n.sid === State.me.sid : (!n.sid || n.sid === State.me.sid));
+
   const Store = {
     db: null,
     init() {
       return new Promise(resolve => {
-        // profile: localStorage first (always available), IndexedDB for notes
-        try { const p = JSON.parse(localStorage.getItem('dqb_profile') || 'null'); if (p) Object.assign(State.me, p); } catch (e) { /* ignore */ }
-        if (!State.me.sid) { State.me.sid = Net.genCode(16); Store.saveProfile(); }          // crypto-random: it identifies this student to the teacher
+        const ident = hostIdentity();
+        if (ident) {
+          // signed in: the site says who this is; only the avatar choice is remembered (per account, never the name for guests)
+          Object.assign(State.me, { sid: ident.sid, name: ident.name, locked: true });
+          try { const av = localStorage.getItem('dqb_av:' + ident.sid); if (Net.AVATARS.includes(av)) State.me.av = av; } catch (e) { /* ignore */ }
+        } else {
+          // profile: localStorage first (always available), IndexedDB for notes
+          try { const p = JSON.parse(localStorage.getItem('dqb_profile') || 'null'); if (p) Object.assign(State.me, { sid: p.sid || '', name: p.name || '', av: p.av || State.me.av }); } catch (e) { /* ignore */ }
+          if (!State.me.sid) { State.me.sid = Net.genCode(16); Store.saveProfile(); }          // crypto-random: it identifies this student to the teacher
+        }
         let req;
         try { req = indexedDB.open('DQB_Student', 2); } catch (e) { resolve(); return; }
         req.onupgradeneeded = e => {
@@ -64,7 +82,7 @@
           Store.db = e.target.result;
           try {
             const tx = Store.db.transaction(['profile', 'notes'], 'readonly');
-            tx.objectStore('profile').get('me').onsuccess = ev => { const r = ev.target.result; if (r && r.val && !State.me.name) Object.assign(State.me, { name: r.val.name || '', av: r.val.av || State.me.av }); };
+            tx.objectStore('profile').get('me').onsuccess = ev => { const r = ev.target.result; if (r && r.val && !State.me.name && !State.me.locked) Object.assign(State.me, { name: r.val.name || '', av: r.val.av || State.me.av }); };
             tx.objectStore('notes').getAll().onsuccess = ev => { State.notes = ev.target.result || []; };
             tx.oncomplete = () => resolve(); tx.onerror = () => resolve();
           } catch (err) { resolve(); }
@@ -72,6 +90,7 @@
       });
     },
     saveProfile() {
+      if (State.me.locked) { try { localStorage.setItem('dqb_av:' + State.me.sid, State.me.av); } catch (e) { /* ignore */ } return; }
       try { localStorage.setItem('dqb_profile', JSON.stringify({ sid: State.me.sid, name: State.me.name, av: State.me.av })); } catch (e) { /* ignore */ }
       if (Store.db) { try { Store.db.transaction('profile', 'readwrite').objectStore('profile').put({ key: 'me', val: { name: State.me.name, av: State.me.av } }); } catch (e) { /* ignore */ } }
     },
@@ -197,7 +216,7 @@
       const q = State.outbox; State.outbox = [];
       q.forEach(m => Conn.send(m, true));
       // anything we saved as "sending" in an earlier session
-      State.notes.filter(n => n.status === 'sending' && n.boardId === State.boardId && !q.some(m => m.id === n.id)).forEach(n => Conn.send(noteMsg(n), true));
+      State.notes.filter(n => n.status === 'sending' && n.boardId === State.boardId && isMine(n) && !q.some(m => m.id === n.id)).forEach(n => Conn.send(noteMsg(n), true));
     }
   };
   function noteMsg(n) { return n.src ? { type: 'IMG_NOTE', id: n.id, src: n.src, text: n.text, zoneId: n.zoneId || null } : { type: 'NOTE', id: n.id, sub: n.sub, text: n.text, zoneId: n.zoneId || null }; }
@@ -243,6 +262,7 @@
         (d.sync || []).forEach(n => { const l = State.notes.find(x => x.id === n.id); if (l) { l.text = clampStr(n.text, 1000); l.sub = n.sub; if (l.status !== 'approved') { l.status = 'approved'; } Store.saveNote(l); } });
         (d.pending || []).forEach(id => { const l = State.notes.find(x => x.id === id); if (l && l.status !== 'pending') { l.status = 'pending'; Store.saveNote(l); } });
         if (d.timer) Timer.set(d.timer);
+        Shared.set(d.shared, true);
         Conn.setState('online');
         State.activity = { type: 'LOCKED', id: null, rid: null, sub: null, title: '', zoneType: null, items: [], payload: null };
         if (d.payload) Handle(d.payload); else if (d.mode) Handle({ type: 'MODE', val: d.mode });
@@ -287,7 +307,13 @@
       }
       case 'RULES': if (d.rules) { State.rules = { names: d.rules.names !== false, approve: !!d.rules.approve }; Write.sync(); } break;
       case 'MUTE': State.muted = !!d.on; Views.renderBoard(); Views.syncChrome(); Write.sync(); if (State.muted) Toast.warn('Your teacher paused notes from you for now.'); else Toast.success('You can add notes again.'); break;
-      case 'KICKED': Conn.stop(); Store.setLastJoin(null); State.everConnected = false; Pages.closeAll(); Views.ended(d.reason === 'code-reset' ? 'The class code was reset' : 'You were removed from the class', d.reason === 'code-reset' ? 'Your teacher generated a new code. Ask for it to rejoin.' : 'Your teacher removed you from this session.'); break;
+      case 'KICKED': {
+        Conn.stop(); Store.setLastJoin(null); State.everConnected = false; Pages.closeAll(); Shared.set([], true);
+        if (d.reason === 'restricted') { Views.ended('This board is for the teacher’s own students', clampStr(d.msg, 200) || 'Sign in with your student account, then join again.'); break; }
+        Views.ended(d.reason === 'code-reset' ? 'The class code was reset' : 'You were removed from the class', d.reason === 'code-reset' ? 'Your teacher generated a new code. Ask for it to rejoin.' : 'Your teacher removed you from this session.');
+        break;
+      }
+      case 'SHARED': Shared.set(d.items); break;
       case 'TIMER': Timer.set(d); break;
       case 'NOTE_STATUS': {
         const n = State.notes.find(x => x.id === d.id); if (!n) break;
@@ -366,7 +392,7 @@
       const canAdd = Write.canAdd();
       $('tab-add').classList.toggle('disabled', !canAdd);
       $('tab-add').setAttribute('aria-disabled', String(!canAdd));
-      const n = State.notes.filter(x => x.boardId === State.boardId).length;
+      const n = State.notes.filter(x => x.boardId === State.boardId && isMine(x)).length;
       const b = $('notes-badge'); b.hidden = !n; b.textContent = n;
     },
     renderMe() {
@@ -408,14 +434,15 @@
         html += done ? `<div class="card done-card"><div class="ok">${ic('check', 'lg')}</div><div><b>Response sent</b><div class="text-2">Thanks! Wait for your teacher to move on.</div></div></div>`
           : `<div class="card act-card"><div class="act-head"><span class="act-tag">${label}</span></div><h2>${esc(a.title || '')}</h2><button type="button" class="btn btn-primary btn-lg" data-act="open-task">Answer now</button></div>`;
       }
-      box.innerHTML = html; hydrateIcons(box);
+      box.innerHTML = Shared.html() + html; hydrateIcons(box);
+      Shared.fillThumbs(box);
       if (a.type === 'ZONE' && a.sub === 'ACT_SORT') Rank.mount();
     },
 
     /* ---- my notes tab ---- */
     renderNotes() {
       const list = $('notes-list'); if (!list) return;
-      const notes = State.notes.filter(n => n.boardId === State.boardId || (!State.boardId && false)).sort((a, b) => b.ts - a.ts);
+      const notes = State.notes.filter(n => n.boardId === State.boardId && isMine(n)).sort((a, b) => b.ts - a.ts);
       $('notes-count').textContent = notes.length ? `${notes.length} note${notes.length === 1 ? '' : 's'}` : '';
       if (!notes.length) { list.innerHTML = `<div class="card empty"><div class="em-ico">${ic('note', 'lg')}</div><div class="em-t">No notes yet</div><div>Tap the <b>+</b> button when your teacher opens the board.</div></div>`; Views.syncChrome(); return; }
       const label = { sending: ['Sending…', 'status-sending'], approved: ['On the board', 'status-approved'], pending: ['Waiting for your teacher', 'status-pending'], rejected: ['Not added', 'status-rejected'] };
@@ -426,6 +453,29 @@
       $$('img[data-img]', list).forEach(img => { const n = State.notes.find(x => x.id === img.dataset.img); const s = n && safeImg(n.src, 3000000); if (s) img.src = s; });
       Views.syncChrome();
     }
+  };
+
+  /* ---- links the teacher shared with the class ---- */
+  const Shared = {
+    clean(list) {
+      return (Array.isArray(list) ? list : []).slice(0, 12).map(x => ({
+        id: safeId(x && x.id), title: clampStr(x && x.title, 200), desc: clampStr(x && x.desc, 500), url: DQBUI.safeUrl(x && x.url),
+        thumb: DQBUI.safeThumb(x && x.thumb), kind: ['resource', 'collection', 'link'].includes(x && x.kind) ? x.kind : 'link', source: clampStr(x && x.source, 60)
+      })).filter(x => x.id && x.url);
+    },
+    set(list, quiet) {
+      const before = new Set(State.shared.map(x => x.id));
+      State.shared = Shared.clean(list);
+      const added = State.shared.filter(x => !before.has(x.id));
+      if (!quiet && added.length) { Toast.show(added.length === 1 ? `Your teacher shared “${added[0].title}”` : `Your teacher shared ${added.length} things`, { icon: 'link', duration: 3200 }); DQBUI.haptic(15); DQBUI.announce('Your teacher shared something with the class.'); }
+      if (State.view === 'board') Views.renderBoard();
+    },
+    html() {
+      if (!State.shared.length) return '';
+      const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
+      return `<section class="shared card" aria-labelledby="shared-h"><div class="shared-head"><span class="ico">${ic('link', 'sm')}</span><h2 id="shared-h">Shared with you</h2><span class="muted">${State.shared.length}</span></div><div class="shared-list">${State.shared.map(x => `<a class="shared-item" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${x.thumb ? `<img alt="" data-thumb="${esc(x.id)}" loading="lazy">` : `<span class="ph" aria-hidden="true">${ic(x.kind === 'link' ? 'link' : 'book')}</span>`}<span class="tx"><b>${esc(x.title)}</b>${x.desc ? `<small>${esc(x.desc)}</small>` : ''}<span class="src">${esc(x.source || host(x.url))}</span></span><span class="go" aria-hidden="true">${ic('chev-right', 'sm')}</span><span class="sr-only"> (opens in a new tab)</span></a>`).join('')}</div></section>`;
+    },
+    fillThumbs(box) { $$('img[data-thumb]', box).forEach(img => { const x = State.shared.find(s => s.id === img.dataset.thumb); if (x && x.thumb) img.src = x.thumb; }); }
   };
 
   /* ---- board interactions (event delegation) ---- */
@@ -626,7 +676,7 @@
     send() {
       const text = $('w-txt').value.trim();
       if (!text || !Write.canAdd()) return;
-      const n = { id: DQBUI.genId(), sub: Write.type, text: clampStr(text, MAX_TEXT), ts: Date.now(), boardId: State.boardId || 'board', status: 'sending', zoneId: Write.targetZoneId() };
+      const n = { id: DQBUI.genId(), sub: Write.type, text: clampStr(text, MAX_TEXT), ts: Date.now(), boardId: State.boardId || 'board', status: 'sending', zoneId: Write.targetZoneId(), sid: State.me.sid };
       Store.saveNote(n); Conn.send(noteMsg(n), true);
       try { localStorage.removeItem('dqb_draft'); } catch (e) { /* ignore */ }
       $('w-txt').value = ''; Pages.close('p-write'); DQBUI.haptic(15);
@@ -703,7 +753,7 @@
     send() {
       if (!Sketch.dirty || !Write.canAdd()) return;
       const src = Sketch.exportData();
-      const n = { id: DQBUI.genId(), sub: 'sketch', text: clampStr($('s-caption').value.trim(), 80), src, ts: Date.now(), boardId: State.boardId || 'board', status: 'sending', zoneId: Write.targetZoneId() };
+      const n = { id: DQBUI.genId(), sub: 'sketch', text: clampStr($('s-caption').value.trim(), 80), src, ts: Date.now(), boardId: State.boardId || 'board', status: 'sending', zoneId: Write.targetZoneId(), sid: State.me.sid };
       Store.saveNote(n); Conn.send(noteMsg(n), true);
       Sketch.ctx.clearRect(0, 0, $('s-canvas').width, $('s-canvas').height); Sketch.dirty = false; Sketch.history = []; $('s-caption').value = '';
       Pages.close('p-sketch'); DQBUI.haptic(15); Toast.success(State.rules.approve ? 'Sent — waiting for your teacher' : 'Drawing sent', { duration: 2000 });
@@ -927,6 +977,7 @@
       on($('inp-code'), 'keydown', e => { if (e.key === 'Enter') connect(); });
       on($('inp-code'), 'input', e => { $('code-err').hidden = true; $('inp-code').classList.remove('invalid'); const v = e.target.value; if (/^https?:|join=/.test(v)) { const p = Net.parseJoinInput(v); if (p) { Onboard.begin(p); } } });
       on($('btn-scan'), 'click', Onboard.scan);
+      on($('live-list'), 'click', e => { const b = e.target.closest('[data-live]'); if (!b) return; const p = Net.parseJoinInput(b.dataset.live); if (p) { Onboard.stopScan(); Onboard.begin(p); } });
       on($('btn-edit-me'), 'click', () => { Views.show('setup'); $('inp-name').value = State.me.name; Onboard.pick(State.me.av); });
       on($('btn-rejoin'), 'click', () => { Views.show('join'); });
       on($('me-btn'), 'click', Profile.open);
@@ -935,7 +986,18 @@
     afterProfile() {
       if (State.target) { Onboard.begin(State.target); return; }
       const lj = Store.lastJoin(); if (lj) { Onboard.begin({ peerId: lj.peerId, code: lj.code }); return; }
-      Views.show('join'); setTimeout(() => $('inp-code').focus({ preventScroll: true }), 100);
+      Views.show('join'); Onboard.live(); setTimeout(() => $('inp-code').focus({ preventScroll: true }), 100);
+    },
+    /** Boards the host says are live for this student right now (DQB_HOST.live() -> [{code, title, teacher}]). */
+    async live() {
+      const fn = DQBUI.host().live, box = $('live-list');
+      if (typeof fn !== 'function' || !box) return;
+      let list = [];
+      try { list = await fn(); } catch (e) { list = []; }
+      list = (Array.isArray(list) ? list : []).map(x => ({ code: String(x && x.code || '').toUpperCase(), title: clampStr(x && x.title, 80) || 'Class board', teacher: clampStr(x && x.teacher, 60), lesson: clampStr(x && x.lesson, 80) })).filter(x => Net.parseJoinInput(x.code)).slice(0, 6);
+      if (!list.length || State.view !== 'join') { box.hidden = true; box.innerHTML = ''; return; }
+      box.innerHTML = `<div class="section-label">Live now</div>` + list.map(x => `<button type="button" class="live-item card" data-live="${esc(x.code)}"><span class="live-tag">LIVE</span><span class="tx"><b>${esc(x.title)}</b><small>${esc([x.teacher, x.lesson].filter(Boolean).join(' · ') || 'Your class')}</small></span><span class="btn btn-primary btn-sm" aria-hidden="true">Join</span></button>`).join('');
+      box.hidden = false;
     },
     begin(target) {
       State.target = target; Views.show('board', true); Views.setTab('board'); Views.renderMe(); State.notes = State.notes || [];
@@ -944,7 +1006,7 @@
     },
     async scan() {
       const reader = $('reader'), err = $('scan-err'); err.hidden = true; reader.hidden = false; $('btn-scan').hidden = true;
-      try { await DQBUI.loadScript('../vendor/html5-qrcode.min.js'); } catch (e) { return Onboard.scanFail('The scanner couldn’t load. Please type the code instead.'); }
+      try { await DQBUI.loadScript(DQBUI.asset('vendor/html5-qrcode.min.js')); } catch (e) { return Onboard.scanFail('The scanner couldn’t load. Please type the code instead.'); }
       try {
         Onboard.scanner = new Html5Qrcode('reader');
         await Onboard.scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 220, height: 220 } }, txt => { const p = Net.parseJoinInput(txt); if (p) { Onboard.stopScan(); Onboard.begin(p); } }, () => {});
@@ -961,9 +1023,9 @@
     open() {
       let av = State.me.av;
       const code = State.target && State.target.code ? Net.formatCode(State.target.code) : '';
-      const wrap = DQBUI.h(`<div class="stack" style="gap:18px"><div class="field"><label>Avatar</label><div class="prof-grid" id="pf-av" role="radiogroup">${Net.AVATARS.map(a => `<button type="button" class="av" role="radio" aria-checked="${a === av}" data-av="${a}" aria-label="Avatar ${a}">${a}</button>`).join('')}</div></div><div class="field"><label for="pf-name">Name</label><input class="input" id="pf-name" maxlength="24" value="${esc(State.me.name)}"></div><div class="field"><label>Appearance</label><div class="seg" id="pf-theme" role="group">${[['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${Theme.get() === v}">${l}</button>`).join('')}</div></div>${code ? `<div class="help-box" style="background:var(--surface-2);padding:12px 14px;border-radius:12px"><div class="muted" style="font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Class code</div><div style="font-size:1.4rem;font-weight:800;letter-spacing:.14em;font-family:ui-monospace,Menlo,monospace">${esc(code)}</div></div>` : ''}<button type="button" class="btn btn-danger-soft btn-block" id="pf-leave">${ic('logout')}Leave class</button></div>`);
+      const wrap = DQBUI.h(`<div class="stack" style="gap:18px"><div class="field"><label>Avatar</label><div class="prof-grid" id="pf-av" role="radiogroup">${Net.AVATARS.map(a => `<button type="button" class="av" role="radio" aria-checked="${a === av}" data-av="${a}" aria-label="Avatar ${a}">${a}</button>`).join('')}</div></div><div class="field"><label for="pf-name">Name</label><input class="input" id="pf-name" maxlength="24" value="${esc(State.me.name)}"${State.me.locked ? ' readonly aria-describedby="pf-name-hint"' : ''}>${State.me.locked ? `<div class="hint" id="pf-name-hint">${esc(DQBUI.host().identityHint || 'This is the name on your account.')}</div>` : ''}</div><div class="field"><label>Appearance</label><div class="seg" id="pf-theme" role="group">${[['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${Theme.get() === v}">${l}</button>`).join('')}</div></div>${code ? `<div class="help-box" style="background:var(--surface-2);padding:12px 14px;border-radius:12px"><div class="muted" style="font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Class code</div><div style="font-size:1.4rem;font-weight:800;letter-spacing:.14em;font-family:ui-monospace,Menlo,monospace">${esc(code)}</div></div>` : ''}<button type="button" class="btn btn-danger-soft btn-block" id="pf-leave">${ic('logout')}Leave class</button></div>`);
       on(wrap, 'click', e => { const b = e.target.closest('[data-av]'); if (b) { av = b.dataset.av; $$('#pf-av .av', wrap).forEach(x => x.setAttribute('aria-checked', String(x === b))); } const t = e.target.closest('#pf-theme [data-v]'); if (t) { Theme.set(t.dataset.v); $$('#pf-theme button', wrap).forEach(x => x.setAttribute('aria-pressed', String(x === t))); } });
-      const ov = Overlay.open({ title: 'You', content: wrap, size: 'sm', footer: [{ label: 'Cancel', kind: 'secondary' }, { label: 'Save', kind: 'primary', close: false, onClick: () => { const n = clampStr(wrap.querySelector('#pf-name').value.replace(/[<>\u0000-\u001f]/g, '').trim(), 24); if (!n) { wrap.querySelector('#pf-name').focus(); return false; } const changed = n !== State.me.name || av !== State.me.av; State.me.name = n; State.me.av = av; Store.saveProfile(); Views.renderMe(); ov.close(); if (changed && Conn.state === 'online') { Conn.raw({ type: 'JOIN', name: n, avatar: av, sid: State.me.sid, v: 2 }); } Toast.success('Saved'); } }] });
+      const ov = Overlay.open({ title: 'You', content: wrap, size: 'sm', footer: [{ label: 'Cancel', kind: 'secondary' }, { label: 'Save', kind: 'primary', close: false, onClick: () => { const n = State.me.locked ? State.me.name : clampStr(wrap.querySelector('#pf-name').value.replace(/[<>\u0000-\u001f]/g, '').trim(), 24); if (!n) { wrap.querySelector('#pf-name').focus(); return false; } const changed = n !== State.me.name || av !== State.me.av; State.me.name = n; State.me.av = av; Store.saveProfile(); Views.renderMe(); ov.close(); if (changed && Conn.state === 'online') { Conn.raw({ type: 'JOIN', name: n, avatar: av, sid: State.me.sid, v: 2 }); } Toast.success('Saved'); } }] });
       on(wrap.querySelector('#pf-leave'), 'click', async () => { const ok = await Dialog.confirm({ title: 'Leave this class?', message: 'Your notes stay on this device.', confirmLabel: 'Leave', danger: true, icon: 'logout' }); if (!ok) return; ov.close(); Conn.stop(); Store.setLastJoin(null); State.target = null; State.everConnected = false; State.boardId = null; Pages.closeAll(); Views.show('join'); });
     }
   };
@@ -981,7 +1043,9 @@
     Net.peerOptions();                                  // persists ?peerHost=… before the query string is cleaned
     if (location.search) history.replaceState(history.state, '', location.pathname);
     $('inp-name').value = State.me.name || '';
-    if (State.me.name) Onboard.afterProfile(); else Views.show('setup');
+    if (State.me.locked) { $('inp-name').readOnly = true; const h = $('name-hint'); if (h) { h.textContent = DQBUI.host().identityHint || 'This is the name on your account.'; h.hidden = false; } }
+    const avatarChosen = !State.me.locked || (function () { try { return !!localStorage.getItem('dqb_av:' + State.me.sid); } catch (e) { return true; } })();
+    if (State.me.name && avatarChosen) Onboard.afterProfile(); else Views.show('setup');
     document.body.dataset.ready = '1';
   }
   boot();

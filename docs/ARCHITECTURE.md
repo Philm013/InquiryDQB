@@ -40,7 +40,7 @@ Messages are JSON strings with a `type`. The host accepts a **fixed allow-list**
 
 **Student → host:** `JOIN {name, avatar, sid}`, `NOTE`, `IMG_NOTE`, `DELETE_NOTE`, `POLL_VOTE`, `DATA_SUBMIT`, `SUBMIT_VOTE`, `SUBMIT_SORT`, `COMMENT`, `EXIT_SUBMIT`, `CONSENSUS_INK`, `HEARTBEAT`, `LEAVE`.
 
-**Host → student:** `WELCOME {boardId, mode, payload, sync, rules, muted, color, pending, timer}`, `RULES`, `MUTE`, `KICKED {reason}`, `TIMER`, `NOTE_STATUS {id, status, reason}`, `SET_COLOR {color, name}`, `MODE`, `ZONE_ACT` / `OPEN_ZONE` / `ACT_VOTE` / `ACT_SORT` / `ACT_DISCUSS`, `ACT_POLL`, `ACT_GRAPH`, `EXIT_TICKET`, `STOP_ACT`, `CONSENSUS_START` / `_STOP` / `_PERMS` / `_INK` / `_CLEAR` / `_SET_INK` / `_ITEM_MOVE` / `_ITEMS` / `_VIEW_SYNC`, `HEARTBEAT`.
+**Host → student:** `WELCOME {boardId, mode, payload, sync, rules, muted, color, pending, timer, shared}`, `RULES`, `MUTE`, `KICKED {reason, msg}`, `SHARED {items}`, `TIMER`, `NOTE_STATUS {id, status, reason}`, `SET_COLOR {color, name}`, `MODE`, `ZONE_ACT` / `OPEN_ZONE` / `ACT_VOTE` / `ACT_SORT` / `ACT_DISCUSS`, `ACT_POLL`, `ACT_GRAPH`, `EXIT_TICKET`, `STOP_ACT`, `CONSENSUS_START` / `_STOP` / `_PERMS` / `_INK` / `_CLEAR` / `_SET_INK` / `_ITEM_MOVE` / `_ITEMS` / `_VIEW_SYNC`, `HEARTBEAT`.
 
 **Co-host ↔ host:** `AUTH_COHOST {key}` → `AUTH_OK` or `AUTH_FAIL`, then `FULL_SYNC`, `SYNC_REQ`, `ADD_ITEM`, `NOTE_UPDATE`, `BATCH_UPDATE`, `GROUP_ITEMS`, `UNGROUP_ITEMS`, `ZONE_REORDER`, `INK_ADD`, `LASER`, `STATE_META`.
 
@@ -80,6 +80,13 @@ Everything that arrives over the network (and everything imported from a file) i
 - **Content-Security-Policy.** Every page carries a CSP `<meta>` that allows scripts only from this site: no inline `<script>` blocks (the theme and service-worker bootstrap live in `shared/boot.js` and `shared/sw-register.js`), no inline event handlers, no `eval`. If escaping ever failed, the browser would still refuse to run injected markup; `tests/site.test.js` proves this by injecting `onerror`, `srcdoc` and script elements and checking that nothing runs. `connect-src` allows any `https:`/`wss:` host so a self-hosted PeerServer works without edits; `worker-src` allows `blob:` for the confetti worker.
 - **No third-party code or analytics.** Libraries, fonts and icons are self-hosted (`vendor/`, `fonts/`, `icons/`); `tests/site.test.js` fails if a page requests anything from another origin. WebRTC itself uses PeerJS's default infrastructure: its signalling service, Google's STUN server and PeerJS's TURN relays (the relays only carry DTLS-encrypted data). All of it can be replaced through `DQB_PEER_OPTS` (see `docs/SELF_HOSTING.md`).
 
+## Embedding (host sites)
+
+A site that offers InquiryDQB as a built-in tool defines `window.DQB_HOST` before the app scripts: account storage for boards,
+a resource library, signed-in student identities, a roster with an admission rule, extra class rules and group actions, and a
+"send to my class" button; the console reports sessions and participation as `dqb:*` events. Standalone nothing changes.
+See [EMBEDDING.md](EMBEDDING.md). **Link cards** (`type: 'link'`) and **sharing** (`SHARED`) work standalone too: Insert › Link.
+
 ## UI system
 
 - Layout adapts at 768 px: sheets become bottom sheets on phones and centred modals on desktop; the teacher chrome switches between the floating whiteboard layout and the bottom-navigation app layout.
@@ -104,6 +111,7 @@ Everything that arrives over the network (and everything imported from a file) i
 | `load.test.js` | A full class: 30 students join at once and send 90 notes; nothing overlaps and the host stays responsive |
 | `legacy.test.js` | Boards and notes saved by earlier versions (same IndexedDB databases) still open, and hostile text inside them stays inert |
 | `touch.test.js` | Real touch input on a phone: drawing a sketch, panning, dragging a note and pinch-zooming the board |
+| `host.test.js` | A fake host (`DQB_HOST`): boards saved to and opened from the account on a second device, no re-upload when nothing changed, the library (cards, pictures, whole collections, unsafe results dropped), Insert › Link, signed-in students (fixed name, check mark, group, contributions), the admission rule, shared links (late joiners, hostile messages, withdrawal on delete), share / groups / join-screen additions |
 
 ## Extending
 

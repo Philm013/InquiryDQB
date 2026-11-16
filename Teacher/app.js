@@ -62,6 +62,7 @@ window.State = {
     votes: {}, blocked: {}, spaceDown: false, multiSelect: false, hasEntered: false,
     muted: {},              // student id (sid) -> true
     groupOf: {},            // student id (sid) -> group colour, so a group survives a dropped connection
+    shared: [],             // ids of link cards shared with the class right now (live only; not saved with the board)
     timer: { endsAt: 0, running: false, remainingMs: 0, totalMs: 0 }
 };
 
@@ -168,6 +169,10 @@ window.addEventListener('statechange', (e) => {
         ActionHistory.push();
         Board.save(true);
     }
+    // a shared card that is deleted or edited: students see the change
+    if (State.shared.length && !State.isCoHost && payload && (action === 'state:fullsync'
+        || (action === 'items:delete' && (payload.ids || []).some(id => State.shared.includes(id)))
+        || (action === 'items:update' && (payload.items || []).some(u => State.shared.includes(u.id) && ('title' in u || 'url' in u || 'desc' in u || 'thumb' in u))))) Network._sharedChanged();
     // an open zone was renamed, recoloured or removed: students see what they can write into now
     if (Network.zonesWatch(action, payload)) Network._zonesChanged();
 
@@ -709,9 +714,11 @@ window.UI = {
 /* --- PERSISTENCE --- */
 window.DB = {
     db: null, ok: true,
+    /** Local database name. A host that signs teachers in gives each account its own (DQB_HOST.ns). */
+    name: () => { const ns = safeId(String(DQBUI.host().ns || '')); return ns ? 'DQB_Ultimate_' + ns : 'DQB_Ultimate'; },
     init: () => new Promise(resolve => {
         let req;
-        try { req = indexedDB.open('DQB_Ultimate', 2); }
+        try { req = indexedDB.open(DB.name(), 2); }
         catch (e) { DB.ok = false; resolve(); if (window.Shell) Shell.onDbError(e); return; }
         req.onupgradeneeded = e => {
             const db = e.target.result;
@@ -755,42 +762,66 @@ window.DB = {
 
 window.Board = {
     list: () => (window.Shell ? Shell.Home.render() : null),
-    create: (tpl) => {
-        State.id = genId(); State.name = "My Board";
+    /** localStorage key of the last open board (per host account). */
+    lastKey: () => { const ns = safeId(String(DQBUI.host().ns || '')); return ns ? 'lastBoard:' + ns : 'lastBoard'; },
+    /** The host's account storage ({list, load, save, remove, rename}), or null when boards live on this device only. */
+    cloud: () => { const c = DQBUI.host().storage; return c && typeof c.save === 'function' && typeof c.load === 'function' ? c : null; },
+    /** Resolves with the promise's value, or rejects after ms (a slow network must never block opening a board). */
+    within: (promise, ms) => new Promise((resolve, reject) => { const t = setTimeout(() => reject(new Error('timeout')), ms); Promise.resolve(promise).then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); }); }),
+    create: (tpl, name) => {
+        State.id = genId(); State.name = clampStr(name || "My Board", 60);
+        Board.rev = 0; Board._localRev = -1; Board._cloudRev = -1; Board._ts = 0;
         StateManager.setFullState({ items: [], ink: [], view: { x: 0, y: 0, z: 1 } }, { silent: true });
-        localStorage.setItem('lastBoard', State.id);
+        localStorage.setItem(Board.lastKey(), State.id);
         ActionHistory.reset();
         Board.start({ fresh: true, template: tpl });
     },
+    /** Opens a board: the newest of the copy on this device and the copy in the host account. */
     load: async (id) => {
-        if (!id) { UI.toast("Could not load that board.", 'error'); return; }
-        const b = (await DB.getAll('boards')).find(x => x.id === id);
-        if (!b) { UI.toast("That board could not be found on this device.", 'error'); if (window.Shell) Shell.Home.render(); return; }
+        if (!safeId(id)) { UI.toast("Could not load that board.", 'error'); return; }
+        let b = (await DB.getAll('boards')).find(x => x.id === id), remote = null;
+        const cloud = Board.cloud();
+        Board._cloudDirty = false;
+        if (cloud) {
+            try { remote = await Board.within(cloud.load(id), 8000); } catch (e) { remote = null; }   // offline: the copy on this device
+            if (remote && Array.isArray(remote.items) && (!b || (Number(remote.ts) || 0) > (Number(b.ts) || 0))) {
+                b = { id, name: clampStr(remote.name || 'My Board', 60), items: remote.items, ink: Array.isArray(remote.ink) ? remote.ink : [], view: remote.view, ts: Number(remote.ts) || Date.now() };
+                DB.save(b).catch(() => {});
+            } else if (b) Board._cloudDirty = !remote || (Number(b.ts) || 0) > (Number(remote.ts) || 0);    // this device has newer work: send it up
+        }
+        if (!b) { UI.toast(cloud ? "That board could not be opened. Check the connection and try again." : "That board could not be found on this device.", 'error'); if (window.Shell) Shell.Home.render(); return; }
         State.id = b.id; State.name = b.name || 'My Board';
-        // Boards saved by older versions may contain odd values; normalise defensively.
-        const items = (Array.isArray(b.items) ? b.items : []).filter(i => i && typeof i === 'object' && safeId(i.id));
-        StateManager.setFullState({ items, ink: Array.isArray(b.ink) ? b.ink : [], view: b.view || { x: 0, y: 0, z: 1 } }, { silent: true });
-        localStorage.setItem('lastBoard', State.id);
+        Board.rev = 0; Board._localRev = 0; Board._ts = Number(b.ts) || 0; Board._cloudRev = Board._cloudDirty ? -1 : 0;
+        const items = (Array.isArray(b.items) ? b.items : []).map(i => Sanitize.item(i)).filter(Boolean);
+        StateManager.setFullState({ items, ink: Sanitize.strokes(b.ink, 5000), view: Board.view(b.view) }, { silent: true });
+        localStorage.setItem(Board.lastKey(), State.id);
         ActionHistory.reset();
         Board.start({ fresh: false });
+        if (Board._cloudDirty) Board.cloudSave();
     },
+    view: (v) => (v && typeof v === 'object' ? { x: Sanitize.num(v.x), y: Sanitize.num(v.y), z: Math.max(0.05, Math.min(5, Sanitize.num(v.z, 1, 5) || 1)) } : { x: 0, y: 0, z: 1 }),
     start: (opts) => {
         opts = opts || {};
+        State.shared = [];
         Network.syncOpenFlags();             // a board saved mid-activity must not reopen showing zones as live
         Render.start();
         if (window.Shell) Shell.enterBoard(opts);
         if (!State.isCoHost) Network.host();
         if (State.id) {
             if (window._autoSaveInterval) clearInterval(window._autoSaveInterval);
-            window._autoSaveInterval = setInterval(() => Board.save(true), 30000);
+            window._autoSaveInterval = setInterval(() => Board.save(true, true), 30000);   // a safety net: writes only what changed
         }
         if (opts.template) UI.loadTemplate(opts.template);
         else if (opts.fresh) Board.save(true);
+        DQBUI.emit('board', { id: State.id, name: State.name, fresh: !!opts.fresh });
     },
     setStartView: () => { Board.save(true); UI.toast("Start view saved", 'success'); },
     _timer: null,
-    save: (silent) => {
+    /** rev counts changes; the copy on this device and the account copy each remember the rev they hold. */
+    rev: 0, _localRev: -1, _cloudRev: -1,
+    save: (silent, unchanged) => {
         if (State.isCoHost || !State.id) return;
+        if (!unchanged) Board.rev++;
         if (window.Shell) Shell.setSave('saving');
         clearTimeout(Board._timer);
         Board._timer = setTimeout(Board.flush, silent ? 450 : 0);
@@ -798,22 +829,61 @@ window.Board = {
     flush: async () => {
         clearTimeout(Board._timer);
         if (State.isCoHost || !State.id) return;
+        const rev = Board.rev, changed = rev !== Board._localRev, ts = (changed || !Board._ts) ? Date.now() : Board._ts;
         try {
-            await DB.save({ id: State.id, name: State.name, items: State.items, ink: State.ink, view: State.view, ts: Date.now() });
-            if (window.Shell) Shell.setSave('saved');
+            if (changed || !Board._ts) await DB.save({ id: State.id, name: State.name, items: State.items, ink: State.ink, view: State.view, ts });
+            Board._ts = ts; Board._localRev = rev;
+            if (Board.cloud() && rev !== Board._cloudRev) { Board._cloudDirty = true; Board.cloudSave(); }
+            else if (window.Shell && !Board._cloudBusy && !Board._cloudDirty) Shell.setSave('saved');
         } catch (error) {
             console.error("Board.save failed:", error);
             if (window.Shell) Shell.setSave('error', error && error.message);
+            if (Board.cloud()) { Board._cloudDirty = true; Board.cloudSave(); }       // the account copy still protects the work
+        }
+    },
+    /* ---- the host account copy: sent a moment after the last change, one upload at a time ---- */
+    _cloudDirty: false, _cloudBusy: false, _cloudT: null, _ts: 0,
+    cloudSave: (delay) => {
+        if (!Board.cloud() || State.isCoHost || !State.id) return;
+        if (window.Shell) Shell.setSave('saving');
+        clearTimeout(Board._cloudT);
+        Board._cloudT = setTimeout(Board.cloudFlush, delay == null ? 2500 : delay);
+    },
+    cloudFlush: async () => {
+        clearTimeout(Board._cloudT);
+        const cloud = Board.cloud();
+        if (!cloud || State.isCoHost || !State.id || !Board._cloudDirty) { if (cloud && window.Shell && !Board._cloudBusy && !Board._cloudDirty) Shell.setSave('saved'); return true; }
+        if (Board._cloudBusy) { Board._cloudAgain = true; return false; }
+        Board._cloudBusy = true; Board._cloudDirty = false; Board._cloudAgain = false;
+        const id = State.id, rev = Board.rev;
+        try {
+            await Board.within(cloud.save({ id, name: State.name, items: State.items, ink: State.ink, view: State.view, ts: Board._ts || Date.now() }), 30000);
+            if (State.id === id) Board._cloudRev = rev;
+            if (State.id === id && Board.rev !== rev) Board._cloudAgain = true;                // changed while it was on its way
+            else if (window.Shell && State.id === id) Shell.setSave('saved', null, true);
+            return true;
+        } catch (e) {
+            Board._cloudDirty = true;
+            if (window.Shell && State.id === id) Shell.setSave('local', e && e.message);
+            clearTimeout(Board._cloudT); Board._cloudT = setTimeout(Board.cloudFlush, 20000);  // try again in a while (and as soon as we are back online)
+            return false;
+        } finally {
+            Board._cloudBusy = false;
+            if (Board._cloudAgain) { Board._cloudAgain = false; Board.cloudSave(800); }
         }
     },
     exit: async () => {
         const n = Object.keys(State.students).filter(k => k !== 'HOST' && State.students[k].role !== 'cohost').length;
-        const ok = await DQBUI.Dialog.confirm({ title: 'Leave this board?', message: n ? `${n} student${n === 1 ? ' is' : 's are'} connected and will be disconnected. Your board is saved on this device.` : 'Your board is saved on this device.', confirmLabel: 'Leave board', icon: 'logout' });
+        const where = Board.cloud() ? (DQBUI.host().storage.label || 'your account') + ' and on this device' : 'this device';
+        const ok = await DQBUI.Dialog.confirm({ title: 'Leave this board?', message: n ? `${n} student${n === 1 ? ' is' : 's are'} connected and will be disconnected. Your board is saved in ${where}.` : `Your board is saved in ${where}.`, confirmLabel: 'Leave board', icon: 'logout' });
         if (!ok) return;
         await Board.flush();
+        if (Board.cloud()) { try { await Board.within(Board.cloudFlush(), 8000); } catch (e) { /* the copy on this device is complete; it is sent next time */ } }
         if (window._autoSaveInterval) clearInterval(window._autoSaveInterval);
-        localStorage.removeItem('lastBoard');
-        location.reload();
+        localStorage.removeItem(Board.lastKey());
+        DQBUI.emit('leave', { id: State.id });
+        const back = DQBUI.host().leaveUrl;
+        if (typeof back === 'string' && back) location.href = back; else location.reload();
     },
     /** Imports a board exported as JSON. Validates shape and sanitises ids before use. */
     import: async (input) => {
@@ -825,7 +895,8 @@ window.Board = {
             if (!d || typeof d !== 'object' || !Array.isArray(d.items)) throw new Error('not a board');
             const items = d.items.filter(i => i && typeof i === 'object' && i.type).map(i => ({ ...i, id: safeId(i.id) || genId() }));
             State.id = genId(); State.name = clampStr(d.name || "Imported board", 60);
-            StateManager.setFullState({ items, ink: Array.isArray(d.ink) ? d.ink : [], view: d.view || { x: 0, y: 0, z: 1 } }, { silent: true });
+            StateManager.setFullState({ items: items.map(i => Sanitize.item(i)).filter(Boolean), ink: Sanitize.strokes(d.ink, 5000), view: Board.view(d.view) }, { silent: true });
+            Board.rev = 0; Board._localRev = -1; Board._cloudRev = -1; Board._ts = 0;
             ActionHistory.reset();
             Board.start({ fresh: true });
             setTimeout(() => Viewport.fit(false), 80);
@@ -889,6 +960,15 @@ window.Board = {
                 ctx.fillStyle = '#0f172a'; ctx.font = '700 14px Inter, sans-serif'; ctx.fillText(it.title || 'Graph', it.x + 12, it.y + 24);
                 const data = it.data || [], mx = Math.max(...data, 10), bw = (it.w - 24) / Math.max(1, data.length);
                 data.forEach((v, i) => { const bh = (it.h - 60) * (v / mx); ctx.fillStyle = '#2563eb'; ctx.fillRect(it.x + 12 + i * bw + 2, it.y + it.h - 12 - bh, Math.max(2, bw - 4), bh); });
+            } else if (it.type === 'link') {
+                ctx.save(); ctx.shadowColor = 'rgba(15,23,42,0.14)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 2; rr(it.x, it.y, it.w, it.h, 12); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.restore();
+                ctx.lineWidth = 1.5; ctx.strokeStyle = '#93c5fd'; rr(it.x, it.y, it.w, it.h, 12); ctx.stroke();
+                let ty = it.y + 22;
+                ctx.fillStyle = '#1d4ed8'; ctx.font = '700 11px Inter, sans-serif'; ctx.fillText(Render.linkLabel(it), it.x + 12, ty);
+                const th = DQBUI.safeThumb(it.thumb);
+                if (th) { const im = await loadImg(th); if (im) { const bw = it.w - 24, bh = Math.min(it.h * 0.45, bw * 0.6); const r = Math.max(bw / im.width, bh / im.height); ctx.save(); rr(it.x + 12, ty + 8, bw, bh, 8); ctx.clip(); ctx.drawImage(im, it.x + 12 + (bw - im.width * r) / 2, ty + 8 + (bh - im.height * r) / 2, im.width * r, im.height * r); ctx.restore(); ty += bh + 8; } }
+                ctx.fillStyle = '#0f172a'; ty += 22 + wrap(it.title, it.x + 12, ty + 4, it.w - 24, 19, '700 15px Inter, sans-serif');
+                ctx.fillStyle = '#475569'; wrap(Sanitize.hostOf(it.url), it.x + 12, Math.min(ty, it.y + it.h - 12), it.w - 24, 16, '12px Inter, sans-serif');
             } else { ctx.save(); rr(it.x, it.y, it.w, it.h, 12); ctx.fillStyle = '#f1f5f9'; ctx.fill(); ctx.restore(); ctx.fillStyle = '#334155'; ctx.font = '700 13px Inter, sans-serif'; ctx.fillText(it.type === 'spin' ? 'Spinner' : it.type, it.x + 12, it.y + 24); }
         }
         cv.toBlob(blob => { if (!blob) { UI.toast('Could not create the image.', 'error'); return; } Board._download(blob, `${(State.name || 'board').replace(/[^a-z0-9]+/gi, '_').toLowerCase()}.png`); UI.toast('Picture saved', 'success'); }, 'image/png');
@@ -911,6 +991,8 @@ window.Board = {
         return b ? { x: b.maxX + 60, y: preferY } : { x: preferX, y: preferY };
     }
 };
+
+window.addEventListener('online', () => { if (Board._cloudDirty) Board.cloudSave(300); });
 
 /* --- INK TOOLS: geometry, painting and conversion shared by the board, consensus models and breakout rooms --- */
 window.InkTools = {
@@ -1240,6 +1322,8 @@ window.Render = {
                 case 'menu': Actions.showContextMenu(e, id); break;
                 case 'spin': Actions.spin(id); break;
                 case 'comments': Actions.showComments(id); break;
+                case 'link-open': Actions.openLink(id); break;
+                case 'link-share': Network.toggleShare(id); break;
             }
         };
         ['items-layer', 'consensus-items-layer'].forEach(n => { const el = $(n); if (el) el.addEventListener('click', handler); });
@@ -1358,6 +1442,7 @@ window.Render = {
             if (i.type === 'poll') Render.updatePoll(el, i);
             if (i.type === 'spin') Render.updateSpin(el, i);
             if (i.type === 'graph') Render.updateGraph(el, i);
+            if (i.type === 'link') Render.updateLink(el, i);
 
             if (i.type === 'note' && !i.src) {
                 const txt = el.querySelector('textarea');
@@ -1449,6 +1534,7 @@ window.Render = {
         } else if (d.type === 'poll') { title = 'Poll'; iconHtml = icon('poll', 'sm'); }
         else if (d.type === 'spin') { title = 'Spinner'; iconHtml = icon('spin', 'sm'); }
         else if (d.type === 'graph') { title = 'Live graph'; iconHtml = icon('graph', 'sm'); }
+        else if (d.type === 'link') { title = Render.linkLabel(d); iconHtml = icon(d.kind === 'link' ? 'link' : 'book', 'sm'); }
         else { title = d.author || head.lbl; iconHtml = esc(head.icon); }
 
         // header action buttons
@@ -1477,6 +1563,7 @@ window.Render = {
             inner += `<div id="zr-${esc(d.id)}" class="zone-res-box"></div>`;
         } else if (d.type === 'poll') inner = `<div class="poll-q"></div><div class="poll-opts"></div>`;
         else if (d.type === 'graph') inner = `<div class="graph-wrap"><div class="graph-bars"></div><div class="graph-empty">${icon('graph', 'lg')}<div><b>No data yet</b><br>Press Broadcast, then students enter a number.</div></div><div class="graph-stats"></div></div>`;
+        else if (d.type === 'link') inner = `<div class="link-card"><img class="lc-thumb" alt="" draggable="false" hidden><div class="lc-body"><div class="lc-title"></div><div class="lc-desc"></div><div class="lc-host"></div></div><div class="lc-actions"><button type="button" class="btn btn-secondary btn-sm" data-act="link-open">${icon('link', 'sm')}Open</button>${State.isCoHost ? '' : `<button type="button" class="btn btn-soft btn-sm lc-share" data-act="link-share">${icon('send', 'sm')}<span>Share with students</span></button>`}</div></div>`;
         else if (d.type === 'spin') inner = `<div class="spin-box"><div class="spin-stage"><div class="spin-pointer"></div><svg class="spin-svg" viewBox="0 0 100 100"></svg></div><button type="button" class="btn btn-soft btn-sm" data-act="spin">${icon('spin', 'sm')}Spin</button><div class="spin-result" aria-live="polite" style="font-weight:700;min-height:1.2em"></div></div>`;
 
         if (isZoneLike) { const lab = document.createElement('div'); lab.className = 'zone-label'; lab.textContent = d.title || 'Zone'; el.appendChild(lab); }
@@ -1517,6 +1604,22 @@ window.Render = {
         return el;
     },
 
+    linkLabel: (d) => (d.kind === 'resource' ? 'Resource' : (d.kind === 'collection' ? 'Collection' : 'Link')) + (d.source ? ' · ' + d.source : ''),
+    /** Link / resource card: text through textContent, the picture only if safeThumb accepts it. */
+    updateLink: (el, d) => {
+        const shared = (State.shared || []).includes(d.id);
+        const sig = [d.title, d.desc, d.url, d.thumb, d.kind, d.source, shared].join('\u0001');
+        if (el._lsig === sig) return; el._lsig = sig;
+        const q = (c) => el.querySelector(c);
+        if (q('.lc-title')) q('.lc-title').textContent = d.title || '';
+        if (q('.lc-desc')) { q('.lc-desc').textContent = d.desc || ''; q('.lc-desc').hidden = !d.desc; }
+        if (q('.lc-host')) q('.lc-host').textContent = Sanitize.hostOf(d.url);
+        const img = q('.lc-thumb'), th = DQBUI.safeThumb(d.thumb);
+        if (img) { if (th) { if (img.getAttribute('src') !== th) img.src = th; img.hidden = false; } else { img.removeAttribute('src'); img.hidden = true; } }
+        const auth = q('.auth-span'); if (auth) auth.textContent = Render.linkLabel(d);
+        el.classList.toggle('is-shared', shared);
+        const b = q('.lc-share'); if (b) { b.classList.toggle('on', shared); b.setAttribute('aria-pressed', String(shared)); const t = b.querySelector('span'); if (t) t.textContent = shared ? 'Shared · stop' : 'Share with students'; }
+    },
     updatePoll: (el, d) => {
         const q = el.querySelector('.poll-q'); if (q && q.textContent !== d.q) q.textContent = d.q || '';
         const box = el.querySelector('.poll-opts'); if (!box) return;
@@ -1610,6 +1713,7 @@ window.Actions = {
         if (type === 'poll') { it.q = "Question?"; it.opts = [{ lbl: 'Yes', v: 0 }, { lbl: 'No', v: 0 }]; it.w = 260; it.h = 170; }
         if (type === 'spin') { it.ang = 0; it.opts = ['A', 'B', 'C', 'D']; it.w = 220; it.h = 260; }
         if (type === 'graph') { it.title = "Class Data"; it.data = []; it.w = 320; it.h = 220; }
+        if (type === 'link') { Actions.promptLink(); return null; }
 
         const pos = at ? { x: c.x - it.w / 2, y: c.y - it.h / 2 } : Board.getFreeSpace(c.x - it.w / 2, c.y - it.h / 2, it.w, it.h);
         it.x = pos.x; it.y = pos.y;
@@ -1624,6 +1728,74 @@ window.Actions = {
         if (it.type === 'poll') setTimeout(() => Actions.editPoll(id), 140);
         return it;
     },
+    /** Asks for a web address and a title, then adds a link card. */
+    promptLink: async (it) => {
+        UI.closeAllMenus();
+        const url = await DQBUI.Dialog.prompt({ title: it ? 'Edit link' : 'Add a link', message: 'The web address students will open (it must start with https:// or http://).', value: it ? it.url : 'https://', confirmLabel: 'Next', maxLength: 2048 });
+        if (url == null) return;
+        const clean = DQBUI.safeUrl(String(url).trim());
+        if (!clean) { UI.toast('That isn’t a full web address. It must start with https:// or http://', 'warn'); return; }
+        const title = await DQBUI.Dialog.prompt({ title: 'Title', message: 'What should the card say?', value: it ? it.title : Sanitize.hostOf(clean), confirmLabel: it ? 'Save' : 'Add', maxLength: 200 });
+        if (title == null) return;
+        if (it) { StateManager.updateItem(it.id, { url: clean, title: clampStr(title, 200).trim() || Sanitize.hostOf(clean) }); if ((State.shared || []).includes(it.id)) Network.pushShared(); return; }
+        Actions.addLink({ url: clean, title, kind: 'link' });
+    },
+    /** Adds a link / resource card (from the Insert menu or a host library). Returns the item, or null. */
+    addLink: (card, at, opts) => {
+        const r = Sanitize.item({ ...card, id: genId(), type: 'link', x: 0, y: 0, w: card.thumb ? 280 : 260, h: card.thumb ? 280 : (card.desc ? 200 : 150) });
+        if (!r) { UI.toast('That card can’t be added: its address isn’t a web page.', 'warn'); return null; }
+        const c = at || Viewport.centerWorld();
+        const pos = Board.getFreeSpace(c.x - r.w / 2, c.y - r.h / 2, r.w, r.h);
+        r.x = pos.x; r.y = pos.y;
+        StateManager.addItem(r);
+        if (!opts || opts.select !== false) StateManager.setSelection([r.id]);
+        return r;
+    },
+    /** Adds several cards in a new zone (a whole collection). Returns how many were added. */
+    addLinkZone: (title, cards) => {
+        const list = (cards || []).map(c => Sanitize.item({ ...c, id: genId(), type: 'link', x: 0, y: 0, w: 240, h: c.thumb ? 260 : 180 })).filter(Boolean).slice(0, 40);
+        if (!list.length) return 0;
+        const cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(list.length)))), cw = 260, ch = 280, pad = 24;
+        const w = cols * cw + pad * 2 - 20, h = Math.ceil(list.length / cols) * ch + pad * 2 + 30;
+        const c = Viewport.centerWorld(), pos = Board.getFreeSpace(c.x - w / 2, c.y - h / 2, w, h);
+        const zone = { id: genId(), type: 'zone', title: clampStr(title || 'Collection', 80), x: pos.x, y: pos.y, w, h, children: list.map(i => i.id) };
+        list.forEach((it, k) => { it.x = pos.x + pad + (k % cols) * cw; it.y = pos.y + pad + 30 + Math.floor(k / cols) * ch; it.parentZone = zone.id; });
+        StateManager.batch(() => { StateManager.addItems([zone].concat(list)); StateManager.setSelection([zone.id]); });
+        setTimeout(() => Viewport.centerOn(zone), 60);
+        return list.length;
+    },
+    openLink: (id) => {
+        const it = State.items.find(i => i.id === id && i.type === 'link'); if (!it) return;
+        const url = DQBUI.safeUrl(it.url); if (!url) return;
+        const w = window.open(url, '_blank', 'noopener,noreferrer'); if (w) { try { w.opener = null; } catch (e) { /* ignore */ } }
+    },
+    /** Puts a picture on the board as an image note (pictures are stored in the board, so they are converted to a data-URI here). */
+    addImage: async (src, caption) => {
+        const data = await Actions.imageData(src);
+        if (!data) { UI.toast('That picture couldn’t be added.', 'warn'); return null; }
+        const c = Viewport.centerWorld(), w = 260, h = 240;
+        const pos = Board.getFreeSpace(c.x - w / 2, c.y - h / 2, w, h);
+        const it = { id: genId(), type: 'note', sub: 'sketch', src: data, text: clampStr(caption || '', 120), w, h, x: pos.x, y: pos.y, votes: 0, groupId: null };
+        StateManager.addItem(it); StateManager.setSelection([it.id]);
+        return it;
+    },
+    /** Loads a same-site picture and re-encodes it (at most 900 px, JPEG) so it is small enough to save and sync. */
+    imageData: (src) => new Promise((resolve) => {
+        const s = DQBUI.safeThumb(src) || DQBUI.safeImg(src);
+        if (!s) return resolve(null);
+        const im = new Image();
+        im.onload = () => {
+            try {
+                const k = Math.min(1, 900 / Math.max(im.naturalWidth || 1, im.naturalHeight || 1));
+                const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(im.naturalWidth * k)); cv.height = Math.max(1, Math.round(im.naturalHeight * k));
+                const ctx = cv.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height); ctx.drawImage(im, 0, 0, cv.width, cv.height);
+                const out = cv.toDataURL('image/jpeg', 0.84);
+                resolve(DQBUI.safeImg(out, 1400000) || null);
+            } catch (e) { resolve(null); }                              // a cross-site picture taints the canvas: refused
+        };
+        im.onerror = () => resolve(null);
+        im.src = s;
+    }),
     /** Enter text-editing mode on a note (notes are dragged by their body until you start editing). */
     editText: (id) => {
         const el = document.getElementById(id), it = State.items.find(i => i.id === id);
@@ -1681,6 +1853,13 @@ window.Actions = {
             items.push({ separator: true });
             items.push({ label: `Delete ${selection.length} items`, icon: 'trash', danger: true, kbd: '⌫', onClick: () => Actions.delete() });
             return items;
+        }
+        if (item.type === 'link') {
+            const shared = (State.shared || []).includes(item.id);
+            items.push({ label: 'Open link', icon: 'link', onClick: () => Actions.openLink(item.id) });
+            if (!State.isCoHost) items.push({ label: shared ? 'Stop sharing with students' : 'Share with students', icon: shared ? 'stop' : 'send', onClick: () => Network.toggleShare(item.id) });
+            if (item.kind === 'link') items.push({ label: 'Edit link…', icon: 'pencil', onClick: () => Actions.promptLink(item) });
+            items.push({ separator: true });
         }
         if (item.type === 'note') {
             ['notice', 'wonder', 'idea', 'test'].forEach(k => { if (!item.src) items.push({ label: `${TYPES[k].icon}  ${TYPES[k].lbl}`, checked: item.sub === k, onClick: () => Actions.setType(item.id, k) }); });
@@ -2776,6 +2955,9 @@ window.SnapSystem = {
 /* --- INPUT SANITISING (everything that arrives from the network or a file is untrusted) --- */
 window.Sanitize = {
     num: (v, d, lim) => { v = Number(v); lim = lim || 1e6; return Number.isFinite(v) ? Math.max(-lim, Math.min(lim, v)) : (d || 0); },
+    hostOf: (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return 'Link'; } },
+    /** What a student is sent about a shared card: only display fields, re-checked. */
+    shared: (it) => ({ id: it.id, title: clampStr(it.title, 200), desc: clampStr(it.desc, 500), url: DQBUI.safeUrl(it.url), thumb: DQBUI.safeThumb(it.thumb) || null, kind: it.kind || 'link', source: it.source ? clampStr(it.source, 60) : null }),
     strokes: (arr, max) => (Array.isArray(arr) ? arr.slice(0, max || 600) : []).map(s => {
         if (!s || !Array.isArray(s.points)) return null;
         const pts = s.points.slice(0, 6000).map(p => ({ x: Sanitize.num(p && p.x), y: Sanitize.num(p && p.y) }));
@@ -2785,7 +2967,7 @@ window.Sanitize = {
     item: (r, depth) => {
         depth = depth || 0;
         if (!r || typeof r !== 'object') return null;
-        const type = ['note', 'zone', 'poll', 'graph', 'spin'].includes(r.type) ? r.type : null;
+        const type = ['note', 'zone', 'poll', 'graph', 'spin', 'link'].includes(r.type) ? r.type : null;
         const id = safeId(r.id);
         if (!type || !id) return null;
         const o = { id, type, x: Sanitize.num(r.x), y: Sanitize.num(r.y), w: Math.min(4000, Math.max(40, Sanitize.num(r.w, 200, 4000))), h: Math.min(4000, Math.max(40, Sanitize.num(r.h, 150, 4000))), groupId: safeId(r.groupId) || null };
@@ -2825,6 +3007,15 @@ window.Sanitize = {
         } else if (type === 'spin') {
             o.ang = Sanitize.num(r.ang, 0, 1e7);
             o.opts = (Array.isArray(r.opts) && r.opts.length ? r.opts : ['A', 'B', 'C', 'D']).map(x => clampStr(x, 40)).slice(0, 12);
+        } else if (type === 'link') {
+            o.url = DQBUI.safeUrl(r.url);
+            if (!o.url) return null;                                   // a card that opens nothing (or something unsafe) is dropped
+            o.title = clampStr(r.title, 200).trim() || Sanitize.hostOf(o.url);
+            o.desc = clampStr(r.desc, 500);
+            const th = DQBUI.safeThumb(r.thumb); if (th) o.thumb = th;
+            o.kind = ['resource', 'collection', 'link'].includes(r.kind) ? r.kind : 'link';
+            if (safeId(String(r.ref == null ? '' : r.ref))) o.ref = String(r.ref);
+            if (r.source) o.source = clampStr(r.source, 60);
         }
         return o;
     }
@@ -2876,6 +3067,7 @@ window.Network = {
             Network._retry = 0; Network._idTries = 0;
             Network.setStatus('ready');
             Network._startHeartbeat();
+            DQBUI.emit('hosting', { code: Net.peerIdToCode(pid), boardId: State.id, name: State.name });
         });
         peer.on('connection', c => Network._onConnection(c));
         peer.on('disconnected', () => {
@@ -3224,6 +3416,28 @@ window.Network = {
         Roster(); if (window.Shell) Shell.syncActivity();
     },
 
+    /* ---------- links shared with the class (students get a "Shared with you" list; never the board itself) ---------- */
+    sharedItems: () => State.shared.map(id => State.items.find(i => i.id === id && i.type === 'link')).filter(Boolean).map(Sanitize.shared).filter(x => x.url),
+    pushShared: () => { Network.broadcast({ type: 'SHARED', items: Network.sharedItems() }); Render.all(); if (window.Shell) Shell.SelBar.render(); },
+    toggleShare: (id) => {
+        if (State.isCoHost) { UI.toast('Only the host can share with students.', 'warn'); return; }
+        const it = State.items.find(i => i.id === id && i.type === 'link'); if (!it) return;
+        if (State.shared.includes(id)) { State.shared = State.shared.filter(x => x !== id); Network.pushShared(); UI.toast(`Stopped sharing “${clampStr(it.title, 40)}”`); return; }
+        if (!DQBUI.safeUrl(it.url)) { UI.toast('That card has no web address to share.', 'warn'); return; }
+        if (State.shared.length >= 12) { UI.toast('At most 12 things can be shared at once. Stop sharing one first.', 'warn'); return; }
+        State.shared = State.shared.concat([id]);
+        Network.pushShared();
+        const n = Network.studentCount();
+        UI.toast(n ? `Shared with ${n} student${n === 1 ? '' : 's'}` : 'Shared: students see it as soon as they join', 'success');
+        DQBUI.emit('share', { id, title: it.title, url: it.url, kind: it.kind, ref: it.ref || null });
+    },
+    _sharedChanged: DQBUI.debounce(() => {
+        const before = State.shared.join();
+        State.shared = State.shared.filter(id => State.items.some(i => i.id === id && i.type === 'link'));
+        Network.broadcast({ type: 'SHARED', items: Network.sharedItems() });     // also carries edited titles
+        if (before !== State.shared.join()) Render.all();
+    }, 150),
+
     /* ---------- class timer ---------- */
     timerBroadcast: () => {
         const t = State.timer;
@@ -3333,6 +3547,7 @@ window.Network = {
                 if (!p || State.activity.targetId !== p.id || !p.opts[idx] || !Network._once('poll', p.id, st.sid)) break;
                 p.opts[idx].v = (p.opts[idx].v || 0) + 1;
                 StateManager.updateItem(p.id, { opts: p.opts });
+                Network._contributed(st, 'poll');
                 if (window.confetti) confetti({ particleCount: 40, spread: 55, origin: { y: 0.8 }, disableForReducedMotion: true });
                 break;
             }
@@ -3343,6 +3558,7 @@ window.Network = {
                 if (!Network._once('graph', g.id, st.sid)) break;
                 g.data = (g.data || []).concat([Math.round(v * 1000) / 1000]).slice(-500);
                 StateManager.updateItem(g.id, { data: g.data });
+                Network._contributed(st, 'data');
                 break;
             }
             case 'SUBMIT_VOTE':
@@ -3356,6 +3572,7 @@ window.Network = {
                 if (!State.activeSorts[d.actId]) State.activeSorts[d.actId] = [];
                 if (State.activeSorts[d.actId].length < SORT_LIMIT) State.activeSorts[d.actId].push(d.type === 'SUBMIT_SORT' ? d.order.slice(0, 100) : d.choiceId);
                 Network.updateResults(d.actId);
+                Network._contributed(st, d.type === 'SUBMIT_SORT' ? 'rank' : 'vote');
                 break;
             }
             case 'COMMENT': {
@@ -3364,6 +3581,7 @@ window.Network = {
                 State.comments.push({ type: 'COMMENT', targetId: d.targetId, text, author: State.settings.names ? st.name : 'Student', tag: ['feedback', 'question', 'connection'].includes(d.tag) ? d.tag : 'feedback' });
                 if (State.comments.length > 1000) State.comments.shift();
                 Network.updateDiscussion(); Render.all();
+                Network._contributed(st, 'comment');
                 break;
             }
             case 'EXIT_SUBMIT': {
@@ -3381,6 +3599,7 @@ window.Network = {
                 zone.children.push(newNote.id);
                 StateManager.updateItem(zone.id, { children: zone.children });
                 LayoutSystem.update(zone.id);
+                Network._contributed(st, 'exit');
                 break;
             }
             case 'CONSENSUS_INK':
@@ -3391,10 +3610,23 @@ window.Network = {
         }
     },
 
+    /** The host's record of a student (a signed-in account), or null for a guest. */
+    hostStudent: (sid) => {
+        const r = DQBUI.host().roster;
+        if (!r || typeof r.lookup !== 'function') return null;
+        try { const m = r.lookup(sid); return m && typeof m === 'object' ? m : null; } catch (e) { return null; }
+    },
     _join: (pid, d, conn) => {
         const sid = safeId(d.sid) || pid;
-        if (State.blocked[sid]) { SafeSend(conn, { type: 'KICKED', reason: 'removed' }); setTimeout(() => { try { conn.close(); } catch (e) { /* ignore */ } }, 150); return; }
-        const name = clampStr(String(d.name || '').replace(/[\u0000-\u001f<>]/g, ''), 24).trim() || 'Student';
+        const refuse = (reason, msg) => { SafeSend(conn, { type: 'KICKED', reason, msg: msg ? clampStr(msg, 200) : undefined }); setTimeout(() => { try { conn.close(); } catch (e) { /* ignore */ } }, 150); };
+        if (State.blocked[sid]) return refuse('removed');
+        const known = Network.hostStudent(sid), roster = DQBUI.host().roster;
+        if (roster && typeof roster.admit === 'function') {
+            let ok = true; try { ok = roster.admit(sid, known) !== false; } catch (e) { ok = true; }
+            if (!ok) return refuse('restricted', roster.refusal || 'This board is only open to the teacher’s own students. Sign in with your student account, then join again.');
+        }
+        const typed = clampStr(String(d.name || '').replace(/[\u0000-\u001f<>]/g, ''), 24).trim() || 'Student';
+        const name = known && known.name ? clampStr(String(known.name).replace(/[\u0000-\u001f<>]/g, ''), 24).trim() || typed : typed;
         const avatar = Net.AVATARS.includes(d.avatar) ? d.avatar : '😀';
         // the same student reconnecting replaces their previous (stale) connection
         let carried = {};
@@ -3404,8 +3636,9 @@ window.Network = {
         });
         conn._joined = true;
         // a student who drops off and comes back keeps their group
-        const color = safeColor(carried.color) || safeColor(State.groupOf[sid]) || null;
-        const student = State.students[pid] = { name, avatar, sid, conn, role: 'student', color, joinedAt: Date.now() };
+        const color = safeColor(carried.color) || safeColor(State.groupOf[sid]) || (known && safeColor(known.color)) || null;
+        const student = State.students[pid] = { name, avatar, sid, conn, role: 'student', color, joinedAt: Date.now(), verified: !!(known && known.verified), info: known && known.info ? clampStr(known.info, 60) : '' };
+        if (color) State.groupOf[sid] = color;
         const a = State.activity;
         let welcomeMode = 'LOCKED', actPayload = null;
         if (a.type === 'OPEN') welcomeMode = 'OPEN';
@@ -3418,8 +3651,10 @@ window.Network = {
             type: 'WELCOME', boardId: State.id, mode: welcomeMode, payload: actPayload, sync: mine, v: 2,
             rules: { names: State.settings.names, approve: State.settings.approve }, muted: !!State.muted[sid], color: student.color,
             pending: State.pending.filter(p => p.sid === sid).map(p => p.id),
-            timer: { running: t.running, remainingMs: t.running ? Math.max(0, t.endsAt - Date.now()) : t.remainingMs, totalMs: t.totalMs }
+            timer: { running: t.running, remainingMs: t.running ? Math.max(0, t.endsAt - Date.now()) : t.remainingMs, totalMs: t.totalMs },
+            shared: Network.sharedItems()
         });
+        DQBUI.emit('join', { sid, name, verified: student.verified, boardId: State.id });
         if (color) SafeSend(conn, { type: 'SET_COLOR', color, name: groupName(color) });
         if (State.consensusMode.active) {
             SafeSend(conn, Consensus.startMsg()); SafeSend(conn, Consensus.viewMsg());
@@ -3474,11 +3709,14 @@ window.Network = {
             State.pending.push({ ...item, zoneId: zone ? zone.id : null, ts: Date.now(), studentName: st.name, avatar: st.avatar });
             SafeSend(conn, { type: 'NOTE_STATUS', id, status: 'pending' });
             Shell.syncQueue(true);
+            Network._contributed(st, 'note');
             return;
         }
         Network._placeNote(item, zone ? zone.id : null);
         SafeSend(conn, { type: 'NOTE_STATUS', id, status: 'approved' });
+        Network._contributed(st, 'note');
     },
+    _contributed: (st, kind) => { if (st && st.role === 'student') DQBUI.emit('contribution', { sid: st.sid, kind, boardId: State.id, verified: !!st.verified }); },
     _placeNote: (item, zoneId) => {
         const c = Viewport.centerWorld();
         const pos = Board.getFreeSpace(c.x - item.w / 2, c.y - item.h / 2, item.w, item.h);

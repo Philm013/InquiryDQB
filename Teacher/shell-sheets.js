@@ -51,6 +51,7 @@
       const items = [];
       if (board && !State.isCoHost) items.push({ label: 'Share & invite students', icon: 'qr', onClick: () => Shell.Share.open() });
       if (board) items.push({ label: 'Templates', icon: 'template', onClick: () => Shell.Templates.open() });
+      if (board && Shell.Library.available()) items.push({ label: (DQBUI.host().library.title || 'Add from the library'), icon: 'book', onClick: () => Shell.Library.open() });
       if (board) {
         items.push({ header: 'Save & export' });
         items.push({ label: 'Download as picture (PNG)', icon: 'image', onClick: () => Board.exportPNG() });
@@ -95,8 +96,9 @@
       const statusHtml = s === 'ready' ? `<span class="dot ok"></span>Ready · ${n ? `${n} student${n === 1 ? '' : 's'} connected` : 'waiting for students'}`
         : s === 'connecting' ? `<span class="dot warn"></span>Connecting to the class service…`
         : `<span class="dot bad"></span>Offline — students can’t join right now`;
-      const err = Network.statusInfo;
-      wrap.innerHTML = `
+      const err = Network.statusInfo, hs = DQBUI.host().share;
+      const hostShare = hs && typeof hs.open === 'function' ? `<div class="host-share card"><div class="grow"><div class="t">${esc(hs.title || 'Send to your class')}</div><div class="s">${esc(typeof hs.status === 'function' ? (hs.status() || '') : (hs.hint || ''))}</div></div><button type="button" class="btn btn-primary" data-host-share ${code ? '' : 'disabled'}>${ic('send')}${esc(hs.label || 'Send')}</button></div>` : '';
+      wrap.innerHTML = hostShare + `
         <div class="share-hero">
           <div class="status-line" role="status">${statusHtml}</div>
           <div class="qr-box ${s === 'ready' ? '' : 'off'}" id="share-qr" role="img" aria-label="QR code that opens the student join page"></div>
@@ -131,7 +133,82 @@
         const ok = await DQBUI.copyText(text); Toast[ok ? 'success' : 'warn'](ok ? (k === 'code' ? 'Code copied' : (k === 'link' ? 'Link copied' : 'Co-host code copied')) : 'Couldn’t copy — select the text and copy it manually');
       }));
       on(ov.body.querySelector('[data-retry]'), 'click', () => Network.retry());
+      on(ov.body.querySelector('[data-host-share]'), 'click', () => { try { hs.open({ code, url, boardId: State.id, name: State.name }); } catch (e) { console.error(e); } });
       on(ov.body.querySelector('[data-share]'), 'click', () => navigator.share({ title: 'Join my InquiryDQB board', text: `Join code ${Net.formatCode(code)}`, url }).catch(() => {}));
+    }
+  };
+
+  /* ---------------------------------------------------------------------- */
+  /* Library: a host's resources and collections (DQB_HOST.library)          */
+  /* search(q, kind) -> [{id, kind, title, desc, url, thumb, meta, source}]  */
+  /* items(collectionId) -> the resources in a collection (optional)         */
+  /* ---------------------------------------------------------------------- */
+  Shell.Library = {
+    ov: null, kind: 'resource', q: '', results: [], seq: 0,
+    available() { const l = DQBUI.host().library; return !!(l && typeof l.search === 'function'); },
+    open() {
+      if (!Shell.Library.available()) return;
+      if (Shell.Library.ov) return;
+      const L = DQBUI.host().library;
+      const wrap = document.createElement('div'); wrap.className = 'lib stack'; wrap.style.gap = '12px';
+      wrap.innerHTML = `
+        <div class="seg" role="group" aria-label="What to search">${[['resource', 'Resources'], ['collection', 'Collections']].map(([k, l]) => `<button type="button" data-lk="${k}" aria-pressed="${Shell.Library.kind === k}">${l}</button>`).join('')}</div>
+        <div class="lib-search"><span class="lib-ico" aria-hidden="true">${ic('search', 'sm')}</span><input type="search" class="input" id="lib-q" placeholder="Search ${esc(L.name || 'the library')}…" aria-label="Search ${esc(L.name || 'the library')}" autocomplete="off" enterkeyhint="search"></div>
+        <div id="lib-results" class="lib-results" aria-live="polite"></div>`;
+      Shell.Library.ov = Overlay.open({ title: L.title || 'Add from the library', content: wrap, size: 'lg', initialFocus: '#lib-q', footer: [{ label: 'Done', kind: 'primary' }], onClose: () => { Shell.Library.ov = null; } });
+      const input = wrap.querySelector('#lib-q'); input.value = Shell.Library.q;
+      const run = DQBUI.debounce(() => Shell.Library.search(input.value), 250);
+      on(input, 'input', run);
+      on(input, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); Shell.Library.search(input.value); } });
+      on(wrap, 'click', e => {
+        const k = e.target.closest('[data-lk]');
+        if (k) { Shell.Library.kind = k.dataset.lk; $$('[data-lk]', wrap).forEach(b => b.setAttribute('aria-pressed', String(b === k))); Shell.Library.search(input.value); return; }
+        const b = e.target.closest('[data-lib]'); if (!b) return;
+        const r = Shell.Library.results[+b.dataset.n]; if (!r) return;
+        Shell.Library.act(b.dataset.lib, r, b);
+      });
+      Shell.Library.search(Shell.Library.q);
+    },
+    async search(q) {
+      const L = DQBUI.host().library, ov = Shell.Library.ov; if (!ov || !L) return;
+      Shell.Library.q = String(q || '').slice(0, 100);
+      const box = ov.body.querySelector('#lib-results'), my = ++Shell.Library.seq;
+      box.setAttribute('aria-busy', 'true');
+      if (!box.children.length) box.innerHTML = `<div class="muted lib-msg">Searching…</div>`;
+      let list = [];
+      try { list = await L.search(Shell.Library.q.trim(), Shell.Library.kind); } catch (e) { if (my === Shell.Library.seq) { box.innerHTML = `<div class="lib-msg err">The library can’t be reached right now. Check the connection and try again.</div>`; box.removeAttribute('aria-busy'); } return; }
+      if (my !== Shell.Library.seq || !Shell.Library.ov) return;
+      Shell.Library.results = (Array.isArray(list) ? list : []).slice(0, 40).map(r => ({ id: String(r.id), kind: r.kind === 'collection' ? 'collection' : 'resource', title: DQBUI.clampStr(r.title, 200), desc: DQBUI.clampStr(r.desc, 500), url: DQBUI.safeUrl(r.url), thumb: DQBUI.safeThumb(r.thumb), meta: DQBUI.clampStr(r.meta, 120), source: r.source ? DQBUI.clampStr(r.source, 60) : (L.name || '') })).filter(r => r.url);
+      box.removeAttribute('aria-busy');
+      if (!Shell.Library.results.length) { box.innerHTML = `<div class="muted lib-msg">${Shell.Library.q ? 'Nothing found. Try other words.' : 'Nothing here yet.'}</div>`; return; }
+      box.innerHTML = Shell.Library.results.map((r, n) => `
+        <div class="lib-row" role="group" aria-label="${esc(r.title)}">
+          ${r.thumb ? `<img class="lib-thumb" alt="" data-n="${n}" loading="lazy">` : `<span class="lib-thumb lib-ph" aria-hidden="true">${ic(r.kind === 'collection' ? 'layers' : 'book')}</span>`}
+          <div class="grow lib-text"><div class="t">${esc(r.title)}</div>${r.meta ? `<div class="s">${esc(r.meta)}</div>` : ''}</div>
+          <div class="lib-acts">
+            <button type="button" class="btn btn-primary btn-sm" data-lib="card" data-n="${n}" aria-label="Add a card for ${esc(r.title)}">${ic('plus', 'sm')}Card</button>
+            ${r.kind === 'resource' && r.thumb ? `<button type="button" class="btn btn-secondary btn-sm" data-lib="image" data-n="${n}" aria-label="Add the picture of ${esc(r.title)}">${ic('image', 'sm')}Picture</button>` : ''}
+            ${r.kind === 'collection' && typeof L.items === 'function' ? `<button type="button" class="btn btn-secondary btn-sm" data-lib="all" data-n="${n}" aria-label="Add every resource in ${esc(r.title)}">${ic('layers', 'sm')}All</button>` : ''}
+            <button type="button" class="btn btn-soft btn-sm" data-lib="share" data-n="${n}" aria-label="Add ${esc(r.title)} and share it with students">${ic('send', 'sm')}Share</button>
+          </div>
+        </div>`).join('');
+      $$('img.lib-thumb', box).forEach(img => { const r = Shell.Library.results[+img.dataset.n]; if (r && r.thumb) img.src = r.thumb; });
+    },
+    async act(what, r, btn) {
+      if (Workspace.mode !== 'board') { Toast.info('Go back to the main board to add things from the library.'); return; }
+      const card = { url: r.url, title: r.title, desc: r.desc, thumb: r.thumb, kind: r.kind, ref: r.id, source: r.source };
+      if (what === 'card') { if (Actions.addLink(card)) Toast.success('Card added'); }
+      else if (what === 'share') { const it = Actions.addLink(card); if (it) Network.toggleShare(it.id); }
+      else if (what === 'image') { btn.disabled = true; const it = await Actions.addImage(r.thumb, r.title); btn.disabled = false; if (it) Toast.success('Picture added'); }
+      else if (what === 'all') {
+        btn.disabled = true;
+        let list = [];
+        try { list = await DQBUI.host().library.items(r.id); } catch (e) { list = null; }
+        btn.disabled = false;
+        if (!Array.isArray(list)) { Toast.warn('That collection couldn’t be loaded.'); return; }
+        const n = Actions.addLinkZone(r.title, list.map(x => ({ url: x.url, title: x.title, desc: x.desc, thumb: x.thumb, kind: 'resource', ref: String(x.id), source: r.source })));
+        if (n) Toast.success(`${n} resource${n === 1 ? '' : 's'} added in a zone`); else Toast.info('That collection has no resources to add.');
+      }
     }
   };
 
@@ -273,6 +350,8 @@
         onClose: () => { Shell.Groups.ov = null; }
       });
       on(wrap, 'click', e => {
+        const ha = e.target.closest('[data-host-group]');
+        if (ha) { const a = (DQBUI.host().groupActions || [])[+ha.dataset.hostGroup]; if (a && typeof a.run === 'function') { Promise.resolve(a.run()).then(() => Shell.Groups.refresh(), () => Shell.Groups.refresh()); } return; }
         const b = e.target.closest('[data-gn], [data-gw], #gr-zones'); if (!b) return;
         if (b.dataset.gn) Shell.Groups.n = +b.dataset.gn;
         else if (b.dataset.gw) Shell.Groups.who = b.dataset.gw;
@@ -291,11 +370,18 @@
       wrap.innerHTML = `
         <p class="text-2">Split the class into colour groups. When you open colour zones, each student writes into their own group’s zone, and several groups can work at the same time.</p>
         <div class="field"><label>Number of groups</label><div class="seg" role="group" aria-label="Number of groups">${[2, 3, 4, 5, 6].map(k => `<button type="button" data-gn="${k}" aria-pressed="${G.n === k}">${k}</button>`).join('')}</div><div class="hint">${esc(Network.groupColors(G.n).map(groupName).join(', '))} · ${list.length ? `${list.length} student${list.length === 1 ? '' : 's'} connected, about ${per} per group` : 'no students connected yet; you can still add the group zones now'}</div></div>
+        ${Shell.Groups.hostActions()}
         <div class="field"><label>Who to sort</label><div class="seg" role="group" aria-label="Who to sort"><button type="button" data-gw="all" aria-pressed="${G.who === 'all'}">Everyone · new mix</button><button type="button" data-gw="new" aria-pressed="${G.who === 'new'}">Only students without a group</button></div></div>
         <div class="rule-row" style="padding:0;border:0"><div class="grow"><div class="t" style="font-weight:600">Add a zone for each group</div><div class="s muted" style="font-size:.8125rem">Adds any missing colour zones to the board and selects them, ready to open together.</div></div><button type="button" class="switch" role="switch" id="gr-zones" aria-checked="${G.zones}" aria-label="Add a zone for each group"></button></div>
         <div><div class="section-label" style="padding-top:0">Current groups</div>
         ${groups.length || none.length ? `<div class="gr-list">${groups.map(({ g, members }) => `<div class="gr-card" style="--zc:${g.color}"><div class="gr-h"><span class="oz-dot"></span><b>${esc(g.name)}</b><span class="muted">${members.length}</span></div><div class="gr-m">${members.map(esc).join(', ')}</div></div>`).join('')}${none.length ? `<div class="gr-card"><div class="gr-h"><span class="oz-dot any"></span><b>No group</b><span class="muted">${none.length}</span></div><div class="gr-m">${none.map(esc).join(', ')}</div></div>` : ''}</div>` : '<div class="muted">Nobody is in a group yet.</div>'}</div>`;
       if (focusKey) { const f = wrap.querySelector(focusKey); if (f) f.focus({ preventScroll: true }); }
+    },
+    /** Buttons a host adds to the Groups sheet ([{label, hint, run}]). */
+    hostActions() {
+      const acts = DQBUI.host().groupActions;
+      if (!Array.isArray(acts) || !acts.length) return '';
+      return `<div class="field"><label>From your classes</label><div class="row" style="gap:8px;flex-wrap:wrap">${acts.map((a, k) => `<button type="button" class="btn btn-secondary btn-sm" data-host-group="${k}">${ic('users', 'sm')}${esc(a.label || 'Use groups')}</button>`).join('')}</div>${acts[0] && acts[0].hint ? `<div class="hint">${esc(typeof acts[0].hint === 'function' ? acts[0].hint() : acts[0].hint)}</div>` : ''}</div>`;
     },
     make() {
       const G = Shell.Groups, moved = Network.makeGroups(G.n, G.who === 'new');
@@ -339,7 +425,7 @@
       Shell.A11y.refresh();
     },
     describe(i) {
-      const kind = { note: (TYPES[i.sub] || TYPES.meta).lbl + (i.src ? ' sketch' : ' note'), poll: 'Poll', graph: 'Live graph', spin: 'Spinner', zone: ({ cer: 'CER builder', consensus: 'Consensus model', exit: 'Exit ticket', breakout: 'Breakout board' })[i.zoneType] || 'Zone' }[i.type] || i.type;
+      const kind = { note: (TYPES[i.sub] || TYPES.meta).lbl + (i.src ? ' sketch' : ' note'), poll: 'Poll', graph: 'Live graph', spin: 'Spinner', link: Render.linkLabel(i), zone: ({ cer: 'CER builder', consensus: 'Consensus model', exit: 'Exit ticket', breakout: 'Breakout board' })[i.zoneType] || 'Zone' }[i.type] || i.type;
       let text = i.text || i.title || i.q || '';
       if (i.type === 'note' && i.src && !text) text = '(drawing)';
       if (i.type === 'zone' && i.zoneType === 'exit') text = i.prompt;
@@ -347,6 +433,7 @@
       if (i.type === 'poll') extra = (i.opts || []).map(o => `${o.lbl}: ${o.v}`).join(' · ');
       if (i.type === 'graph') extra = (i.data || []).length ? 'Values: ' + i.data.join(', ') : 'No data yet';
       if (i.type === 'spin') extra = 'Options: ' + (i.opts || []).join(', ');
+      if (i.type === 'link') extra = [i.desc, i.url, (State.shared || []).includes(i.id) ? 'shared with students' : ''].filter(Boolean).join(' · ');
       return { kind, text: text || '(empty)', extra };
     },
     list() {
@@ -386,7 +473,7 @@
   /* QR scanner (lazy loaded) + co-host join                                  */
   /* ---------------------------------------------------------------------- */
   Shell.scanQR = async function (hostEl, onText, onError) {
-    try { await DQBUI.loadScript('../vendor/html5-qrcode.min.js'); } catch (e) { onError('The scanner couldn’t load. Type the code instead.'); return null; }
+    try { await DQBUI.loadScript(DQBUI.asset('vendor/html5-qrcode.min.js')); } catch (e) { onError('The scanner couldn’t load. Type the code instead.'); return null; }
     hostEl.id = hostEl.id || ('qr-reader-' + Date.now());
     const sc = new Html5Qrcode(hostEl.id);
     try {

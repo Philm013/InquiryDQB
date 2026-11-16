@@ -7,7 +7,7 @@
    - HTML / JS / CSS: network-first (4s timeout) so updates arrive immediately, cache as the offline fallback.
    - Fonts, icons and vendored libraries: cache-first.
    Bump CACHE_VERSION whenever the shell files change shape (it also forces a clean-up of old caches). */
-const CACHE_VERSION = 'dqb-v2.1.0';
+const CACHE_VERSION = 'dqb-v2.2.0';
 const CORE = [
   'Teacher/', 'Teacher/index.html', 'Teacher/app.css', 'Teacher/app.js', 'Teacher/shell.js', 'Teacher/shell-sheets.js', 'Teacher/shell-home.js',
   'Student/', 'Student/index.html', 'Student/app.css', 'Student/app.js',

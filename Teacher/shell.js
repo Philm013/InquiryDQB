@@ -76,8 +76,11 @@
     open(anchor) {
       const node = $('insert-content');
       const bk = Workspace.mode === 'breakout';
-      $$('[data-add="breakout"], [data-add="consensus"]', node).forEach(b => { b.hidden = bk; });
+      $$('[data-add="breakout"], [data-add="consensus"], [data-add="link"]', node).forEach(b => { b.hidden = bk; });
       $$('[data-act="templates"]', node).forEach(b => { b.hidden = !Workspace.caps().templates; });
+      const lib = DQBUI.host().library;
+      $$('[data-act="library"]', node).forEach(b => { b.hidden = bk || !Shell.Library.available(); const t = b.querySelector('small'); if (t && lib && lib.name) t.textContent = `From ${lib.name}`; });
+      $$('.res-section', node).forEach(el => { el.hidden = bk; });
       Shell.Insert.ov = Shell.present('insert', node, { anchor: anchor || $('rail-add'), title: 'Add to board', size: 'md', tall: false, onClose: () => { Shell.Insert.ov = null; Shell.syncNav(); } });
       Shell.syncNav();
     },
@@ -87,6 +90,7 @@
       on($('insert-content'), 'click', (e) => {
         const t = e.target.closest('[data-add], [data-exit], [data-act]'); if (!t) return;
         if (t.dataset.act === 'templates') { Shell.Insert.close(); Shell.Templates.open(); return; }
+        if (t.dataset.act === 'library') { Shell.Insert.close(); Shell.Library.open(); return; }
         Shell.Insert.close();
         if (t.dataset.add) { const [type, sub] = t.dataset.add.split(':'); Workspace.insert(type, sub); }
         else if (t.dataset.exit) Workspace.insertExit(t.dataset.exit);
@@ -185,14 +189,18 @@
     if (Shell.Share.ov) Shell.Share.refresh();
   };
   let saveTimer = null;
+  /** saving · saved · error (this device failed) · local (saved on this device, the host account copy is waiting for the network) */
   Shell.setSave = function (state, msg) {
     const el = $('save-status'); if (!el) return;
-    el.className = 'save-status ' + (state === 'saving' ? 'saving' : (state === 'error' ? 'err' : ''));
-    const label = state === 'saving' ? 'Saving…' : (state === 'error' ? 'Not saved' : 'Saved');
-    el.innerHTML = ic(state === 'error' ? 'warn' : (state === 'saving' ? 'refresh' : 'check'), 'sm') + `<span>${label}</span>`;
-    el.title = state === 'error' ? (msg || 'This board could not be saved on this device') : 'Saved on this device';
-    if (state === 'error' && !Shell._saveWarned) { Shell._saveWarned = true; Toast.warn('This board couldn’t be saved on this device. Export it from the menu to keep a copy.', { duration: 7000 }); }
-    if (state === 'saved') Shell._saveWarned = false;
+    const cloud = !!Board.cloud(), where = cloud ? (DQBUI.host().storage.label || 'your account') : '';
+    el.className = 'save-status ' + (state === 'saving' ? 'saving' : (state === 'error' ? 'err' : (state === 'local' ? 'local' : '')));
+    const label = state === 'saving' ? 'Saving…' : (state === 'error' ? 'Not saved' : (state === 'local' ? 'Saved on this device' : 'Saved'));
+    el.innerHTML = ic(state === 'error' || state === 'local' ? 'warn' : (state === 'saving' ? 'refresh' : 'check'), 'sm') + `<span>${label}</span>`;
+    el.title = state === 'error' ? (msg || 'This board could not be saved on this device')
+      : (state === 'local' ? `Saved on this device. It is saved to ${where} as soon as the connection is back.` : (cloud ? `Saved to ${where} and on this device` : 'Saved on this device'));
+    if (state === 'error' && !Shell._saveWarned) { Shell._saveWarned = true; Toast.warn(cloud ? 'This board couldn’t be saved on this device; it is still being saved to ' + where + '.' : 'This board couldn’t be saved on this device. Export it from the menu to keep a copy.', { duration: 7000 }); }
+    if (state === 'local' && !Shell._cloudWarned) { Shell._cloudWarned = true; Toast.warn(`Couldn’t reach ${where} just now. The board is safe on this device and will be saved there when the connection is back.`, { duration: 7000 }); }
+    if (state === 'saved') { Shell._saveWarned = false; Shell._cloudWarned = false; }
   };
   Shell.onDbError = function () { Toast.warn('Your browser is blocking local storage, so boards can’t be saved here. You can still run a session and export the board.', { duration: 8000 }); const n = $('saved-list'); if (n) Shell.Home.render(); };
   Shell.syncZoom = function () { const z = $('zoom-pct'); if (z) { const t = Workspace.zoomPct() + '%'; if (z.textContent !== t) { z.textContent = t; z.setAttribute('aria-label', t + ' zoom, open zoom menu'); } } };
@@ -348,6 +356,11 @@
         } else if (it.type === 'spin') {
           add({ id: 'spin', icon: 'spin', label: 'Spin', keep: true, accent: true }, () => Actions.spin(id));
           add({ id: 'edit', icon: 'pencil', title: 'Edit options' }, () => Actions.editSpin(id));
+        } else if (it.type === 'link') {
+          const shared = (State.shared || []).includes(id);
+          if (!State.isCoHost) add({ id: 'share', icon: shared ? 'stop' : 'send', label: shared ? 'Stop sharing' : 'Share', keep: true, accent: !shared, on: shared, title: shared ? 'Stop sharing with students' : 'Share with students: it appears on every student’s device' }, () => Network.toggleShare(id));
+          add({ id: 'open', icon: 'link', label: 'Open', title: 'Open the link in a new tab' }, () => Actions.openLink(id));
+          if (it.kind === 'link') add({ id: 'edit', icon: 'pencil', title: 'Edit link' }, () => Actions.promptLink(it));
         }
         sep();
         add({ id: 'lock', icon: it.locked ? 'unlock' : 'lock', on: !!it.locked, title: it.locked ? 'Unlock' : 'Lock in place' }, () => Actions.toggleLock(id));
@@ -510,6 +523,21 @@
     onSelection: null,
     flashJoined(s) { Toast.show(`${s.avatar} ${s.name} joined`, { duration: 2200 }); },
     flashLeft(s) { /* silent: students drop off and rejoin often */ },
+    /** Rules a host adds to Class rules, e.g. "Only my students can join" ([{title, sub, get(), set(v)}]). */
+    hostRules() {
+      const rules = DQBUI.host().rules, box = document.querySelector('#pt-students .card.rules');
+      if (!Array.isArray(rules) || !box) return;
+      rules.forEach((r, k) => {
+        if (!r || typeof r.get !== 'function' || typeof r.set !== 'function') return;
+        const row = document.createElement('div'); row.className = 'rule-row';
+        row.innerHTML = `<div class="grow"><div class="t"></div><div class="s"></div></div><button type="button" class="switch" role="switch" id="rule-host-${k}"></button>`;
+        row.querySelector('.t').textContent = String(r.title || ''); row.querySelector('.s').textContent = String(r.sub || '');
+        const sw = row.querySelector('button'); sw.setAttribute('aria-label', String(r.title || 'Rule'));
+        const sync = () => sw.setAttribute('aria-checked', String(!!r.get()));
+        on(sw, 'click', () => { try { r.set(!r.get()); } catch (e) { console.error(e); } sync(); });
+        sync(); box.appendChild(row);
+      });
+    },
     renderRoster() {
       Shell.Panel.updateCounts();
       const box = $('roster'); if (!box) return;
@@ -526,7 +554,8 @@
           if (zonesLive && !Network.zonesFor(s).placed) return (g ? g + ' · ' : 'No group · ') + (State.settings.anyZone ? 'picks any zone' : 'waiting for a zone');
           return g || 'Connected';
         };
-        box.innerHTML = list.map(([pid, s]) => `<div class="stu${State.muted[s.sid] ? ' muted-stu' : ''}"><div class="av">${DQBUI.esc(s.avatar)}${s.color ? `<span class="pip" style="background:${DQBUI.safeColor(s.color)}"></span>` : ''}</div><div class="grow"><div class="nm truncate">${DQBUI.esc(s.name)}</div><div class="st">${DQBUI.esc(status(s))}</div></div><button type="button" class="icon-btn" data-pid="${DQBUI.esc(pid)}" aria-label="Actions for ${DQBUI.esc(s.name)}">${ic('more')}</button></div>`).join('') + (cohosts ? `<div class="stu"><div class="av">👑</div><div class="grow"><div class="nm">Co-host${cohosts > 1 ? 's' : ''}</div><div class="st">${cohosts} connected</div></div></div>` : '');
+        const vlabel = DQBUI.host().verifiedLabel || 'Signed in';
+        box.innerHTML = list.map(([pid, s]) => `<div class="stu${State.muted[s.sid] ? ' muted-stu' : ''}"><div class="av">${DQBUI.esc(s.avatar)}${s.color ? `<span class="pip" style="background:${DQBUI.safeColor(s.color)}"></span>` : ''}</div><div class="grow"><div class="nm truncate">${DQBUI.esc(s.name)}${s.verified ? `<span class="vmark" title="${DQBUI.esc(vlabel)}" aria-label="${DQBUI.esc(vlabel)}">${ic('check', 'sm')}</span>` : ''}</div><div class="st">${DQBUI.esc(status(s) + (s.info ? ' · ' + s.info : ''))}</div></div><button type="button" class="icon-btn" data-pid="${DQBUI.esc(pid)}" aria-label="Actions for ${DQBUI.esc(s.name)}">${ic('more')}</button></div>`).join('') + (cohosts ? `<div class="stu"><div class="av">👑</div><div class="grow"><div class="nm">Co-host${cohosts > 1 ? 's' : ''}</div><div class="st">${cohosts} connected</div></div></div>` : '');
         $$('#roster [data-pid]').forEach(b => on(b, 'click', () => {
           const pid = b.dataset.pid, s = State.students[pid]; if (!s) return;
           const items = [
@@ -565,6 +594,7 @@
       on($('rule-names'), 'click', () => { State.settings.names = !State.settings.names; save(); });
       on($('rule-approve'), 'click', () => { State.settings.approve = !State.settings.approve; save(); if (State.settings.approve) Toast.info('New notes will wait in Approvals until you accept them'); else if (State.pending.length) Toast.info(`${State.pending.length} notes are still waiting in Approvals`); });
       on($('rule-anyzone'), 'click', () => { State.settings.anyZone = !State.settings.anyZone; save(); Network.pushZones(); });
+      Shell.Panel.hostRules();
       on($('btn-groups'), 'click', () => Shell.Groups.open());
       on($('act-results'), 'click', (e) => {
         const b = e.target.closest('[data-oz]'); if (!b) return;
@@ -713,7 +743,7 @@
     // top bar
     on($('tb-back'), 'click', () => { if (Workspace.mode === 'board') Board.exit(); else Workspace.exit(); });
     const nameIn = $('board-name');
-    on(nameIn, 'input', () => { State.name = DQBUI.clampStr(nameIn.value, 60); Board.save(true); });
+    on(nameIn, 'input', () => { State.name = DQBUI.clampStr(nameIn.value, 60); Board.save(true); DQBUI.emit('rename', { id: State.id, name: State.name }); });
     on(nameIn, 'keydown', e => { if (e.key === 'Enter' || e.key === 'Escape') nameIn.blur(); });
     on(nameIn, 'blur', () => { if (!nameIn.value.trim()) { nameIn.value = 'My Board'; State.name = 'My Board'; } });
     on($('btn-share'), 'click', () => Shell.Share.open());

@@ -23,6 +23,17 @@
   var IMG_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=]+$/;
   /** Allow only raster data-URIs (no svg, no external urls) under a size cap. */
   function safeImg(s, max) { return (typeof s === 'string' && s.length <= (max || 2500000) && IMG_RE.test(s)) ? s : ''; }
+  /** Allow only absolute http(s) web addresses (links people open: never javascript:, data: or relative). */
+  function safeUrl(s) {
+    if (typeof s !== 'string' || s.length > 2048 || /[\u0000-\u001f\u007f\s\\]/.test(s) || !/^https?:\/\/[^/?#]+/i.test(s)) return '';
+    try { var u = new URL(s); return (u.protocol === 'https:' || u.protocol === 'http:') ? u.href : ''; } catch (e) { return ''; }
+  }
+  /** A picture for a link card: a raster data-URI, or a path on this site ("/img.php?…"), never another site or "//host". */
+  function safeThumb(s) {
+    if (typeof s !== 'string') return '';
+    if (s.indexOf('data:') === 0) return safeImg(s, 400000);
+    return (s.length <= 1000 && /^\/(?![\/\\])[A-Za-z0-9._~%!$&'()*+,;=:@\/?-]*$/.test(s) && s.indexOf('..') === -1) ? s : '';
+  }
   function clampStr(s, n) { return String(s == null ? '' : s).slice(0, n); }
   function num(v, min, max, dflt) { v = Number(v); if (!isFinite(v)) return dflt; return Math.max(min, Math.min(max, v)); }
   function genId() { return Math.random().toString(36).slice(2, 11); }
@@ -32,6 +43,19 @@
   function icon(name, cls) { return global.icon ? global.icon(name, cls) : ''; }
   function h(html) { var t = document.createElement('template'); t.innerHTML = String(html).trim(); return t.content.firstElementChild; }
   function haptic(ms) { try { if (navigator.vibrate) navigator.vibrate(ms || 10); } catch (e) { /* ignore */ } }
+
+  /* ---------------------------------------------------------------------- */
+  /* Host integration                                                        */
+  /* A site that embeds InquiryDQB (for example TechieTeaching) defines        */
+  /* window.DQB_HOST before the app scripts; standalone it is absent and every */
+  /* hook below falls back to the stand-alone behaviour.                       */
+  /* ---------------------------------------------------------------------- */
+  /** The host's hooks (always an object). */
+  function host() { return (global.DQB_HOST && typeof global.DQB_HOST === 'object') ? global.DQB_HOST : {}; }
+  /** URL of a shared file ("vendor/x.js") from a Teacher/ or Student/ page, or from the host's asset folder. */
+  function asset(path) { var b = host().assetBase; return (typeof b === 'string' && b ? b.replace(/\/?$/, '/') : '../') + path; }
+  /** Tells the host what happened ("dqb:hosting", "dqb:board", "dqb:contribution" …). Never throws. */
+  function emit(name, detail) { try { global.dispatchEvent(new CustomEvent('dqb:' + name, { detail: detail || {} })); } catch (e) { /* ignore */ } }
 
   var _scripts = {};
   /** Load a script once; resolves when ready. */
@@ -483,7 +507,8 @@
   global.alert = function (m) { Toast.info(String(m)); };
 
   global.DQBUI = {
-    esc: esc, safeId: safeId, safeColor: safeColor, safeImg: safeImg, clampStr: clampStr, num: num, genId: genId,
+    esc: esc, safeId: safeId, safeColor: safeColor, safeImg: safeImg, safeUrl: safeUrl, safeThumb: safeThumb, clampStr: clampStr, num: num, genId: genId,
+    host: host, asset: asset, emit: emit,
     debounce: debounce, throttle: throttle, isMobile: isMobile, icon: icon, h: h, haptic: haptic,
     loadScript: loadScript, copyText: copyText, announce: announce, kbd: kbd, isMac: isMac,
     Theme: Theme, Hist: Hist, Overlay: Overlay, Dialog: Dialog, Menu: Menu, Toast: Toast

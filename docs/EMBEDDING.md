@@ -26,7 +26,7 @@ and boards loaded from a host are sanitised item by item like anything that arri
 | `brand` | `{name, sub, homeUrl, homeLabel}` | Name under the logo and a "back" link on the boards home |
 | `openBoard` | board id | Opens that board as soon as the console starts (a host's "Open board" link) |
 | `storage` | `{label, list(), load(id), save(board), remove(id), rename(id, name)}` (promises) | Boards are saved to the host account as well as the device. `list()` returns `[{id, name, ts, notes, preview}]` (`preview` = light items for the thumbnail). The newest copy (by `ts`) wins when a board opens; a change is sent about 2.5 s after the last edit, one upload at a time, and only when something changed. Offline, the status reads "Saved on this device" and the upload is retried |
-| `library` | `{name, title, search(q, kind), items(collectionId)}` | "Library" in the Insert and More menus. `search` returns `[{id, kind: 'resource'|'collection', title, desc, url, thumb, meta, source}]`; each result can become a card, a picture (an image note), a card shared with students at once, or (collections, with `items`) a zone holding every resource |
+| `library` | `{name, title, search(q, kind), items(collectionId)}` | "Library" in the Insert and More menus. `search` returns `[{id, kind: 'resource'|'collection', title, desc, url, thumb, meta, source}]`; each result can become a card, a picture students can annotate (from `thumb`, re-encoded into the board), a video (when `url` is a YouTube, Vimeo or video-file address), a card shared with students at once, or (collections, with `items`) a zone holding every resource, its videos playable. Share the zone and students explore it on their own |
 | `roster` | `{lookup(sid), admit(sid, known), refusal}` | `lookup` returns `{name, verified, color, info}` for a student the host knows (shown with a check mark, named by the host, placed in a colour group). `admit` returning `false` turns a student away with `KICKED {reason: 'restricted', msg: refusal}` |
 | `rules` | `[{title, sub, get(), set(v)}]` | Extra switches in Class rules (e.g. "Only my students can join") |
 | `groupActions` | `[{label, hint, run()}]` | Extra buttons in the Groups sheet (e.g. "Use my class groups") |
@@ -44,8 +44,8 @@ participation without patching the app:
 | `dqb:hosting` `{code, boardId, name}` | The board is reachable under a join code |
 | `dqb:rename` `{id, name}` | The board was renamed |
 | `dqb:join` `{sid, name, verified, boardId}` | A student joined |
-| `dqb:contribution` `{sid, kind, boardId, verified}` | A student added a note or answered (`note`, `poll`, `data`, `vote`, `rank`, `comment`, `exit`) |
-| `dqb:share` `{id, title, url, kind, ref}` | A card was shared with students |
+| `dqb:contribution` `{sid, kind, boardId, verified}` | A student added a note or answered (`note`, `poll`, `data`, `vote`, `rank`, `comment`, `exit`), drew on a picture or video (`markup`), or opened something in a shared set (`explore`, once per item) |
+| `dqb:share` `{id, title, url, kind, ref}` | Something was shared with students: a card (`kind` `resource`, `collection` or `link`), a picture or video (`image`, `video`) or a zone to explore (`set`) |
 | `dqb:leave` `{id}` | The teacher left the board |
 
 ## Student app
@@ -58,8 +58,11 @@ participation without patching the app:
 
 ## Messages added for hosts and link cards
 
-* `SHARED {items: [{id, title, desc, url, thumb, kind, source}]}` (host → student, also inside `WELCOME` as `shared`): what the
-  teacher shares right now. Students show it as "Shared with you", links open in a new tab with `noopener noreferrer`.
+* `SHARED {items}` (host → student, also inside `WELCOME` as `shared`): what the teacher shares right now, per student.
+  Entries are `{type: 'link', id, title, desc, url, thumb, kind, source}`, `{type: 'media', id, kind, title, desc, thumb, video,
+  aspect, source}` or `{type: 'set', id, title, color, group, items}` (a zone to explore; its items are links, media and
+  `{type: 'text', text}` prompts). Students show them as "Shared with you"; links open in a new tab with `noopener noreferrer`.
+  Pictures and annotations come separately (`VIEW` → `ITEM`), see ARCHITECTURE.md.
 * `KICKED {reason: 'restricted', msg}`: the host's admission rule turned the student away.
 
 ## Link cards

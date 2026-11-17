@@ -29,13 +29,13 @@
   /* ====================================================================== */
   const State = {
     me: { sid: '', name: '', av: '😀', color: null, group: '', locked: false },
-    shared: [],              // links the teacher shared with the class ({ id, title, desc, url, thumb, kind, source })
+    shared: [],              // what the teacher shared: links, pictures and videos, and sets to explore ({ id, type: 'link' | 'media' | 'set', … })
     target: null,            // { peerId, code }
     boardId: null, notes: [],
     // zones: the open zones this student may write into ({ id, title, zoneType, color, group }); zonePick: the one they chose
     activity: { type: 'LOCKED', id: null, rid: null, sub: null, title: '', zoneType: null, items: [], payload: null, zones: [], waiting: false, unplaced: false },
     zonePick: null,
-    rules: { names: true, approve: false }, muted: false,
+    rules: { names: true, approve: false, peers: true }, muted: false,
     responded: {}, everConnected: false, tab: 'board', view: 'setup',
     timer: { running: false, endsAt: 0, remainingMs: 0, totalMs: 0 },
     outbox: []
@@ -244,10 +244,11 @@
   function autoOpenTask() {
     const a = State.activity;
     if (isDone()) return;
-    if (a.type === 'POLL') { Pages.closeAll(['p-poll']); Poll.open(); }
-    else if (a.type === 'GRAPH') { Pages.closeAll(['p-graph']); Graph.open(); }
-    else if (a.type === 'EXIT') { Pages.closeAll(['p-exit']); Exit.open(); }
+    if (a.type === 'POLL') { Pages.closeAll(['p-poll'].concat(KEEP_PAGES)); Poll.open(); }
+    else if (a.type === 'GRAPH') { Pages.closeAll(['p-graph'].concat(KEEP_PAGES)); Graph.open(); }
+    else if (a.type === 'EXIT') { Pages.closeAll(['p-exit'].concat(KEEP_PAGES)); Exit.open(); }
   }
+  const KEEP_PAGES = ['p-explore', 'p-media'];
 
   function Handle(d) {
     if (!d || typeof d.type !== 'string') return;
@@ -256,7 +257,7 @@
       case 'WELCOME': {
         const first = !State.everConnected;
         State.boardId = d.boardId || 'board'; State.everConnected = true; Conn.attempts = 0;
-        if (d.rules) State.rules = { names: d.rules.names !== false, approve: !!d.rules.approve };
+        if (d.rules) State.rules = { names: d.rules.names !== false, approve: !!d.rules.approve, peers: d.rules.peers !== false };
         State.muted = !!d.muted; State.me.color = d.color || null;
         Store.setLastJoin(Conn.target);
         (d.sync || []).forEach(n => { const l = State.notes.find(x => x.id === n.id); if (l) { l.text = clampStr(n.text, 1000); l.sub = n.sub; if (l.status !== 'approved') { l.status = 'approved'; } Store.saveNote(l); } });
@@ -270,13 +271,14 @@
         Views.show('board', true); Views.setTab('board'); Views.renderNotes(); Views.renderMe();
         if (first) Toast.success('You’re in!', { duration: 1800 });
         Conn.flush();
+        MediaPage.resume();
         break;
       }
-      case 'MODE': { Pages.closeAll(['p-write', 'p-sketch']); setActivity({ type: d.val === 'OPEN' ? 'OPEN' : 'LOCKED' }); break; }
+      case 'MODE': { Pages.closeAll(['p-write', 'p-sketch'].concat(KEEP_PAGES)); setActivity({ type: d.val === 'OPEN' ? 'OPEN' : 'LOCKED' }); break; }
       case 'ZONE_ACT': case 'OPEN_ZONE': case 'ACT_VOTE': case 'ACT_SORT': case 'ACT_DISCUSS': {
         const sub = d.type === 'ZONE_ACT' ? (d.subType || d.type) : d.type;
-        const items = (Array.isArray(d.items) ? d.items : []).slice(0, 100).map(i => ({ id: safeId(i.id), text: clampStr(i.text, 300), sub: i.sub })).filter(i => i.id);
-        if (sub !== 'OPEN_ZONE') Pages.closeAll();
+        const items = (Array.isArray(d.items) ? d.items : []).slice(0, 100).map(i => ({ id: safeId(i.id), text: clampStr(i.text, 300), sub: ['link', 'image', 'video'].includes(i.sub) ? i.sub : (TYPES[i.sub] ? i.sub : 'notice') })).filter(i => i.id);
+        if (sub !== 'OPEN_ZONE') Pages.closeAll(KEEP_PAGES);
         if (sub === 'ACT_SORT') Rank.reset(items);
         if (sub === 'ACT_VOTE') Vote.reset();
         if (sub === 'OPEN_ZONE') {
@@ -290,14 +292,14 @@
         setActivity({ type: 'ZONE', id: safeId(d.actId), rid: safeId(d.rid), sub, title: clampStr(d.title, 80), zoneType: d.zoneType === 'cer' ? 'cer' : null, items });
         break;
       }
-      case 'ACT_POLL': { const id = safeId(d.actId); Pages.closeAll(); setActivity({ type: 'POLL', id, rid: safeId(d.rid), title: clampStr(d.q, 200), payload: { q: clampStr(d.q, 200), opts: (Array.isArray(d.opts) ? d.opts : []).slice(0, 12).map(o => clampStr(o && o.lbl, 80)) } }); Poll.reset(); autoOpenTask(); break; }
-      case 'ACT_GRAPH': { const id = safeId(d.actId); Pages.closeAll(); setActivity({ type: 'GRAPH', id, rid: safeId(d.rid), title: clampStr(d.title, 120), payload: {} }); autoOpenTask(); break; }
+      case 'ACT_POLL': { const id = safeId(d.actId); Pages.closeAll(KEEP_PAGES); setActivity({ type: 'POLL', id, rid: safeId(d.rid), title: clampStr(d.q, 200), payload: { q: clampStr(d.q, 200), opts: (Array.isArray(d.opts) ? d.opts : []).slice(0, 12).map(o => clampStr(o && o.lbl, 80)) } }); Poll.reset(); autoOpenTask(); break; }
+      case 'ACT_GRAPH': { const id = safeId(d.actId); Pages.closeAll(KEEP_PAGES); setActivity({ type: 'GRAPH', id, rid: safeId(d.rid), title: clampStr(d.title, 120), payload: {} }); autoOpenTask(); break; }
       case 'EXIT_TICKET': {
-        const id = safeId(d.actId); Pages.closeAll();
+        const id = safeId(d.actId); Pages.closeAll(KEEP_PAGES);
         setActivity({ type: 'EXIT', id, rid: safeId(d.rid), title: 'Exit ticket', payload: { mode: ['short', 'smiley', 'mc', 'multi', 'lw'].includes(d.mode) ? d.mode : 'short', prompt: clampStr(d.prompt, 300), opts: (Array.isArray(d.opts) ? d.opts : []).slice(0, 12).map(o => clampStr(o, 80)) } });
         autoOpenTask(); break;
       }
-      case 'STOP_ACT': { Pages.closeAll(['p-write', 'p-sketch']); setActivity({ type: 'LOCKED' }); break; }
+      case 'STOP_ACT': { Pages.closeAll(['p-write', 'p-sketch'].concat(KEEP_PAGES)); setActivity({ type: 'LOCKED' }); break; }
       case 'SET_COLOR': {
         const had = State.me.color;
         State.me.color = safeColor(d.color) || null; State.me.group = State.me.color ? (clampStr(d.name, 24) || 'colour') : '';
@@ -305,8 +307,8 @@
         if (State.me.color && State.me.color !== had) Toast.info(`You’re in the ${State.me.group} group`, { duration: 2400 });
         break;
       }
-      case 'RULES': if (d.rules) { State.rules = { names: d.rules.names !== false, approve: !!d.rules.approve }; Write.sync(); } break;
-      case 'MUTE': State.muted = !!d.on; Views.renderBoard(); Views.syncChrome(); Write.sync(); if (State.muted) Toast.warn('Your teacher paused notes from you for now.'); else Toast.success('You can add notes again.'); break;
+      case 'RULES': if (d.rules) { State.rules = { names: d.rules.names !== false, approve: !!d.rules.approve, peers: d.rules.peers !== false }; Write.sync(); MediaPage.sync(); } break;
+      case 'MUTE': State.muted = !!d.on; Views.renderBoard(); Views.syncChrome(); Write.sync(); MediaPage.sync(); if (State.muted) Toast.warn('Your teacher paused notes from you for now.'); else Toast.success('You can add notes again.'); break;
       case 'KICKED': {
         Conn.stop(); Store.setLastJoin(null); State.everConnected = false; Pages.closeAll(); Shared.set([], true);
         if (d.reason === 'restricted') { Views.ended('This board is for the teacher’s own students', clampStr(d.msg, 200) || 'Sign in with your student account, then join again.'); break; }
@@ -314,6 +316,8 @@
         break;
       }
       case 'SHARED': Shared.set(d.items); break;
+      case 'ITEM': MediaPage.onItem(d); break;
+      case 'ANNO_STATUS': MediaPage.onStatus(d); break;
       case 'TIMER': Timer.set(d); break;
       case 'NOTE_STATUS': {
         const n = State.notes.find(x => x.id === d.id); if (!n) break;
@@ -457,25 +461,212 @@
 
   /* ---- links the teacher shared with the class ---- */
   const Shared = {
-    clean(list) {
-      return (Array.isArray(list) ? list : []).slice(0, 12).map(x => ({
-        id: safeId(x && x.id), title: clampStr(x && x.title, 200), desc: clampStr(x && x.desc, 500), url: DQBUI.safeUrl(x && x.url),
-        thumb: DQBUI.safeThumb(x && x.thumb), kind: ['resource', 'collection', 'link'].includes(x && x.kind) ? x.kind : 'link', source: clampStr(x && x.source, 60)
-      })).filter(x => x.id && x.url);
+    /** One entry, re-checked: a link, a picture or video, a teacher's note (inside a set) or a set to explore. */
+    entry(x, inSet) {
+      if (!x || typeof x !== 'object') return null;
+      const id = safeId(x.id); if (!id) return null;
+      const type = ['media', 'set', 'text'].includes(x.type) ? x.type : 'link';
+      if (type === 'link') {
+        const url = DQBUI.safeUrl(x.url); if (!url) return null;
+        return { id, type, title: clampStr(x.title, 200) || 'Link', desc: clampStr(x.desc, 500), url, thumb: DQBUI.safeThumb(x.thumb), kind: ['resource', 'collection', 'link'].includes(x.kind) ? x.kind : 'link', source: clampStr(x.source, 60) };
+      }
+      if (type === 'media') {
+        const kind = x.kind === 'video' ? 'video' : 'image';
+        const o = { id, type, kind, title: clampStr(x.title, 200) || (kind === 'video' ? 'Video' : 'Picture'), desc: clampStr(x.desc, 500), thumb: safeImg(x.thumb, 150000) || DQBUI.safeThumb(x.thumb), source: clampStr(x.source, 60), aspect: Number(x.aspect) > 0.1 && Number(x.aspect) < 10 ? Number(x.aspect) : 0 };
+        if (kind === 'video') { o.video = DQBMedia.cleanVideo(x.video); if (!o.video) return null; }
+        return o;
+      }
+      if (type === 'text') { const text = clampStr(x.text, 600).trim(); return inSet && text ? { id, type, text } : null; }
+      if (inSet) return null;
+      const items = (Array.isArray(x.items) ? x.items : []).slice(0, 40).map(i => Shared.entry(i, true)).filter(Boolean);
+      return items.some(i => i.type !== 'text') ? { id, type: 'set', title: clampStr(x.title, 80) || 'Explore', color: safeColor(x.color), group: clampStr(x.group, 24), items } : null;
+    },
+    clean(list) { return (Array.isArray(list) ? list : []).slice(0, 12).map(x => Shared.entry(x, false)).filter(Boolean); },
+    /** Finds an item anywhere in what is shared: {item, set} (set: the set it is in, or null). */
+    find(id) {
+      for (const x of State.shared) {
+        if (x.id === id) return { item: x, set: null };
+        if (x.type === 'set') { const i = x.items.find(y => y.id === id); if (i) return { item: i, set: x }; }
+      }
+      return null;
     },
     set(list, quiet) {
       const before = new Set(State.shared.map(x => x.id));
       State.shared = Shared.clean(list);
       const added = State.shared.filter(x => !before.has(x.id));
-      if (!quiet && added.length) { Toast.show(added.length === 1 ? `Your teacher shared “${added[0].title}”` : `Your teacher shared ${added.length} things`, { icon: 'link', duration: 3200 }); DQBUI.haptic(15); DQBUI.announce('Your teacher shared something with the class.'); }
+      if (!quiet && added.length) {
+        const one = added[0];
+        Toast.show(added.length === 1 ? (one.type === 'set' ? `Your teacher shared “${one.title}” to explore` : `Your teacher shared “${one.title}”`) : `Your teacher shared ${added.length} things`, { icon: one.type === 'set' ? 'explore' : (one.type === 'media' ? (one.kind === 'video' ? 'video' : 'image') : 'link'), duration: 3200 });
+        DQBUI.haptic(15); DQBUI.announce('Your teacher shared something with the class.');
+      }
       if (State.view === 'board') Views.renderBoard();
+      Explore.sync(); MediaPage.check();
     },
     html() {
       if (!State.shared.length) return '';
       const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
-      return `<section class="shared card" aria-labelledby="shared-h"><div class="shared-head"><span class="ico">${ic('link', 'sm')}</span><h2 id="shared-h">Shared with you</h2><span class="muted">${State.shared.length}</span></div><div class="shared-list">${State.shared.map(x => `<a class="shared-item" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${x.thumb ? `<img alt="" data-thumb="${esc(x.id)}" loading="lazy">` : `<span class="ph" aria-hidden="true">${ic(x.kind === 'link' ? 'link' : 'book')}</span>`}<span class="tx"><b>${esc(x.title)}</b>${x.desc ? `<small>${esc(x.desc)}</small>` : ''}<span class="src">${esc(x.source || host(x.url))}</span></span><span class="go" aria-hidden="true">${ic('chev-right', 'sm')}</span><span class="sr-only"> (opens in a new tab)</span></a>`).join('')}</div></section>`;
+      const row = (x) => {
+        if (x.type === 'set') {
+          const p = Explore.progress(x), n = x.items.filter(i => i.type !== 'text').length;
+          return `<button type="button" class="shared-item set" data-act="open-set" data-id="${esc(x.id)}"${x.color ? ` style="--zc:${esc(x.color)}"` : ''}><span class="ph set" aria-hidden="true">${ic('explore')}</span><span class="tx"><b>${esc(x.title)}</b><small>${n} thing${n === 1 ? '' : 's'} to explore${x.group ? ` · ${esc(x.group)} group` : ''}</small><span class="xp-bar" aria-hidden="true"><i style="width:${p.pct}%"></i></span><span class="src">${p.done ? `${p.done} of ${p.total} done` : (p.opened ? 'Started' : 'Not started yet')}</span></span><span class="go" aria-hidden="true">${ic('chev-right', 'sm')}</span></button>`;
+        }
+        if (x.type === 'media') return `<button type="button" class="shared-item media" data-act="open-media" data-id="${esc(x.id)}">${x.thumb ? `<img alt="" data-thumb="${esc(x.id)}" loading="lazy">` : `<span class="ph" aria-hidden="true">${ic(x.kind === 'video' ? 'video' : 'image')}</span>`}<span class="tx"><b>${esc(x.title)}</b><small>${x.kind === 'video' ? 'Video · watch it and comment at moments' : 'Picture · look closely, comment and draw on it'}</small></span><span class="go" aria-hidden="true">${ic(x.kind === 'video' ? 'play' : 'eye', 'sm')}</span></button>`;
+        return `<div class="shared-row"><a class="shared-item" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">${x.thumb ? `<img alt="" data-thumb="${esc(x.id)}" loading="lazy">` : `<span class="ph" aria-hidden="true">${ic(x.kind === 'link' ? 'link' : 'book')}</span>`}<span class="tx"><b>${esc(x.title)}</b>${x.desc ? `<small>${esc(x.desc)}</small>` : ''}<span class="src">${esc(x.source || host(x.url))}</span></span><span class="go" aria-hidden="true">${ic('chev-right', 'sm')}</span><span class="sr-only"> (opens in a new tab)</span></a><button type="button" class="icon-btn sm shared-cmt" data-act="link-comments" data-id="${esc(x.id)}" aria-label="Comments on ${esc(x.title)}">${ic('comment', 'sm')}</button></div>`;
+      };
+      return `<section class="shared card" aria-labelledby="shared-h"><div class="shared-head"><span class="ico">${ic('link', 'sm')}</span><h2 id="shared-h">Shared with you</h2><span class="muted">${State.shared.length}</span></div><div class="shared-list">${State.shared.map(row).join('')}</div></section>`;
     },
-    fillThumbs(box) { $$('img[data-thumb]', box).forEach(img => { const x = State.shared.find(s => s.id === img.dataset.thumb); if (x && x.thumb) img.src = x.thumb; }); }
+    fillThumbs(box) { $$('img[data-thumb]', box).forEach(img => { const f = Shared.find(img.dataset.thumb); if (f && f.item.thumb) img.src = f.item.thumb; }); }
+  };
+
+  /* ---- exploring a set: every card, picture and video in a zone the teacher shared ---- */
+  const Explore = {
+    id: null,
+    key(setId) { return 'dqb_explore:' + (State.me.sid || '') + ':' + (State.boardId || '') + ':' + setId; },
+    get(setId) { try { const r = JSON.parse(localStorage.getItem(Explore.key(setId)) || '{}'); return r && typeof r === 'object' ? r : {}; } catch (e) { return {}; } },
+    put(setId, rec) { try { localStorage.setItem(Explore.key(setId), JSON.stringify(rec)); } catch (e) { /* ignore */ } },
+    progress(set) {
+      const rec = Explore.get(set.id), list = set.items.filter(i => i.type !== 'text');
+      const done = list.filter(i => rec[i.id] && rec[i.id].d).length, opened = list.filter(i => rec[i.id] && rec[i.id].o).length;
+      return { done, opened, total: list.length, pct: list.length ? Math.round((done / list.length) * 100) : 0 };
+    },
+    /** Remembers progress on this device and tells the teacher (it waits in the outbox while offline). */
+    mark(setId, id, patch) {
+      const rec = Explore.get(setId), before = rec[id] || {};
+      const next = Object.assign({}, before, patch);
+      if (next.d) next.o = true;
+      rec[id] = next; Explore.put(setId, rec);
+      Conn.send({ type: 'EXPLORE', set: setId, id, open: !!next.o, done: !!next.d, star: !!next.s }, true);
+      if (Explore.id === setId) Explore.render();
+      if (State.view === 'board') Views.renderBoard();
+      const set = State.shared.find(s => s.id === setId);
+      if (set && patch.d && !before.d) { const p = Explore.progress(set); if (p.done === p.total) { Toast.success('You explored everything in this set!'); DQBUI.haptic(20); } }
+    },
+    open(id) {
+      const set = State.shared.find(s => s.id === id && s.type === 'set'); if (!set) return;
+      Explore.id = id;
+      Explore.render();
+      if (!Pages.isOpen('p-explore')) Pages.open('p-explore', { focus: '.page-bar [data-close]', onClose: () => { Explore.id = null; } });
+    },
+    /** The shared list changed: keep the page in step (or close it if the set was withdrawn). */
+    sync() {
+      if (!Explore.id) return;
+      if (!State.shared.some(s => s.id === Explore.id && s.type === 'set')) { Pages.close('p-explore'); Explore.id = null; Toast.info('Your teacher stopped sharing that set.'); return; }
+      Explore.render();
+    },
+    render() {
+      const set = State.shared.find(s => s.id === Explore.id && s.type === 'set'); if (!set) return;
+      const rec = Explore.get(set.id), p = Explore.progress(set);
+      $('xp-title').textContent = set.title;
+      $('xp-sub').textContent = `${p.done} of ${p.total} done`;
+      const prompts = set.items.filter(i => i.type === 'text');
+      $('xp-head').innerHTML = `<div class="xp-meter" role="progressbar" aria-label="Your progress" aria-valuemin="0" aria-valuemax="${p.total}" aria-valuenow="${p.done}" aria-valuetext="${p.done} of ${p.total} done"><i style="width:${p.pct}%"></i></div>`
+        + (prompts.length ? prompts.map(t => `<div class="xp-prompt">${ic('megaphone', 'sm')}<span></span></div>`).join('') : `<p class="text-2 xp-hint">Open each one, take a look, then tick it off. Star the ones you found most useful.</p>`);
+      $$('.xp-prompt span', $('xp-head')).forEach((el, k) => { el.textContent = prompts[k].text; });
+      const list = $('xp-list');
+      list.innerHTML = set.items.filter(i => i.type !== 'text').map((i, k) => {
+        const r = rec[i.id] || {}, kind = i.type === 'link' ? (i.kind === 'link' ? 'Link' : 'Resource') : (i.kind === 'video' ? 'Video' : 'Picture');
+        const main = i.type === 'link'
+          ? `<a class="btn btn-primary btn-sm" href="${esc(i.url)}" target="_blank" rel="noopener noreferrer" data-x="open" data-id="${esc(i.id)}">${ic('link', 'sm')}<span>Open</span><span class="sr-only"> ${esc(i.title)} (opens in a new tab)</span></a><button type="button" class="btn btn-secondary btn-sm" data-x="look" data-id="${esc(i.id)}" aria-label="Comment on ${esc(i.title)}">${ic('comment', 'sm')}<span>Comment</span></button>`
+          : `<button type="button" class="btn btn-primary btn-sm" data-x="look" data-id="${esc(i.id)}" aria-label="${i.kind === 'video' ? 'Watch' : 'Look at'} ${esc(i.title)}">${ic(i.kind === 'video' ? 'play' : 'eye', 'sm')}<span>${i.kind === 'video' ? 'Watch' : 'Look closely'}</span></button>`;
+        return `<article class="xp-item${r.d ? ' done' : ''}" data-id="${esc(i.id)}"><div class="xp-top">${i.thumb ? `<img alt="" data-xthumb="${esc(i.id)}" loading="lazy">` : `<span class="ph" aria-hidden="true">${ic(i.type === 'link' ? 'book' : (i.kind === 'video' ? 'video' : 'image'))}</span>`}<div class="xp-tx"><span class="xp-kind">${k + 1} · ${kind}${r.o && !r.d ? ' · opened' : ''}</span><b></b><small></small></div></div><div class="xp-acts">${main}<span class="grow"></span><button type="button" class="icon-btn sm xp-star" data-x="star" data-id="${esc(i.id)}" aria-pressed="${!!r.s}" aria-label="Star ${esc(i.title)}">${ic('star', 'sm')}</button><button type="button" class="btn btn-sm xp-done${r.d ? ' on' : ''}" data-x="done" data-id="${esc(i.id)}" aria-pressed="${!!r.d}">${ic('check', 'sm')}<span>${r.d ? 'Done' : 'Mark done'}</span></button></div></article>`;
+      }).join('');
+      $$('.xp-item', list).forEach(el => { const i = set.items.find(x => x.id === el.dataset.id); el.querySelector('.xp-tx b').textContent = i.title; const s = el.querySelector('.xp-tx small'); if (i.desc) s.textContent = i.desc; else s.remove(); });
+      $$('img[data-xthumb]', list).forEach(img => { const i = set.items.find(x => x.id === img.dataset.xthumb); if (i && i.thumb) img.src = i.thumb; });
+      hydrateIcons(list); hydrateIcons($('xp-head'));
+    }
+  };
+  on($('xp-list'), 'click', e => {
+    const b = e.target.closest('[data-x]'); if (!b || !Explore.id) return;
+    const set = State.shared.find(s => s.id === Explore.id); if (!set) return;
+    const i = set.items.find(x => x.id === b.dataset.id); if (!i) return;
+    const rec = Explore.get(set.id)[i.id] || {};
+    if (b.dataset.x === 'open') Explore.mark(set.id, i.id, { o: true });                      // the link itself opens in a new tab
+    else if (b.dataset.x === 'look') { Explore.mark(set.id, i.id, { o: true }); MediaPage.open(i, set.id); }
+    else if (b.dataset.x === 'star') { Explore.mark(set.id, i.id, { s: !rec.s }); }
+    else if (b.dataset.x === 'done') { Explore.mark(set.id, i.id, { d: !rec.d }); DQBUI.announce(rec.d ? 'Marked as not done' : 'Marked as done'); }
+  });
+
+  /* ---- one picture, video or card: the viewer (shared/media.js), with comments and markup ---- */
+  const MediaPage = {
+    id: null, setId: null, item: null, viewer: null, src: null, annos: [], local: [],
+    viewItem() {
+      const e = MediaPage.item;
+      return e.type === 'link' ? { id: e.id, kind: 'link', title: e.title, desc: e.desc, url: e.url, thumb: e.thumb, source: e.source }
+        : { id: e.id, kind: e.kind, title: e.title, desc: e.desc, src: MediaPage.src, thumb: e.thumb, video: e.video, aspect: e.aspect, source: e.source };
+    },
+    notice() {
+      if (State.muted) return 'Your teacher paused comments from you for now.';
+      if (Conn.state !== 'online') return 'You’re offline. What you add is sent when you reconnect.';
+      if (State.rules.approve) return 'Your teacher checks comments before classmates see them.';
+      if (!State.rules.peers) return 'Only your teacher sees your comments and drawings.';
+      return '';
+    },
+    open(entry, setId) {
+      if (MediaPage.viewer) { MediaPage.viewer.destroy(); MediaPage.viewer = null; }
+      Object.assign(MediaPage, { id: entry.id, setId: setId || null, item: entry, src: null, annos: [], local: [] });
+      $('md-title').textContent = entry.title || (entry.type === 'link' ? 'Link' : (entry.kind === 'video' ? 'Video' : 'Picture'));
+      $('md-sub').textContent = entry.type === 'link' ? 'Comments' : (entry.kind === 'video' ? 'Video · ' + DQBMedia.providerName(entry.video) : 'Picture');
+      const body = $('md-body'); body.textContent = '';
+      MediaPage.viewer = DQBMedia.Viewer(body, {
+        item: MediaPage.viewItem(), annos: [], me: { sid: State.me.sid, name: State.me.name, role: 's' },
+        canAdd: !State.muted, notice: MediaPage.notice(),
+        onAdd: (a) => MediaPage.add(a), onDelete: (ids) => MediaPage.del(ids),
+        onOpenLink: () => { if (MediaPage.setId) Explore.mark(MediaPage.setId, MediaPage.id, { o: true }); }
+      });
+      if (!Pages.isOpen('p-media')) Pages.open('p-media', { focus: '.page-bar [data-close]', onClose: () => MediaPage.closed() });
+      Conn.send({ type: 'VIEW', item: entry.id });
+    },
+    closed() {
+      if (MediaPage.viewer) { MediaPage.viewer.destroy(); MediaPage.viewer = null; }
+      if (MediaPage.id) Conn.send({ type: 'VIEW', item: null });
+      MediaPage.id = null; MediaPage.item = null;
+    },
+    resume() { if (MediaPage.id) { Conn.send({ type: 'VIEW', item: MediaPage.id }); MediaPage.sync(); } },
+    /** The shared list changed: the item may have been withdrawn or renamed. */
+    check() {
+      if (!MediaPage.id) return;
+      const f = Shared.find(MediaPage.id);
+      if (!f) { Toast.info('Your teacher stopped sharing this.'); Pages.close('p-media'); return; }
+      if (f.item.title !== MediaPage.item.title) { MediaPage.item = f.item; $('md-title').textContent = f.item.title; if (MediaPage.viewer) MediaPage.viewer.setItem(MediaPage.viewItem()); }
+    },
+    sync() { if (MediaPage.viewer) MediaPage.viewer.setCanAdd(!State.muted, MediaPage.notice()); },
+    render() { if (MediaPage.viewer) MediaPage.viewer.setAnnos(MediaPage.annos.concat(MediaPage.local)); },
+    onItem(d) {
+      if (!MediaPage.id || safeId(d.id) !== MediaPage.id) return;
+      if (d.gone) { Toast.info('Your teacher stopped sharing this.'); Pages.close('p-media'); return; }
+      if (typeof d.src === 'string' && MediaPage.item.type === 'media' && MediaPage.item.kind === 'image') {
+        const s = safeImg(d.src, 1600000) || DQBUI.safeThumb(d.src);
+        if (s && s !== MediaPage.src) { MediaPage.src = s; MediaPage.viewer.setItem(MediaPage.viewItem()); }
+      }
+      MediaPage.annos = DQBMedia.cleanAnnos(d.annos, { video: MediaPage.item.kind === 'video' });
+      MediaPage.local = MediaPage.local.filter(l => !MediaPage.annos.some(a => a.id === l.id));
+      MediaPage.render();
+    },
+    onStatus(d) {
+      const aid = safeId(d.aid), mine = MediaPage.local.find(l => l.id === aid);
+      if (d.status === 'pending' && mine) { mine.pend = true; MediaPage.render(); return; }
+      if (['limit', 'muted', 'bad', 'gone'].includes(d.status)) {
+        MediaPage.local = MediaPage.local.filter(l => l.id !== aid); MediaPage.render();
+        if (d.status === 'limit') Toast.warn('You’ve added as many comments and drawings here as you can.');
+        else if (d.status === 'muted') Toast.warn('Your teacher paused comments from you.');
+      }
+    },
+    add(a) {
+      const clean = DQBMedia.cleanAnno(Object.assign({}, a, { id: DQBUI.genId(), by: { n: State.me.name, r: 's' }, ts: Date.now() }), { student: true, video: MediaPage.item.kind === 'video' });
+      if (!clean || !MediaPage.id) return;
+      const wire = Object.assign({}, clean); delete wire.by; delete wire.mine; delete wire.pend;
+      clean.mine = true; if (State.rules.approve) clean.pend = true;
+      MediaPage.local.push(clean); MediaPage.render();
+      Conn.send({ type: 'ANNO_ADD', id: clean.id, item: MediaPage.id, a: wire }, true);    // kept in the outbox while offline
+      if (MediaPage.setId) Explore.mark(MediaPage.setId, MediaPage.id, { o: true });
+    },
+    del(ids) {
+      const gone = new Set(ids);
+      MediaPage.local = MediaPage.local.filter(l => !gone.has(l.id) && !gone.has(l.re));
+      MediaPage.annos = MediaPage.annos.filter(a => !gone.has(a.id) && !gone.has(a.re));
+      MediaPage.render();
+      Conn.send({ type: 'ANNO_DEL', item: MediaPage.id, ids: ids.slice(0, 50) }, true);
+    }
   };
 
   /* ---- board interactions (event delegation) ---- */
@@ -490,6 +681,9 @@
     else if (act === 'send-rank') Rank.send();
     else if (act === 'comment') Discuss.open(b.dataset.id);
     else if (act === 'pick-zone') ZonePick.choose(b.dataset.id);
+    else if (act === 'open-set') Explore.open(b.dataset.id);
+    else if (act === 'open-media') { const x = State.shared.find(s => s.id === b.dataset.id); if (x) MediaPage.open(x, null); }
+    else if (act === 'link-comments') { const x = State.shared.find(s => s.id === b.dataset.id); if (x) MediaPage.open(x, null); }
   });
   function autoOpenTaskForce() { const a = State.activity; if (a.type === 'POLL') Poll.open(); else if (a.type === 'GRAPH') Graph.open(); else if (a.type === 'EXIT') Exit.open(); }
   on($('notes-list'), 'click', async e => {

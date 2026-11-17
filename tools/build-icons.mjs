@@ -40,6 +40,8 @@ const ICONS = {
   // files
   download: 'download', upload: 'upload', print: 'printer', save: 'save', logout: 'log-out', a11y: 'accessibility', keyboard: 'keyboard',
   history: 'history', folder: 'folder-open', files: 'files', edit: 'square-pen', 'thumbs-up': 'thumbs-up',
+  // media and exploring
+  video: 'video', explore: 'compass', target: 'target', callout: 'message-square-quote', 'comment-text': 'message-square-text', 'check-big': 'circle-check-big',
 };
 
 const out = {};

@@ -188,7 +188,8 @@
           <div class="grow lib-text"><div class="t">${esc(r.title)}</div>${r.meta ? `<div class="s">${esc(r.meta)}</div>` : ''}</div>
           <div class="lib-acts">
             <button type="button" class="btn btn-primary btn-sm" data-lib="card" data-n="${n}" aria-label="Add a card for ${esc(r.title)}">${ic('plus', 'sm')}Card</button>
-            ${r.kind === 'resource' && r.thumb ? `<button type="button" class="btn btn-secondary btn-sm" data-lib="image" data-n="${n}" aria-label="Add the picture of ${esc(r.title)}">${ic('image', 'sm')}Picture</button>` : ''}
+            ${r.kind === 'resource' && DQBMedia.parseVideo(r.url) ? `<button type="button" class="btn btn-secondary btn-sm" data-lib="video" data-n="${n}" aria-label="Add ${esc(r.title)} as a video students can watch and comment on">${ic('video', 'sm')}Video</button>` : ''}
+            ${r.kind === 'resource' && r.thumb && !DQBMedia.parseVideo(r.url) ? `<button type="button" class="btn btn-secondary btn-sm" data-lib="image" data-n="${n}" aria-label="Add the picture of ${esc(r.title)} to annotate">${ic('image', 'sm')}Picture</button>` : ''}
             ${r.kind === 'collection' && typeof L.items === 'function' ? `<button type="button" class="btn btn-secondary btn-sm" data-lib="all" data-n="${n}" aria-label="Add every resource in ${esc(r.title)}">${ic('layers', 'sm')}All</button>` : ''}
             <button type="button" class="btn btn-soft btn-sm" data-lib="share" data-n="${n}" aria-label="Add ${esc(r.title)} and share it with students">${ic('send', 'sm')}Share</button>
           </div>
@@ -200,7 +201,14 @@
       const card = { url: r.url, title: r.title, desc: r.desc, thumb: r.thumb, kind: r.kind, ref: r.id, source: r.source };
       if (what === 'card') { if (Actions.addLink(card)) Toast.success('Card added'); }
       else if (what === 'share') { const it = Actions.addLink(card); if (it) Network.toggleShare(it.id); }
-      else if (what === 'image') { btn.disabled = true; const it = await Actions.addImage(r.thumb, r.title); btn.disabled = false; if (it) Toast.success('Picture added'); }
+      else if (what === 'image') {
+        btn.disabled = true;
+        const enc = await DQBMedia.encodeImage(r.thumb);
+        btn.disabled = false;
+        const it = enc && enc.src ? Actions.addMedia({ kind: 'image', title: r.title, desc: r.desc, src: enc.src, thumb: enc.thumb, aspect: enc.aspect, url: r.url, ref: r.id, source: r.source }) : null;
+        if (it) Toast.success('Picture added: open it to comment and mark it up'); else Toast.warn('That picture couldn’t be added.');
+      }
+      else if (what === 'video') { if (Actions.addVideoFromLink(card)) Toast.success('Video added: students can watch it and comment at moments'); }
       else if (what === 'all') {
         btn.disabled = true;
         let list = [];
@@ -210,6 +218,79 @@
         const n = Actions.addLinkZone(r.title, list.map(x => ({ url: x.url, title: x.title, desc: x.desc, thumb: x.thumb, kind: 'resource', ref: String(x.id), source: r.source })));
         if (n) Toast.success(`${n} resource${n === 1 ? '' : 's'} added in a zone`); else Toast.info('That collection has no resources to add.');
       }
+    }
+  };
+
+  /* ---------------------------------------------------------------------- */
+  /* A picture, video or card in the viewer (shared/media.js)               */
+  /* ---------------------------------------------------------------------- */
+  Shell.MediaView = {
+    ov: null, v: null, id: null,
+    itemOf(it) {
+      if (it.type === 'link') return { id: it.id, kind: 'link', title: it.title, desc: it.desc, url: it.url, thumb: it.thumb, source: it.source };
+      return { id: it.id, kind: it.kind, title: it.title, desc: it.desc, src: it.src, thumb: it.thumb, video: it.video, aspect: it.aspect, source: it.source };
+    },
+    footer(it) {
+      const f = [];
+      if (!State.isCoHost) { const shared = (State.shared || []).includes(it.id); f.push({ label: shared ? 'Stop sharing' : 'Share with students', kind: shared ? 'secondary' : 'primary', icon: shared ? 'stop' : 'send', close: false, onClick: () => { Network.toggleShare(it.id); Shell.MediaView.refresh(it.id); return false; } }); }
+      const src = it.type === 'media' && it.kind === 'video' ? DQBMedia.watchUrl(it.video) : (it.type === 'link' ? DQBUI.safeUrl(it.url) : DQBUI.safeUrl(it.url));
+      if (src) f.push({ label: it.type === 'media' && it.kind === 'video' ? (it.video.p === 'file' ? 'Open the video file' : 'Open on ' + DQBMedia.providerName(it.video)) : 'Open page', kind: 'ghost', icon: 'link', close: false, onClick: () => { window.open(src, '_blank', 'noopener,noreferrer'); return false; } });
+      f.push({ label: 'Done', kind: 'secondary' });
+      return f;
+    },
+    open(id) {
+      const it = State.items.find(i => i.id === id && (i.type === 'media' || i.type === 'link')); if (!it) return;
+      if (Shell.MediaView.ov) Shell.MediaView.ov.close();
+      const wrap = document.createElement('div'); wrap.className = 'mv-host';
+      const mine = {};                 // this sheet's own viewer: a sheet that finishes closing later must not touch the next one
+      const ov = Overlay.open({
+        title: it.title || (it.type === 'link' ? 'Comments' : (it.kind === 'video' ? 'Video' : 'Picture')), content: wrap, size: 'lg', className: 'mv-sheet' + (it.type === 'link' ? ' mv-sheet-link' : ''),
+        footer: Shell.MediaView.footer(it),
+        onClose: () => { if (mine.v) mine.v.destroy(); if (Shell.MediaView.ov === ov) { Shell.MediaView.v = null; Shell.MediaView.ov = null; Shell.MediaView.id = null; } }
+      });
+      Shell.MediaView.ov = ov; Shell.MediaView.id = id;
+      Shell.MediaView.v = mine.v = DQBMedia.Viewer(wrap, {
+        item: Shell.MediaView.itemOf(it), annos: it.annos || [], me: { sid: State.isCoHost ? 'cohost' : 'host', name: State.isCoHost ? 'Co-host' : 'Teacher', role: 't' },
+        onAdd: (a) => Actions.addAnno(id, a), onDelete: (ids) => Actions.delAnnos(id, ids), onApprove: (aid) => Actions.approveAnno(id, aid)
+      });
+      setTimeout(() => { if (Shell.MediaView.v) Shell.MediaView.v.focus(); }, 60);
+    },
+    refresh(id) {
+      if (!Shell.MediaView.ov || Shell.MediaView.id !== id) return;
+      const it = State.items.find(i => i.id === id);
+      if (!it) { Shell.MediaView.ov.close(); return; }
+      Shell.MediaView.ov.setTitle(it.title || (it.kind === 'video' ? 'Video' : 'Picture'));
+      Shell.MediaView.ov.setFooter(Shell.MediaView.footer(it));
+      Shell.MediaView.v.setItem(Shell.MediaView.itemOf(it));
+      Shell.MediaView.v.setAnnos(it.annos || []);
+    }
+  };
+
+  /* ---------------------------------------------------------------------- */
+  /* Exploring a shared zone: who has opened, finished and starred what     */
+  /* ---------------------------------------------------------------------- */
+  Shell.ExploreProgress = {
+    ov: null, id: null,
+    open(id) {
+      const z = State.items.find(i => i.id === id && i.type === 'zone'); if (!z) return;
+      if (Shell.ExploreProgress.ov) Shell.ExploreProgress.ov.close();
+      const wrap = document.createElement('div'); wrap.className = 'xp stack';
+      Shell.ExploreProgress.id = id;
+      const ov = Shell.ExploreProgress.ov = Overlay.open({ title: 'Exploring · ' + (z.title || 'Zone'), content: wrap, size: 'lg', footer: [{ label: (State.shared || []).includes(id) ? 'Stop sharing' : 'Share to explore', kind: 'secondary', close: false, onClick: () => { Network.toggleShare(id); Shell.ExploreProgress.refresh(); return false; } }, { label: 'Done', kind: 'primary' }], onClose: () => { if (Shell.ExploreProgress.ov === ov) { Shell.ExploreProgress.ov = null; Shell.ExploreProgress.id = null; } } });
+      Shell.ExploreProgress.refresh();
+    },
+    refresh() {
+      const ov = Shell.ExploreProgress.ov; if (!ov) return;
+      const z = State.items.find(i => i.id === Shell.ExploreProgress.id); if (!z) { ov.close(); return; }
+      const items = Network.setItems(z).filter(i => i.type !== 'note'), rec = State.explore[z.id] || {};
+      const names = {}; Object.values(State.students).forEach(s => { if (s.role === 'student') names[s.sid] = s; });
+      const sids = Object.keys(rec).concat(Object.keys(names).filter(s => !rec[s] && Network.setVisible(names[s], z)));
+      const shared = (State.shared || []).includes(z.id);
+      const head = `<p class="muted" style="margin:0">${shared ? (safeColor(z.color) ? `Shared with the ${esc(groupName(z.color))} group.` : 'Shared with the whole class.') + ' Each student opens the things in this zone on their own device, marks them done and stars favourites.' : 'Not shared right now. Share the zone so students can explore it.'}</p>`;
+      if (!items.length) { ov.body.firstChild.innerHTML = head + '<div class="muted">There is nothing to explore in this zone yet.</div>'; return; }
+      const cell = (r) => (!r ? '<td class="xp-c"><span class="sr-only">Not opened</span></td>' : `<td class="xp-c ${r.d ? 'done' : 'seen'}">${r.d ? ic('check', 'sm') + '<span class="sr-only">Done</span>' : ic('eye', 'sm') + '<span class="sr-only">Opened</span>'}${r.s ? `<span class="xp-star" title="Starred">${ic('star', 'sm')}<span class="sr-only"> and starred</span></span>` : ''}</td>`);
+      const totals = items.map(i => Network.exploreCounts(i.id) || { opened: 0, done: 0, stars: 0 });
+      ov.body.firstChild.innerHTML = head + (sids.length ? `<div class="xp-scroll"><table class="xp-table"><caption class="sr-only">What each student has explored</caption><thead><tr><th scope="col">Student</th>${items.map(i => `<th scope="col" title="${esc(i.title || '')}"><span>${esc(clampStr(i.title || (i.kind === 'video' ? 'Video' : 'Picture'), 28))}</span></th>`).join('')}<th scope="col">Done</th></tr></thead><tbody>${sids.map(sid => { const s = names[sid], r = rec[sid] || {}; const done = items.filter(i => r[i.id] && r[i.id].d).length; return `<tr><th scope="row">${esc(s ? s.name : 'Left the board')}</th>${items.map(i => cell(r[i.id])).join('')}<td class="xp-n">${done}/${items.length}</td></tr>`; }).join('')}</tbody><tfoot><tr><th scope="row">Class</th>${totals.map(t => `<td class="xp-n">${t.done}${ic('check', 'sm')} ${t.stars ? t.stars + ic('star', 'sm') : ''}</td>`).join('')}<td></td></tr></tfoot></table></div>` : '<div class="muted">No students have joined yet.</div>');
     }
   };
 
@@ -426,7 +507,7 @@
       Shell.A11y.refresh();
     },
     describe(i) {
-      const kind = { note: (TYPES[i.sub] || TYPES.meta).lbl + (i.src ? ' sketch' : ' note'), poll: 'Poll', graph: 'Live graph', spin: 'Spinner', link: Render.linkLabel(i), zone: ({ cer: 'CER builder', consensus: 'Consensus model', exit: 'Exit ticket', breakout: 'Breakout board' })[i.zoneType] || 'Zone' }[i.type] || i.type;
+      const kind = { note: (TYPES[i.sub] || TYPES.meta).lbl + (i.src ? ' sketch' : ' note'), poll: 'Poll', graph: 'Live graph', spin: 'Spinner', link: Render.linkLabel(i), media: i.type === 'media' ? Render.mediaLabel(i) : '', zone: ({ cer: 'CER builder', consensus: 'Consensus model', exit: 'Exit ticket', breakout: 'Breakout board' })[i.zoneType] || 'Zone' }[i.type] || i.type;
       let text = i.text || i.title || i.q || '';
       if (i.type === 'note' && i.src && !text) text = '(drawing)';
       if (i.type === 'zone' && i.zoneType === 'exit') text = i.prompt;
@@ -434,7 +515,10 @@
       if (i.type === 'poll') extra = (i.opts || []).map(o => `${o.lbl}: ${o.v}`).join(' · ');
       if (i.type === 'graph') extra = (i.data || []).length ? 'Values: ' + i.data.join(', ') : 'No data yet';
       if (i.type === 'spin') extra = 'Options: ' + (i.opts || []).join(', ');
-      if (i.type === 'link') extra = [i.desc, i.url, (State.shared || []).includes(i.id) ? 'shared with students' : ''].filter(Boolean).join(' · ');
+      const annoInfo = () => { const c = DQBMedia.counts(i.annos); return [c.comments ? `${c.comments} comment${c.comments === 1 ? '' : 's'}` : '', c.ink ? `${c.ink} drawing${c.ink === 1 ? '' : 's'}` : '', c.marks ? `${c.marks} callout${c.marks === 1 ? '' : 's'} or hotspot${c.marks === 1 ? '' : 's'}` : ''].filter(Boolean).join(', '); };
+      if (i.type === 'link') extra = [i.desc, i.url, annoInfo(), Network.isShared(i.id) ? 'shared with students' : ''].filter(Boolean).join(' · ');
+      if (i.type === 'media') extra = [i.desc, i.kind === 'video' && i.video ? DQBMedia.watchUrl(i.video) : '', annoInfo(), Network.isShared(i.id) ? 'shared with students' : ''].filter(Boolean).join(' · ');
+      if (i.type === 'zone' && (State.shared || []).includes(i.id)) extra = 'shared with students to explore';
       return { kind, text: text || '(empty)', extra };
     },
     list() {

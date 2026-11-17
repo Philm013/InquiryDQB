@@ -57,12 +57,13 @@ window.State = {
     draw: { color: '#ef4444', width: 4 },
     isCoHost: false,
     // class rules (persisted per device, not per board). anyZone: students without a zone of their own may pick any open zone
-    settings: { names: true, approve: false, anyZone: true },
+    settings: { names: true, approve: false, anyZone: true, peers: true },
     pending: [],            // student notes waiting for teacher approval
     votes: {}, blocked: {}, spaceDown: false, multiSelect: false, hasEntered: false,
     muted: {},              // student id (sid) -> true
     groupOf: {},            // student id (sid) -> group colour, so a group survives a dropped connection
-    shared: [],             // ids of link cards shared with the class right now (live only; not saved with the board)
+    shared: [],             // ids of link cards, media items and zones (sets to explore) shared with the class right now (live only; not saved)
+    explore: {},            // zone id -> student sid -> item id -> {o: opened, d: done, s: starred} (live only)
     timer: { endsAt: 0, running: false, remainingMs: 0, totalMs: 0 }
 };
 
@@ -121,6 +122,12 @@ window.StateManager = {
         });
         if (!options.silent && updatedItems.length > 0) StateManager._notify('items:update', { items: updatedItems });
     },
+    /** Annotations on a picture, video or card: not undo steps (students add them live), saved and synced like any change. */
+    setAnnos: (id, annos) => {
+        const item = State.items.find(i => i.id === id); if (!item) return;
+        item.annos = annos;
+        StateManager._notify('items:annos', { id, annos });
+    },
     deleteItems: (ids, options = { silent: false }) => {
         State.items = State.items.filter(i => !ids.includes(i.id));
         State.selection = State.selection.filter(id => !ids.includes(id));
@@ -169,10 +176,17 @@ window.addEventListener('statechange', (e) => {
         ActionHistory.push();
         Board.save(true);
     }
+    if (action === 'items:annos') {
+        Board.save(true);
+        Render.all();
+        if (!State.isCoHost) Network.pushItem(payload.id);
+        if (window.Shell && Shell.MediaView) Shell.MediaView.refresh(payload.id);
+        if (Network.peer) Network.relay(action, payload);
+        return;
+    }
     // a shared card that is deleted or edited: students see the change
-    if (State.shared.length && !State.isCoHost && payload && (action === 'state:fullsync'
-        || (action === 'items:delete' && (payload.ids || []).some(id => State.shared.includes(id)))
-        || (action === 'items:update' && (payload.items || []).some(u => State.shared.includes(u.id) && ('title' in u || 'url' in u || 'desc' in u || 'thumb' in u))))) Network._sharedChanged();
+    if (State.shared.length && !State.isCoHost && payload && Network.touchesShared(action, payload)) Network._sharedChanged();
+    if (window.Shell && Shell.MediaView && action === 'items:update' && (payload.items || []).some(u => u.id === Shell.MediaView.id)) Shell.MediaView.refresh(Shell.MediaView.id);
     // an open zone was renamed, recoloured or removed: students see what they can write into now
     if (Network.zonesWatch(action, payload)) Network._zonesChanged();
 
@@ -202,7 +216,9 @@ window.ActionHistory = {
     _snap: () => JSON.stringify({ items: State.items, ink: State.ink }, (k, v) => (k === 'isOpen' ? undefined : v)),
     _restore: (json) => {
         const s = JSON.parse(json), live = new Set(State.items.filter(i => i.isOpen).map(i => i.id));
+        const annos = new Map(State.items.filter(i => Array.isArray(i.annos)).map(i => [i.id, i.annos]));   // annotations are not undone
         StateManager.setFullState(s, { silent: true });
+        State.items.forEach(i => { if (annos.has(i.id)) i.annos = annos.get(i.id); });
         if (State.isCoHost) State.items.forEach(i => { if (live.has(i.id)) i.isOpen = true; });   // a co-host mirrors the host's live items
         else Network.syncOpenFlags();
         State.selection = State.selection.filter(id => State.items.some(i => i.id === id));
@@ -969,6 +985,22 @@ window.Board = {
                 if (th) { const im = await loadImg(th); if (im) { const bw = it.w - 24, bh = Math.min(it.h * 0.45, bw * 0.6); const r = Math.max(bw / im.width, bh / im.height); ctx.save(); rr(it.x + 12, ty + 8, bw, bh, 8); ctx.clip(); ctx.drawImage(im, it.x + 12 + (bw - im.width * r) / 2, ty + 8 + (bh - im.height * r) / 2, im.width * r, im.height * r); ctx.restore(); ty += bh + 8; } }
                 ctx.fillStyle = '#0f172a'; ty += 22 + wrap(it.title, it.x + 12, ty + 4, it.w - 24, 19, '700 15px Inter, sans-serif');
                 ctx.fillStyle = '#475569'; wrap(Sanitize.hostOf(it.url), it.x + 12, Math.min(ty, it.y + it.h - 12), it.w - 24, 16, '12px Inter, sans-serif');
+            } else if (it.type === 'media') {
+                ctx.save(); ctx.shadowColor = 'rgba(15,23,42,0.14)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 2; rr(it.x, it.y, it.w, it.h, 12); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.restore();
+                ctx.lineWidth = 1.5; ctx.strokeStyle = '#c4b5fd'; rr(it.x, it.y, it.w, it.h, 12); ctx.stroke();
+                ctx.fillStyle = '#6d28d9'; ctx.font = '700 11px Inter, sans-serif'; ctx.fillText(Render.mediaLabel(it), it.x + 12, it.y + 22);
+                const fx = it.x + 12, fy = it.y + 32, fw = it.w - 24, fh = Math.max(40, it.h - 80);
+                ctx.save(); rr(fx, fy, fw, fh, 8); ctx.clip(); ctx.fillStyle = '#0f172a'; ctx.fillRect(fx, fy, fw, fh);
+                const src = it.kind === 'image' ? (safeImg(it.src, 1500000) || DQBUI.safeThumb(it.src)) : (safeImg(it.thumb, 150000) || DQBUI.safeThumb(it.thumb));
+                const im = src ? await loadImg(src) : null;
+                if (im) { const r = it.kind === 'image' ? Math.min(fw / im.width, fh / im.height) : Math.max(fw / im.width, fh / im.height); ctx.drawImage(im, fx + (fw - im.width * r) / 2, fy + (fh - im.height * r) / 2, im.width * r, im.height * r); }
+                if (it.kind === 'image' && im) {                      // the drawings on the picture come with it
+                    const r = Math.min(fw / im.width, fh / im.height), iw = im.width * r, ih = im.height * r, ox = fx + (fw - iw) / 2, oy = fy + (fh - ih) / 2;
+                    (it.annos || []).filter(a => a.k === 'ink').forEach(a => { ctx.save(); ctx.strokeStyle = a.c; ctx.lineWidth = Math.max(1, a.w * iw * (a.tool === 'hl' ? 3 : 1)); ctx.globalAlpha = a.tool === 'hl' ? 0.38 : 1; ctx.lineCap = ctx.lineJoin = 'round'; ctx.beginPath(); a.pts.forEach((pt, k) => { const x = ox + pt[0] * iw, y = oy + pt[1] * ih; if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke(); ctx.restore(); });
+                }
+                if (it.kind === 'video') { ctx.fillStyle = 'rgba(239,68,68,0.95)'; ctx.beginPath(); ctx.arc(fx + fw / 2, fy + fh / 2, 24, 0, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(fx + fw / 2 - 8, fy + fh / 2 - 12); ctx.lineTo(fx + fw / 2 + 12, fy + fh / 2); ctx.lineTo(fx + fw / 2 - 8, fy + fh / 2 + 12); ctx.closePath(); ctx.fill(); }
+                ctx.restore();
+                ctx.fillStyle = '#0f172a'; wrap(it.title || (it.kind === 'video' ? 'Video' : 'Picture'), it.x + 12, fy + fh + 22, it.w - 24, 18, '700 14px Inter, sans-serif');
             } else { ctx.save(); rr(it.x, it.y, it.w, it.h, 12); ctx.fillStyle = '#f1f5f9'; ctx.fill(); ctx.restore(); ctx.fillStyle = '#334155'; ctx.font = '700 13px Inter, sans-serif'; ctx.fillText(it.type === 'spin' ? 'Spinner' : it.type, it.x + 12, it.y + 24); }
         }
         cv.toBlob(blob => { if (!blob) { UI.toast('Could not create the image.', 'error'); return; } Board._download(blob, `${(State.name || 'board').replace(/[^a-z0-9]+/gi, '_').toLowerCase()}.png`); UI.toast('Picture saved', 'success'); }, 'image/png');
@@ -1324,6 +1356,8 @@ window.Render = {
                 case 'comments': Actions.showComments(id); break;
                 case 'link-open': Actions.openLink(id); break;
                 case 'link-share': Network.toggleShare(id); break;
+                case 'media-open': case 'annos': Actions.openMedia(id); break;
+                case 'explore-progress': if (window.Shell) Shell.ExploreProgress.open(id); break;
             }
         };
         ['items-layer', 'consensus-items-layer'].forEach(n => { const el = $(n); if (el) el.addEventListener('click', handler); });
@@ -1443,6 +1477,9 @@ window.Render = {
             if (i.type === 'spin') Render.updateSpin(el, i);
             if (i.type === 'graph') Render.updateGraph(el, i);
             if (i.type === 'link') Render.updateLink(el, i);
+            if (i.type === 'media') Render.updateMedia(el, i);
+            if (i.type === 'link' || i.type === 'media') Render.updateStats(el, i);
+            if (i.type === 'zone') Render.updateZoneShare(el, i);
 
             if (i.type === 'note' && !i.src) {
                 const txt = el.querySelector('textarea');
@@ -1520,6 +1557,7 @@ window.Render = {
         const type = String(d.type || 'note').replace(/[^a-z]/gi, '') || 'note';
         const el = document.createElement('div');
         el.id = d.id; el.className = `item ${type}`;
+        if (d.type === 'media') el.dataset.kind = d.kind === 'video' ? 'video' : 'image';
         if (d.zoneType) el.classList.add('zone-' + String(d.zoneType).replace(/[^a-z]/gi, ''));
         const parent = d.parentZone ? State.items.find(x => x.id === d.parentZone) : null;
         const isConsensusChild = !!(parent && parent.zoneType === 'consensus');
@@ -1535,6 +1573,7 @@ window.Render = {
         else if (d.type === 'spin') { title = 'Spinner'; iconHtml = icon('spin', 'sm'); }
         else if (d.type === 'graph') { title = 'Live graph'; iconHtml = icon('graph', 'sm'); }
         else if (d.type === 'link') { title = Render.linkLabel(d); iconHtml = icon(d.kind === 'link' ? 'link' : 'book', 'sm'); }
+        else if (d.type === 'media') { title = Render.mediaLabel(d); iconHtml = icon(d.kind === 'video' ? 'video' : 'image', 'sm'); }
         else { title = d.author || head.lbl; iconHtml = esc(head.icon); }
 
         // header action buttons
@@ -1563,7 +1602,8 @@ window.Render = {
             inner += `<div id="zr-${esc(d.id)}" class="zone-res-box"></div>`;
         } else if (d.type === 'poll') inner = `<div class="poll-q"></div><div class="poll-opts"></div>`;
         else if (d.type === 'graph') inner = `<div class="graph-wrap"><div class="graph-bars"></div><div class="graph-empty">${icon('graph', 'lg')}<div><b>No data yet</b><br>Press Broadcast, then students enter a number.</div></div><div class="graph-stats"></div></div>`;
-        else if (d.type === 'link') inner = `<div class="link-card"><img class="lc-thumb" alt="" draggable="false" hidden><div class="lc-body"><div class="lc-title"></div><div class="lc-desc"></div><div class="lc-host"></div></div><div class="lc-actions"><button type="button" class="btn btn-secondary btn-sm" data-act="link-open">${icon('link', 'sm')}Open</button>${State.isCoHost ? '' : `<button type="button" class="btn btn-soft btn-sm lc-share" data-act="link-share">${icon('send', 'sm')}<span>Share with students</span></button>`}</div></div>`;
+        else if (d.type === 'link') inner = `<div class="link-card"><img class="lc-thumb" alt="" draggable="false" hidden><div class="lc-body"><div class="lc-title"></div><div class="lc-desc"></div><div class="lc-host"></div></div><div class="lc-actions"><button type="button" class="btn btn-secondary btn-sm" data-act="link-open">${icon('link', 'sm')}Open</button>${State.isCoHost ? '' : `<button type="button" class="btn btn-soft btn-sm lc-share" data-act="link-share" aria-label="Share with students">${icon('send', 'sm')}<span>Share</span></button>`}<span class="grow"></span><span class="card-stats"></span></div></div>`;
+        else if (d.type === 'media') inner = `<div class="media-card"><div class="mc-frame"><img class="mc-img" alt="" draggable="false" hidden>${d.kind === 'video' ? `<span class="mc-play" aria-hidden="true">${icon('play', 'lg')}</span><span class="mc-prov"></span>` : ''}</div><div class="mc-title"></div><div class="lc-actions"><button type="button" class="btn btn-secondary btn-sm" data-act="media-open">${icon(d.kind === 'video' ? 'play' : 'eye', 'sm')}${d.kind === 'video' ? 'Watch' : 'View'}</button>${State.isCoHost ? '' : `<button type="button" class="btn btn-soft btn-sm lc-share" data-act="link-share" aria-label="Share with students">${icon('send', 'sm')}<span>Share</span></button>`}<span class="grow"></span><span class="card-stats"></span></div></div>`;
         else if (d.type === 'spin') inner = `<div class="spin-box"><div class="spin-stage"><div class="spin-pointer"></div><svg class="spin-svg" viewBox="0 0 100 100"></svg></div><button type="button" class="btn btn-soft btn-sm" data-act="spin">${icon('spin', 'sm')}Spin</button><div class="spin-result" aria-live="polite" style="font-weight:700;min-height:1.2em"></div></div>`;
 
         if (isZoneLike) { const lab = document.createElement('div'); lab.className = 'zone-label'; lab.textContent = d.title || 'Zone'; el.appendChild(lab); }
@@ -1607,7 +1647,7 @@ window.Render = {
     linkLabel: (d) => (d.kind === 'resource' ? 'Resource' : (d.kind === 'collection' ? 'Collection' : 'Link')) + (d.source ? ' · ' + d.source : ''),
     /** Link / resource card: text through textContent, the picture only if safeThumb accepts it. */
     updateLink: (el, d) => {
-        const shared = (State.shared || []).includes(d.id);
+        const shared = Network.isShared(d.id);
         const sig = [d.title, d.desc, d.url, d.thumb, d.kind, d.source, shared].join('\u0001');
         if (el._lsig === sig) return; el._lsig = sig;
         const q = (c) => el.querySelector(c);
@@ -1618,7 +1658,55 @@ window.Render = {
         if (img) { if (th) { if (img.getAttribute('src') !== th) img.src = th; img.hidden = false; } else { img.removeAttribute('src'); img.hidden = true; } }
         const auth = q('.auth-span'); if (auth) auth.textContent = Render.linkLabel(d);
         el.classList.toggle('is-shared', shared);
-        const b = q('.lc-share'); if (b) { b.classList.toggle('on', shared); b.setAttribute('aria-pressed', String(shared)); const t = b.querySelector('span'); if (t) t.textContent = shared ? 'Shared · stop' : 'Share with students'; }
+        const b = q('.lc-share'); if (b) Render.shareButton(b, d.id);
+    },
+    /** The Share button on a card: on while it is shared on its own or as part of a shared zone. */
+    shareButton: (b, id) => {
+        const own = (State.shared || []).includes(id), viaSet = !own && Network.isShared(id);
+        b.classList.toggle('on', own || viaSet); b.setAttribute('aria-pressed', String(own));
+        b.setAttribute('aria-label', own ? 'Shared – stop sharing with students' : (viaSet ? 'In set – shared with its zone; share it on its own too' : 'Share with students'));
+        const t = b.querySelector('span'); if (t) t.textContent = own ? 'Shared' : (viaSet ? 'In set' : 'Share');
+    },
+    mediaLabel: (d) => (d.kind === 'video' ? 'Video' + (d.video ? ' · ' + DQBMedia.providerName(d.video) : '') : 'Picture') + (d.source ? ' · ' + d.source : ''),
+    /** Picture / video card: the picture (or the video's cover) and the title. */
+    updateMedia: (el, d) => {
+        const shared = Network.isShared(d.id);
+        const th = d.kind === 'image' ? (DQBUI.safeImg(d.thumb, 150000) || DQBUI.safeThumb(d.thumb) || DQBUI.safeImg(d.src, 1500000) || DQBUI.safeThumb(d.src)) : (DQBUI.safeImg(d.thumb, 150000) || DQBUI.safeThumb(d.thumb));
+        const sig = [d.title, th ? th.length + th.slice(-24) : '', d.kind, d.source, JSON.stringify(d.video || null), shared].join('\u0001');
+        if (el._msig === sig) return; el._msig = sig;
+        const q = (c) => el.querySelector(c);
+        const img = q('.mc-img');
+        if (img) { if (th) { if (img.getAttribute('src') !== th) img.src = th; img.hidden = false; } else { img.removeAttribute('src'); img.hidden = true; } }
+        const t = q('.mc-title'); if (t) { t.textContent = d.title || (d.kind === 'video' ? 'Video' : 'Picture'); }
+        const pv = q('.mc-prov'); if (pv) pv.textContent = d.video ? DQBMedia.providerName(d.video) : '';
+        const auth = q('.auth-span'); if (auth) auth.textContent = Render.mediaLabel(d);
+        el.classList.toggle('is-shared', shared);
+        const b = q('.lc-share'); if (b) Render.shareButton(b, d.id);
+    },
+    /** Comments and markup on a card, and how far students got with it when it is in a shared set. */
+    updateStats: (el, d) => {
+        const box = el.querySelector('.card-stats'); if (!box) return;
+        const c = DQBMedia.counts(d.annos), ex = Network.exploreCounts(d.id);
+        const sig = [c.comments, c.ink + c.marks, c.pend, ex ? ex.done + '/' + ex.stars + '/' + ex.opened : ''].join('|');
+        if (box._sig === sig) return; box._sig = sig;
+        const parts = [];
+        if (ex && ex.opened) parts.push(`<span class="cs" title="Students who opened it">${icon('eye', 'sm')}${ex.opened}</span>`);
+        if (ex && ex.done) parts.push(`<span class="cs" title="Students who finished it">${icon('check', 'sm')}${ex.done}</span>`);
+        if (ex && ex.stars) parts.push(`<span class="cs" title="Students who starred it">${icon('star', 'sm')}${ex.stars}</span>`);
+        if (c.comments) parts.push(`<button type="button" class="cs cs-btn${c.pend ? ' pend' : ''}" data-act="annos" title="${c.pend ? c.pend + ' waiting for approval' : 'Comments'}" aria-label="${c.comments} comment${c.comments === 1 ? '' : 's'}${c.pend ? ', ' + c.pend + ' waiting for approval' : ''}: open">${icon('comment', 'sm')}${c.comments}</button>`);
+        if (c.ink + c.marks && d.type === 'media') parts.push(`<span class="cs" title="Drawings, callouts and hotspots">${icon('pen', 'sm')}${c.ink + c.marks}</span>`);
+        box.innerHTML = parts.join('');
+    },
+    /** A zone shared for exploring says so, with how many students are on it. */
+    updateZoneShare: (el, d) => {
+        const shared = (State.shared || []).includes(d.id);
+        el.classList.toggle('is-shared', shared);
+        let tag = el.querySelector('.zone-share-tag');
+        if (!shared) { if (tag) tag.remove(); return; }
+        if (!tag) { tag = document.createElement('button'); tag.type = 'button'; tag.className = 'zone-share-tag'; tag.dataset.act = 'explore-progress'; el.appendChild(tag); }
+        const n = Object.keys(State.explore[d.id] || {}).length;
+        const txt = n ? `Exploring · ${n} student${n === 1 ? '' : 's'}` : 'Shared to explore';
+        if (tag.textContent !== txt) { tag.textContent = txt; tag.setAttribute('aria-label', txt + ': show progress'); }
     },
     updatePoll: (el, d) => {
         const q = el.querySelector('.poll-q'); if (q && q.textContent !== d.q) q.textContent = d.q || '';
@@ -1714,6 +1802,7 @@ window.Actions = {
         if (type === 'spin') { it.ang = 0; it.opts = ['A', 'B', 'C', 'D']; it.w = 220; it.h = 260; }
         if (type === 'graph') { it.title = "Class Data"; it.data = []; it.w = 320; it.h = 220; }
         if (type === 'link') { Actions.promptLink(); return null; }
+        if (type === 'media') { if (sub === 'video') Actions.promptVideo(); else Actions.pickImage(); return null; }
 
         const pos = at ? { x: c.x - it.w / 2, y: c.y - it.h / 2 } : Board.getFreeSpace(c.x - it.w / 2, c.y - it.h / 2, it.w, it.h);
         it.x = pos.x; it.y = pos.y;
@@ -1753,7 +1842,7 @@ window.Actions = {
     },
     /** Adds several cards in a new zone (a whole collection). Returns how many were added. */
     addLinkZone: (title, cards) => {
-        const list = (cards || []).map(c => Sanitize.item({ ...c, id: genId(), type: 'link', x: 0, y: 0, w: 260, h: c.thumb ? 300 : 190 })).filter(Boolean).slice(0, 40);
+        const list = (cards || []).map(c => { const v = DQBMedia.parseVideo(c.url); return v ? Sanitize.item({ id: genId(), type: 'media', kind: 'video', title: c.title, desc: c.desc, thumb: c.thumb, video: v, url: c.url, ref: c.ref, source: c.source, x: 0, y: 0, w: 260, h: 300, annos: [] }) : Sanitize.item({ ...c, id: genId(), type: 'link', x: 0, y: 0, w: 260, h: c.thumb ? 320 : 190 }); }).filter(Boolean).slice(0, 40);
         if (!list.length) return 0;
         const cols = Math.min(4, Math.max(1, Math.ceil(Math.sqrt(list.length)))), cw = 280, ch = 320, pad = 24;
         const w = cols * cw + pad * 2 - 20, h = Math.ceil(list.length / cols) * ch + pad * 2 + 30;
@@ -1764,10 +1853,104 @@ window.Actions = {
         setTimeout(() => Viewport.centerOn(zone), 60);
         return list.length;
     },
+    /* ---------- pictures and videos ---------- */
+    /** Places a media item ({kind, title, src | video, thumb, aspect, ...}) near the centre. Returns it, or null. */
+    addMedia: (m, at, opts) => {
+        const isVideo = m.kind === 'video';
+        const w = 320, h = isVideo ? 300 : Math.round(Math.max(200, Math.min(420, 40 + 300 / Math.max(0.4, Math.min(2.5, m.aspect || 1.5)) + 100)));
+        const r = Sanitize.item({ ...m, id: genId(), type: 'media', x: 0, y: 0, w, h, annos: [] });
+        if (!r) { UI.toast(isVideo ? 'That video can’t be added.' : 'That picture can’t be added.', 'warn'); return null; }
+        const c = at || Viewport.centerWorld();
+        const pos = Board.getFreeSpace(c.x - r.w / 2, c.y - r.h / 2, r.w, r.h);
+        r.x = pos.x; r.y = pos.y;
+        StateManager.addItem(r);
+        if (!opts || opts.select !== false) StateManager.setSelection([r.id]);
+        return r;
+    },
+    /** Insert › Image: a picture from this device (it is re-encoded and kept in the board). */
+    pickImage: () => {
+        UI.closeAllMenus();
+        const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+        input.addEventListener('change', async () => { const f = input.files && input.files[0]; if (f) await Actions.addImageFile(f); });
+        input.click();
+    },
+    addImageFile: async (file, at, title) => {
+        const enc = await DQBMedia.encodeImage(file);
+        if (!enc || !enc.src) { UI.toast('That picture couldn’t be added. Try a JPEG or PNG file.', 'warn'); return null; }
+        const name = title || (file && file.name ? String(file.name).replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').trim() : '');
+        const it = Actions.addMedia({ kind: 'image', title: clampStr(name || 'Picture', 200), src: enc.src, thumb: enc.thumb, aspect: enc.aspect }, at);
+        if (it) UI.toast('Picture added. Open it to add comments, callouts and hotspots.', 'success');
+        return it;
+    },
+    /** Insert › Video: a YouTube, Vimeo or video-file address. */
+    promptVideo: async (prefill) => {
+        UI.closeAllMenus();
+        const url = await DQBUI.Dialog.prompt({ title: 'Add a video', message: 'Paste a YouTube or Vimeo address, or a link to a video file (.mp4, .webm).', value: prefill || 'https://', confirmLabel: 'Next', maxLength: 2048, icon: 'video', validate: (v) => (DQBMedia.parseVideo(v) ? null : 'That isn’t a YouTube, Vimeo or video-file address.') });
+        if (url == null) return null;
+        const v = DQBMedia.parseVideo(url); if (!v) return null;
+        const title = await DQBUI.Dialog.prompt({ title: 'Title', message: 'What should the card say?', value: DQBMedia.providerName(v) + ' video', confirmLabel: 'Add', maxLength: 200, icon: 'video' });
+        if (title == null) return null;
+        const it = Actions.addMedia({ kind: 'video', title: clampStr(title, 200).trim() || 'Video', video: v, url: DQBMedia.watchUrl(v) });
+        if (it) UI.toast('Video added. Open it to add callouts and hotspots at moments in the video.', 'success');
+        return it;
+    },
+    /** A library resource that is a video, as a video item. */
+    addVideoFromLink: (card, at) => {
+        const v = DQBMedia.parseVideo(card.url); if (!v) return null;
+        return Actions.addMedia({ kind: 'video', title: card.title, desc: card.desc, thumb: card.thumb, video: v, url: card.url, ref: card.ref, source: card.source }, at);
+    },
+    openMedia: (id) => {
+        const it = State.items.find(i => i.id === id && (i.type === 'media' || i.type === 'link')); if (!it || !window.Shell) return;
+        Shell.MediaView.open(id);
+    },
+    /** A new annotation from the console (the teacher or a co-host). */
+    addAnno: (id, a) => {
+        const it = State.items.find(i => i.id === id); if (!it) return;
+        if (State.isCoHost) { const h = State.students['HOST']; if (h) SafeSend(h.conn, { type: 'ANNO_ADD', item: id, id: a.id || genId(), a }); return; }
+        const clean = DQBMedia.cleanAnno({ ...a, by: { n: 'Teacher', r: 't', sid: 'host' }, ts: Date.now(), pend: false }, { video: it.kind === 'video' });
+        if (!clean) return;
+        if (it.type === 'link' && clean.k !== 'comment') return;
+        const list = it.annos || [];
+        if (list.length >= DQBMedia.LIMITS.perItem) { UI.toast('This has as many annotations as it can hold. Delete some first.', 'warn'); return; }
+        StateManager.setAnnos(id, list.concat([clean]));
+    },
+    delAnnos: (id, ids) => {
+        const it = State.items.find(i => i.id === id); if (!it || !Array.isArray(ids)) return;
+        if (State.isCoHost) { const h = State.students['HOST']; if (h) SafeSend(h.conn, { type: 'ANNO_DEL', item: id, ids }); return; }
+        const gone = new Set(ids);
+        (it.annos || []).forEach(a => { if (a.re && gone.has(a.re)) gone.add(a.id); });          // replies go with their comment
+        StateManager.setAnnos(id, (it.annos || []).filter(a => !gone.has(a.id)));
+    },
+    approveAnno: (id, aid) => {
+        const it = State.items.find(i => i.id === id); if (!it) return;
+        if (State.isCoHost) { const h = State.students['HOST']; if (h) SafeSend(h.conn, { type: 'ANNO_OK', item: id, aid }); return; }
+        StateManager.setAnnos(id, (it.annos || []).map(a => (a.id === aid ? (({ pend, ...rest }) => rest)(a) : a)));
+    },
     openLink: (id) => {
         const it = State.items.find(i => i.id === id && i.type === 'link'); if (!it) return;
         const url = DQBUI.safeUrl(it.url); if (!url) return;
         const w = window.open(url, '_blank', 'noopener,noreferrer'); if (w) { try { w.opener = null; } catch (e) { /* ignore */ } }
+    },
+    renameMedia: async (id) => {
+        const it = State.items.find(i => i.id === id && i.type === 'media'); if (!it) return;
+        const t = await DQBUI.Dialog.prompt({ title: 'Rename', value: it.title || '', confirmLabel: 'Save', maxLength: 200 });
+        if (t == null) return;
+        StateManager.updateItem(id, { title: clampStr(t, 200).trim() || it.title });
+    },
+    /** A link card that is a YouTube / Vimeo / video-file address becomes a video item in the same place. */
+    linkToVideo: (id) => {
+        const it = State.items.find(i => i.id === id && i.type === 'link'); if (!it) return;
+        const v = DQBMedia.parseVideo(it.url); if (!v) return;
+        const m = Sanitize.item({ id: genId(), type: 'media', kind: 'video', title: it.title, desc: it.desc, thumb: it.thumb, video: v, url: it.url, ref: it.ref, source: it.source, x: it.x, y: it.y, w: 320, h: 300, parentZone: it.parentZone, annos: it.annos || [] });
+        if (!m) return;
+        StateManager.batch(() => {
+            const z = it.parentZone && State.items.find(x => x.id === it.parentZone);
+            StateManager.addItem(m);
+            if (z) StateManager.updateItem(z.id, { children: (z.children || []).map(c => (c === it.id ? m.id : c)) });
+            StateManager.deleteItems([it.id]);
+            StateManager.setSelection([m.id]);
+        });
+        if (State.shared.includes(it.id)) { State.shared = State.shared.map(x => (x === it.id ? m.id : x)); Network.pushShared(); }
     },
     /** Puts a picture on the board as an image note (pictures are stored in the board, so they are converted to a data-URI here). */
     addImage: async (src, caption) => {
@@ -1857,8 +2040,18 @@ window.Actions = {
         if (item.type === 'link') {
             const shared = (State.shared || []).includes(item.id);
             items.push({ label: 'Open link', icon: 'link', onClick: () => Actions.openLink(item.id) });
+            items.push({ label: 'Comments', icon: 'comment', onClick: () => Actions.openMedia(item.id) });
             if (!State.isCoHost) items.push({ label: shared ? 'Stop sharing with students' : 'Share with students', icon: shared ? 'stop' : 'send', onClick: () => Network.toggleShare(item.id) });
             if (item.kind === 'link') items.push({ label: 'Edit link…', icon: 'pencil', onClick: () => Actions.promptLink(item) });
+            if (DQBMedia.parseVideo(item.url)) items.push({ label: 'Turn into a video', icon: 'video', onClick: () => Actions.linkToVideo(item.id) });
+            items.push({ separator: true });
+        }
+        if (item.type === 'media') {
+            const shared = (State.shared || []).includes(item.id);
+            items.push({ label: item.kind === 'video' ? 'Watch and annotate' : 'View and annotate', icon: item.kind === 'video' ? 'play' : 'eye', onClick: () => Actions.openMedia(item.id) });
+            if (!State.isCoHost) items.push({ label: shared ? 'Stop sharing with students' : 'Share with students', icon: shared ? 'stop' : 'send', onClick: () => Network.toggleShare(item.id) });
+            items.push({ label: 'Rename…', icon: 'pencil', onClick: () => Actions.renameMedia(item.id) });
+            if (item.kind === 'video' && item.video) items.push({ label: 'Open on ' + DQBMedia.providerName(item.video), icon: 'link', onClick: () => { const u = DQBMedia.watchUrl(item.video); if (u) window.open(u, '_blank', 'noopener,noreferrer'); } });
             items.push({ separator: true });
         }
         if (item.type === 'note') {
@@ -1871,6 +2064,12 @@ window.Actions = {
                 items.push({ label: 'Vote', icon: 'vote', onClick: () => Network.startActivity('vote') });
                 items.push({ label: 'Rank', icon: 'rank', onClick: () => Network.startActivity('sort') });
                 items.push({ label: 'Discuss', icon: 'discuss', onClick: () => Network.startActivity('discuss') });
+                items.push({ separator: true });
+            }
+            if (!item.zoneType && !State.isCoHost && Network.setItems(item).length) {
+                const shared = (State.shared || []).includes(item.id);
+                items.push({ label: shared ? 'Stop sharing to explore' : 'Share to explore', icon: shared ? 'stop' : 'explore', onClick: () => Network.toggleShare(item.id) });
+                if (shared) items.push({ label: 'Exploring progress', icon: 'checks', onClick: () => Shell.ExploreProgress.open(item.id) });
                 items.push({ separator: true });
             }
             if (!item.zoneType) items.push({ label: 'Rename', icon: 'pencil', onClick: () => Actions.rename(item.id) });
@@ -2763,6 +2962,7 @@ window.InputController = {
             const it = State.items.find(i => i.id === itemEl.id);
             if (it && it.type === 'note' && !it.src) Actions.editText(it.id);
             else if (it && it.type === 'zone' && !it.zoneType) Actions.rename(it.id);
+            else if (it && it.type === 'media') Actions.openMedia(it.id);
             return;
         }
         if (e.target.closest('[data-act], input, textarea')) return;
@@ -2958,6 +3158,8 @@ window.Sanitize = {
     hostOf: (url) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return 'Link'; } },
     /** What a student is sent about a shared card: only display fields, re-checked. */
     shared: (it) => ({ id: it.id, title: clampStr(it.title, 200), desc: clampStr(it.desc, 500), url: DQBUI.safeUrl(it.url), thumb: DQBUI.safeThumb(it.thumb) || null, kind: it.kind || 'link', source: it.source ? clampStr(it.source, 60) : null }),
+    /** A card takes comments only (no places or moments). */
+    linkAnnos: (list) => DQBMedia.cleanAnnos(list, { video: false }).filter(a => a.k === 'comment').map(a => { delete a.x; delete a.y; return a; }),
     strokes: (arr, max) => (Array.isArray(arr) ? arr.slice(0, max || 600) : []).map(s => {
         if (!s || !Array.isArray(s.points)) return null;
         const pts = s.points.slice(0, 6000).map(p => ({ x: Sanitize.num(p && p.x), y: Sanitize.num(p && p.y) }));
@@ -2967,7 +3169,7 @@ window.Sanitize = {
     item: (r, depth) => {
         depth = depth || 0;
         if (!r || typeof r !== 'object') return null;
-        const type = ['note', 'zone', 'poll', 'graph', 'spin', 'link'].includes(r.type) ? r.type : null;
+        const type = ['note', 'zone', 'poll', 'graph', 'spin', 'link', 'media'].includes(r.type) ? r.type : null;
         const id = safeId(r.id);
         if (!type || !id) return null;
         const o = { id, type, x: Sanitize.num(r.x), y: Sanitize.num(r.y), w: Math.min(4000, Math.max(40, Sanitize.num(r.w, 200, 4000))), h: Math.min(4000, Math.max(40, Sanitize.num(r.h, 150, 4000))), groupId: safeId(r.groupId) || null };
@@ -3016,6 +3218,19 @@ window.Sanitize = {
             o.kind = ['resource', 'collection', 'link'].includes(r.kind) ? r.kind : 'link';
             if (safeId(String(r.ref == null ? '' : r.ref))) o.ref = String(r.ref);
             if (r.source) o.source = clampStr(r.source, 60);
+            if (Array.isArray(r.annos) && r.annos.length) o.annos = Sanitize.linkAnnos(r.annos);
+        } else if (type === 'media') {
+            o.kind = r.kind === 'video' ? 'video' : 'image';
+            o.title = clampStr(r.title, 200).trim();
+            o.desc = clampStr(r.desc, 500);
+            if (o.kind === 'image') { const src = safeImg(r.src, 1500000) || DQBUI.safeThumb(r.src); if (!src) return null; o.src = src; }
+            else { const v = DQBMedia.cleanVideo(r.video); if (!v) return null; o.video = v; }
+            const th = safeImg(r.thumb, 150000) || DQBUI.safeThumb(r.thumb); if (th) o.thumb = th;
+            const ar = Number(r.aspect); if (ar > 0.1 && ar < 10) o.aspect = Math.round(ar * 1000) / 1000;
+            const url = DQBUI.safeUrl(r.url); if (url) o.url = url;
+            if (safeId(String(r.ref == null ? '' : r.ref))) o.ref = String(r.ref);
+            if (r.source) o.source = clampStr(r.source, 60);
+            o.annos = DQBMedia.cleanAnnos(r.annos, { video: o.kind === 'video' });
         }
         return o;
     }
@@ -3023,7 +3238,8 @@ window.Sanitize = {
 
 /* --- NETWORK & ACTIVITY MANAGER --- */
 // What a connected *student* may ask the host to do. Everything else is co-host only.
-const STUDENT_MESSAGES = new Set(['NOTE', 'IMG_NOTE', 'DELETE_NOTE', 'POLL_VOTE', 'DATA_SUBMIT', 'SUBMIT_VOTE', 'SUBMIT_SORT', 'COMMENT', 'EXIT_SUBMIT', 'CONSENSUS_INK', 'HEARTBEAT', 'LEAVE']);
+const STUDENT_MESSAGES = new Set(['NOTE', 'IMG_NOTE', 'DELETE_NOTE', 'POLL_VOTE', 'DATA_SUBMIT', 'SUBMIT_VOTE', 'SUBMIT_SORT', 'COMMENT', 'EXIT_SUBMIT', 'CONSENSUS_INK', 'HEARTBEAT', 'LEAVE', 'VIEW', 'ANNO_ADD', 'ANNO_DEL', 'EXPLORE']);
+const SHARE_LIMIT = 12;
 const NOTE_SUBS_STUDENT = ['notice', 'wonder', 'idea', 'test', 'claim', 'evidence', 'reasoning'];
 const SORT_LIMIT = 200;
 
@@ -3116,7 +3332,8 @@ window.Network = {
         c._joined = false;
         const t = setTimeout(() => { if (!c._joined) { try { c.close(); } catch (e) { /* ignore */ } } }, 15000);
         c.on('data', d => {
-            if (typeof d === 'string' && d.length > 4000000) return;
+            const big = State.isCoHost || (State.students[c.peer] && State.students[c.peer].role === 'cohost');   // a co-host syncs whole boards
+            if (typeof d === 'string' && d.length > (big ? 40000000 : 4000000)) return;
             let msg; try { msg = typeof d === 'string' ? JSON.parse(d) : d; } catch (e) { return; }
             try { Network.handle(c.peer, msg, c); } catch (e) { console.error(e); }
         });
@@ -3304,18 +3521,19 @@ window.Network = {
 
     startActivity: (mode) => {
         let targets = []; let zoneId = null;
+        const votable = (n) => n && (n.type === 'note' || n.type === 'link' || n.type === 'media');
         State.selection.forEach(id => {
             const i = State.items.find(x => x.id === id); if (!i) return;
-            if (i.type === 'note') targets.push(i);
+            if (votable(i)) targets.push(i);
             else if (i.type === 'zone') {
                 zoneId = i.id;
                 if (i.children) i.children.forEach(cid => { const n = State.items.find(x => x.id === cid); if (n) targets.push(n); });
             }
         });
-        targets = [...new Set(targets)].filter(n => n.type === 'note');
+        targets = [...new Set(targets)].filter(votable);
 
-        if (targets.length < 1 && mode === 'discuss') { UI.toast("Select a zone or some notes to discuss", 'warn'); return; }
-        if (targets.length < 2 && mode !== 'discuss') { UI.toast("This activity needs at least 2 notes in the zone", 'warn'); return; }
+        if (targets.length < 1 && mode === 'discuss') { UI.toast("Select a zone, some notes or some cards to discuss", 'warn'); return; }
+        if (targets.length < 2 && mode !== 'discuss') { UI.toast("This activity needs at least 2 notes, cards, pictures or videos in the zone", 'warn'); return; }
 
         if (!zoneId) {
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -3329,7 +3547,8 @@ window.Network = {
 
         State.activeSorts[zoneId] = [];
         const subType = mode === 'vote' ? 'ACT_VOTE' : (mode === 'sort' ? 'ACT_SORT' : 'ACT_DISCUSS');
-        const itemsList = targets.map(n => ({ id: n.id, text: clampStr(n.text, 300), sub: n.sub }));
+        const itemsList = targets.map(n => (n.type === 'note' ? { id: n.id, text: clampStr(n.text, 300), sub: n.sub }
+            : { id: n.id, text: clampStr(n.title || (n.type === 'media' ? (n.kind === 'video' ? 'Video' : 'Picture') : 'Link'), 300), sub: n.type === 'link' ? 'link' : n.kind, thumb: (safeImg(n.thumb, 150000) || DQBUI.safeThumb(n.thumb)) || undefined }));
         Network.transitionTo('ZONE_ACT', zoneId, { type: subType, subType: subType, actId: zoneId, items: itemsList });
     },
     stopActivity: () => { Network.transitionTo('LOCKED'); },
@@ -3417,26 +3636,115 @@ window.Network = {
     },
 
     /* ---------- links shared with the class (students get a "Shared with you" list; never the board itself) ---------- */
+    /* ---------- sharing: cards, pictures, videos, and zones as sets to explore ---------- */
+    /** What can be shared: a link card, a picture or video, or a plain zone with at least one card, picture or video in it. */
+    shareable: (it) => !!it && ((it.type === 'link' && !!DQBUI.safeUrl(it.url)) || it.type === 'media' || (it.type === 'zone' && !it.zoneType && Network.setItems(it).length > 0)),
+    /** The things in a zone that students explore: cards, pictures, videos, and the teacher's own text notes as prompts. */
+    setItems: (z) => (z && z.children ? z.children : []).map(id => State.items.find(i => i.id === id)).filter(i => i && (i.type === 'link' || i.type === 'media' || (i.type === 'note' && !i.sid && !i.src && (i.text || '').trim()))).slice(0, 40),
+    /** Shared on its own, or inside a shared zone. */
+    isShared: (id) => (State.shared || []).includes(id) || (State.shared || []).some(z => { const zone = State.items.find(i => i.id === z && i.type === 'zone'); return !!zone && (zone.children || []).includes(id); }),
+    /** A zone with a group colour is only for that group. */
+    setVisible: (st, z) => !z.color || (st && safeColor(st.color) === safeColor(z.color)),
+    /** The item a student may look at: shared on its own, or in a shared zone they can see. Returns it or null. */
+    visibleItem: (st, id) => {
+        if (!id || !st) return null;
+        const it = State.items.find(i => i.id === id); if (!it || (it.type !== 'link' && it.type !== 'media')) return null;
+        if (State.shared.includes(id)) return it;
+        const z = State.items.find(i => i.type === 'zone' && State.shared.includes(i.id) && (i.children || []).includes(id));
+        return z && Network.setVisible(st, z) ? it : null;
+    },
+    /** One entry of a student's "Shared with you" list (display fields only, re-checked; no picture data, no annotations). */
+    sharedEntry: (it) => {
+        if (it.type === 'link') { const o = Sanitize.shared(it); o.type = 'link'; return o.url ? o : null; }
+        if (it.type === 'media') {
+            const o = { id: it.id, type: 'media', kind: it.kind, title: clampStr(it.title, 200) || (it.kind === 'video' ? 'Video' : 'Picture'), desc: clampStr(it.desc, 500), source: it.source ? clampStr(it.source, 60) : null };
+            const th = safeImg(it.thumb, 150000) || DQBUI.safeThumb(it.thumb); if (th) o.thumb = th;
+            if (it.kind === 'video') o.video = DQBMedia.cleanVideo(it.video);
+            if (it.aspect) o.aspect = it.aspect;
+            return o;
+        }
+        if (it.type === 'note') return { id: it.id, type: 'text', text: clampStr(it.text, 600) };
+        return null;
+    },
+    sharedFor: (st) => State.shared.map(id => State.items.find(i => i.id === id)).filter(Boolean).map(it => {
+        if (it.type !== 'zone') return Network.sharedEntry(it);
+        if (!Network.setVisible(st, it)) return null;
+        return { id: it.id, type: 'set', title: clampStr(it.title || 'Zone', 80), color: safeColor(it.color) || null, group: safeColor(it.color) ? groupName(it.color) : null, items: Network.setItems(it).map(Network.sharedEntry).filter(Boolean) };
+    }).filter(Boolean),
+    /** Kept for hosts and older callers: the shared link cards. */
     sharedItems: () => State.shared.map(id => State.items.find(i => i.id === id && i.type === 'link')).filter(Boolean).map(Sanitize.shared).filter(x => x.url),
-    pushShared: () => { Network.broadcast({ type: 'SHARED', items: Network.sharedItems() }); Render.all(); if (window.Shell) Shell.SelBar.render(); },
+    pushShared: () => {
+        Object.values(State.students).forEach(st => { if (st.role === 'student') SafeSend(st.conn, { type: 'SHARED', items: Network.sharedFor(st) }); });
+        Render.all(); if (window.Shell) Shell.SelBar.render();
+    },
     toggleShare: (id) => {
         if (State.isCoHost) { UI.toast('Only the host can share with students.', 'warn'); return; }
-        const it = State.items.find(i => i.id === id && i.type === 'link'); if (!it) return;
-        if (State.shared.includes(id)) { State.shared = State.shared.filter(x => x !== id); Network.pushShared(); UI.toast(`Stopped sharing “${clampStr(it.title, 40)}”`); return; }
-        if (!DQBUI.safeUrl(it.url)) { UI.toast('That card has no web address to share.', 'warn'); return; }
-        if (State.shared.length >= 12) { UI.toast('At most 12 things can be shared at once. Stop sharing one first.', 'warn'); return; }
+        const it = State.items.find(i => i.id === id); if (!it) return;
+        const label = clampStr(it.title || it.text || 'that', 40);
+        if (State.shared.includes(id)) {
+            State.shared = State.shared.filter(x => x !== id);
+            if (it.type === 'zone') delete State.explore[id];
+            Network.pushShared(); UI.toast(`Stopped sharing “${label}”`); return;
+        }
+        if (!Network.shareable(it)) { UI.toast(it.type === 'zone' ? 'Put a card, picture or video in the zone first: students explore what is inside it.' : 'That can’t be shared.', 'warn'); return; }
+        if (State.shared.length >= SHARE_LIMIT) { UI.toast(`At most ${SHARE_LIMIT} things can be shared at once. Stop sharing one first.`, 'warn'); return; }
         State.shared = State.shared.concat([id]);
         Network.pushShared();
         const n = Network.studentCount();
-        UI.toast(n ? `Shared with ${n} student${n === 1 ? '' : 's'}` : 'Shared: students see it as soon as they join', 'success');
-        DQBUI.emit('share', { id, title: it.title, url: it.url, kind: it.kind, ref: it.ref || null });
+        const forGroup = it.type === 'zone' && safeColor(it.color) ? ` (the ${groupName(it.color)} group)` : '';
+        UI.toast(n ? `Shared with ${forGroup ? 'the ' + groupName(it.color) + ' group' : n + ' student' + (n === 1 ? '' : 's')}` : `Shared: students${forGroup} see it as soon as they join`, 'success');
+        DQBUI.emit('share', { id, title: it.title || '', url: it.url || (it.video ? DQBMedia.watchUrl(it.video) : ''), kind: it.type === 'zone' ? 'set' : (it.type === 'media' ? it.kind : it.kind), ref: it.ref || null });
+    },
+    /** Did this change touch something shared (so students need a fresh list)? */
+    touchesShared: (action, payload) => {
+        if (action === 'state:fullsync') return true;
+        const sharedZones = State.shared.filter(id => { const z = State.items.find(i => i.id === id); return z && z.type === 'zone'; });
+        const inSet = (id) => sharedZones.some(z => { const zone = State.items.find(i => i.id === z); return zone && (zone.children || []).includes(id); });
+        if (action === 'items:delete') return (payload.ids || []).some(id => State.shared.includes(id) || sharedZones.length);
+        if (action === 'items:add') return sharedZones.length > 0 && (payload.items || []).some(i => sharedZones.includes(i.parentZone));
+        if (action === 'items:update') return (payload.items || []).some(u => ((State.shared.includes(u.id) || inSet(u.id)) && ['title', 'url', 'desc', 'thumb', 'text', 'video', 'kind', 'src', 'color', 'children'].some(k => k in u)) || ('parentZone' in u && sharedZones.length) || (sharedZones.includes(u.id) && 'children' in u));
+        return false;
     },
     _sharedChanged: DQBUI.debounce(() => {
         const before = State.shared.join();
-        State.shared = State.shared.filter(id => State.items.some(i => i.id === id && i.type === 'link'));
-        Network.broadcast({ type: 'SHARED', items: Network.sharedItems() });     // also carries edited titles
+        State.shared = State.shared.filter(id => Network.shareable(State.items.find(i => i.id === id)));
+        Object.keys(State.explore).forEach(z => { if (!State.shared.includes(z)) delete State.explore[z]; });
+        Object.values(State.students).forEach(st => { if (st.role === 'student') SafeSend(st.conn, { type: 'SHARED', items: Network.sharedFor(st) }); });   // also carries edited titles
         if (before !== State.shared.join()) Render.all();
     }, 150),
+
+    /* ---------- one item for the students looking at it (VIEW / ITEM) ---------- */
+    itemMsg: (st, it, withSrc) => {
+        const m = { type: 'ITEM', id: it.id, annos: DQBMedia.visibleTo(it.annos || [], { teacher: false, sid: st.sid, peers: State.settings.peers !== false, names: !!State.settings.names }) };
+        if (withSrc && it.type === 'media' && it.kind === 'image') m.src = it.src;
+        return m;
+    },
+    _itemT: {},
+    /** After annotations change: everyone looking at the item gets the new list (a burst of changes is sent once). */
+    pushItem: (id) => {
+        if (Network._itemT[id]) return;
+        Network._itemT[id] = setTimeout(() => {
+            delete Network._itemT[id];
+            const it = State.items.find(i => i.id === id);
+            Object.values(State.students).forEach(st => {
+                if (st.role !== 'student' || st.viewing !== id) return;
+                if (!it || !Network.visibleItem(st, id)) { SafeSend(st.conn, { type: 'ITEM', id, gone: true }); st.viewing = null; return; }
+                SafeSend(st.conn, Network.itemMsg(st, it, false));
+            });
+        }, 120);
+    },
+    /** Rules changed: what students see of each other's annotations may have too. */
+    pushAllItems: () => { Object.values(State.students).forEach(st => { if (st.role === 'student' && st.viewing) Network.pushItem(st.viewing); }); },
+
+    /* ---------- exploring a shared set ---------- */
+    exploreCounts: (id) => {
+        const zid = State.shared.find(z => { const zone = State.items.find(i => i.id === z && i.type === 'zone'); return zone && (zone.children || []).includes(id); });
+        if (!zid) return null;
+        const c = { opened: 0, done: 0, stars: 0 };
+        Object.values(State.explore[zid] || {}).forEach(rec => { const r = rec[id]; if (!r) return; if (r.o) c.opened++; if (r.d) c.done++; if (r.s) c.stars++; });
+        return c;
+    },
+    _exploreChanged: DQBUI.debounce(() => { Render.all(); if (window.Shell && Shell.ExploreProgress) Shell.ExploreProgress.refresh(); }, 200),
 
     /* ---------- class timer ---------- */
     timerBroadcast: () => {
@@ -3465,7 +3773,7 @@ window.Network = {
             if (d.type === 'JOIN') return Network._join(pid, d, conn);
             if (d.type === 'AUTH_COHOST') return Network._authCohost(pid, d, conn);
             if (!st) return;                                       // must JOIN first
-            if (!Network._allow(conn, d.type === 'IMG_NOTE' ? 5 : 1)) return;
+            if (!Network._allow(conn, d.type === 'IMG_NOTE' ? 5 : (d.type === 'ANNO_ADD' ? 2 : 1))) return;
             if (st.role !== 'cohost' && !STUDENT_MESSAGES.has(d.type)) return;
         }
         const nr = () => { Render.all(); };                           // silent updates still need a repaint
@@ -3495,15 +3803,15 @@ window.Network = {
                 if (fromHostToCohost) { if (first || !State.hasEntered) { State.hasEntered = true; Shell.enterBoard({ cohost: true }); } nr(); Shell.syncBoardState(); }
                 break;
             }
-            case 'NOTE_UPDATE': { const n = Sanitize.item(d.note); if (n) { fromHostToCohost ? (StateManager.updateItem(n.id, n, silent), nr()) : StateManager.updateItem(n.id, n); } break; }
+            case 'NOTE_UPDATE': { const n = Sanitize.item(d.note); if (n) { if (!fromHostToCohost) delete n.annos; fromHostToCohost ? (StateManager.updateItem(n.id, n, silent), nr()) : StateManager.updateItem(n.id, n); } break; }
             case 'BATCH_UPDATE': {
-                const ups = (Array.isArray(d.items) ? d.items : []).slice(0, 500).map(i => Sanitize.item(i)).filter(Boolean).map(i => ({ id: i.id, props: i }));
+                const ups = (Array.isArray(d.items) ? d.items : []).slice(0, 500).map(i => Sanitize.item(i)).filter(Boolean).map(i => { if (!fromHostToCohost) delete i.annos; return { id: i.id, props: i }; });
                 if (ups.length) { fromHostToCohost ? (StateManager.updateItems(ups, silent), nr()) : StateManager.updateItems(ups); }
                 break;
             }
             case 'ADD_ITEM': {
                 const n = Sanitize.item(d.item); if (!n) break;
-                if (State.items.find(i => i.id === n.id)) { fromHostToCohost ? (StateManager.updateItem(n.id, n, silent), nr()) : StateManager.updateItem(n.id, n); }
+                if (State.items.find(i => i.id === n.id)) { if (!fromHostToCohost) delete n.annos; fromHostToCohost ? (StateManager.updateItem(n.id, n, silent), nr()) : StateManager.updateItem(n.id, n); }
                 else fromHostToCohost ? (StateManager.addItem(n, silent), nr()) : StateManager.addItem(n);
                 break;
             }
@@ -3573,6 +3881,75 @@ window.Network = {
                 if (State.activeSorts[d.actId].length < SORT_LIMIT) State.activeSorts[d.actId].push(d.type === 'SUBMIT_SORT' ? d.order.slice(0, 100) : d.choiceId);
                 Network.updateResults(d.actId);
                 Network._contributed(st, d.type === 'SUBMIT_SORT' ? 'rank' : 'vote');
+                break;
+            }
+            case 'VIEW': {
+                if (fromHostToCohost) break;
+                const id = d.item == null ? null : safeId(d.item);
+                if (!id) { st.viewing = null; break; }
+                const it = Network.visibleItem(st, id);
+                if (!it) { SafeSend(conn, { type: 'ITEM', id, gone: true }); break; }
+                st.viewing = id;
+                SafeSend(conn, Network.itemMsg(st, it, true));
+                break;
+            }
+            case 'ANNO_ADD': {
+                if (fromHostToCohost) break;
+                const cohost = st.role === 'cohost';
+                const itemId = safeId(d.item);
+                const it = cohost ? State.items.find(i => i.id === itemId && (i.type === 'media' || i.type === 'link')) : Network.visibleItem(st, itemId);
+                const aid = safeId(d.a && d.a.id);
+                const status = (s) => SafeSend(conn, { type: 'ANNO_STATUS', id: itemId, aid, status: s });
+                if (!it) { status('gone'); break; }
+                if (!cohost && State.muted[st.sid]) { SafeSend(conn, { type: 'MUTE', on: true }); status('muted'); break; }
+                const list = it.annos || [];
+                if (aid && list.some(a => a.id === aid)) { status('ok'); break; }                    // sent again from the outbox
+                if (list.length >= DQBMedia.LIMITS.perItem || (!cohost && list.filter(a => a.by.sid === st.sid).length >= DQBMedia.LIMITS.perStudent)) { status('limit'); break; }
+                const a = DQBMedia.cleanAnno({ ...(d.a && typeof d.a === 'object' ? d.a : {}), by: cohost ? { n: 'Co-host', r: 't', sid: 'cohost' } : { n: st.name, r: 's', sid: st.sid }, ts: Date.now(), pend: !cohost && !!State.settings.approve, mine: false }, { student: !cohost, video: it.kind === 'video' });
+                if (!a || (it.type === 'link' && a.k !== 'comment')) { status('bad'); break; }
+                if (it.type === 'link') { delete a.x; delete a.y; delete a.t; delete a.t2; }
+                if (a.re && !list.some(x => x.id === a.re && x.k === 'comment' && !x.re)) delete a.re;
+                StateManager.setAnnos(it.id, list.concat([a]));
+                status(a.pend ? 'pending' : 'ok');
+                if (!cohost) Network._contributed(st, a.k === 'ink' ? 'markup' : 'comment');
+                break;
+            }
+            case 'ANNO_DEL': {
+                if (fromHostToCohost) break;
+                const cohost = st.role === 'cohost';
+                const it = cohost ? State.items.find(i => i.id === safeId(d.item)) : Network.visibleItem(st, safeId(d.item));
+                if (!it || !Array.isArray(it.annos)) break;
+                const ids = (Array.isArray(d.ids) ? d.ids : [d.aid]).map(safeId).filter(Boolean).slice(0, 800);
+                const gone = new Set(ids.filter(x => it.annos.some(a => a.id === x && (cohost || a.by.sid === st.sid))));
+                if (!gone.size) break;
+                it.annos.forEach(a => { if (a.re && gone.has(a.re)) gone.add(a.id); });
+                StateManager.setAnnos(it.id, it.annos.filter(a => !gone.has(a.id)));
+                break;
+            }
+            case 'ANNO_OK': {
+                if (fromHostToCohost || st.role !== 'cohost') break;
+                Actions.approveAnno(safeId(d.item), safeId(d.aid));
+                break;
+            }
+            case 'ANNOS_SET': {                                    // host -> co-host: the annotations on one item
+                if (!fromHostToCohost) break;
+                const it = State.items.find(i => i.id === safeId(d.id)); if (!it) break;
+                it.annos = it.type === 'link' ? Sanitize.linkAnnos(d.annos) : DQBMedia.cleanAnnos(d.annos, { video: it.kind === 'video' });
+                nr(); if (window.Shell && Shell.MediaView) Shell.MediaView.refresh(it.id);
+                break;
+            }
+            case 'EXPLORE': {
+                if (fromHostToCohost || st.role !== 'student') break;
+                const z = State.items.find(i => i.id === safeId(d.set) && i.type === 'zone' && State.shared.includes(i.id));
+                if (!z || !Network.setVisible(st, z)) break;
+                const id = safeId(d.id); if (!id || !Network.setItems(z).some(i => i.id === id)) break;
+                const bySid = State.explore[z.id] || (State.explore[z.id] = {});
+                const rec = bySid[st.sid] || (bySid[st.sid] = {});
+                const cur = rec[id] || {};
+                const next = { o: !!(cur.o || d.open || d.done), d: typeof d.done === 'boolean' ? d.done : !!cur.d, s: typeof d.star === 'boolean' ? d.star : !!cur.s };
+                rec[id] = next;
+                if (next.o && !cur.o) Network._contributed(st, 'explore');
+                Network._exploreChanged();
                 break;
             }
             case 'COMMENT': {
@@ -3649,10 +4026,10 @@ window.Network = {
         const t = State.timer;
         SafeSend(conn, {
             type: 'WELCOME', boardId: State.id, mode: welcomeMode, payload: actPayload, sync: mine, v: 2,
-            rules: { names: State.settings.names, approve: State.settings.approve }, muted: !!State.muted[sid], color: student.color,
+            rules: { names: State.settings.names, approve: State.settings.approve, peers: State.settings.peers !== false }, muted: !!State.muted[sid], color: student.color,
             pending: State.pending.filter(p => p.sid === sid).map(p => p.id),
             timer: { running: t.running, remainingMs: t.running ? Math.max(0, t.endsAt - Date.now()) : t.remainingMs, totalMs: t.totalMs },
-            shared: Network.sharedItems()
+            shared: Network.sharedFor(student)
         });
         DQBUI.emit('join', { sid, name, verified: student.verified, boardId: State.id });
         if (color) SafeSend(conn, { type: 'SET_COLOR', color, name: groupName(color) });
@@ -3742,7 +4119,8 @@ window.Network = {
         const submissions = State.activeSorts[actId] || [];
         const scores = {};
         submissions.forEach(sub => { if (Array.isArray(sub)) sub.forEach((itemId, idx) => { scores[itemId] = (scores[itemId] || 0) + (sub.length - idx); }); else scores[sub] = (scores[sub] || 0) + 1; });
-        const results = Object.keys(scores).map(id => { const item = State.items.find(x => x.id === id); return { text: item && item.text ? item.text.substring(0, 40) : (item && item.src ? 'Sketch' : 'Unknown'), score: scores[id] }; }).sort((a, b) => b.score - a.score);
+        const label = (item) => (!item ? 'Unknown' : (item.type === 'note' ? (item.text ? item.text.substring(0, 40) : (item.src ? 'Sketch' : 'Note')) : clampStr(item.title || (item.type === 'media' ? (item.kind === 'video' ? 'Video' : 'Picture') : 'Link'), 40)));
+        const results = Object.keys(scores).map(id => ({ text: label(State.items.find(x => x.id === id)), score: scores[id] })).sort((a, b) => b.score - a.score);
         const max = results.length ? results[0].score : 1;
         return `<div style="margin-bottom:10px;font-weight:700;color:var(--text-2)">${submissions.length} response${submissions.length === 1 ? '' : 's'}</div>` +
             (results.length ? results.map((r, i) => `<div class="result-row"><div style="width:24px;font-weight:700;color:var(--text-3)">#${i + 1}</div><div style="flex:2;font-weight:600">${esc(r.text)}</div><div class="bar-bg"><div class="bar-fill" style="width:${(r.score / max) * 100}%"></div></div><div style="font-weight:700;color:var(--accent);min-width:20px;text-align:right">${r.score}</div></div>`).join('') : '<div class="muted">Waiting for responses…</div>');
@@ -3760,7 +4138,8 @@ window.Network = {
         const relevant = State.comments.filter(c => c.targetId === actId || (State.activity.payload.items && State.activity.payload.items.find(i => i.id === c.targetId)));
         const html = relevant.map(c => {
             const item = State.items.find(x => x.id === c.targetId);
-            const txt = item && item.text ? item.text.substring(0, 24) + (item.text.length > 24 ? '…' : '') : 'Sketch';
+            const raw = item ? (item.type === 'note' ? item.text : item.title) : '';
+            const txt = raw ? raw.substring(0, 24) + (raw.length > 24 ? '…' : '') : (item && item.type === 'note' ? 'Sketch' : 'Item');
             return `<div class="disc-item"><div style="display:flex;justify-content:space-between;font-size:0.8rem;color:var(--text-3);margin-bottom:4px"><span>${esc(c.author)}</span><span>Re: ${esc(txt)}</span></div><span class="disc-tag dt-${esc(c.tag)}">${esc(c.tag)}</span><span>${esc(c.text)}</span></div>`;
         }).reverse().join('') || '<div class="muted">No comments yet.</div>';
         const zContainer = $(`zr-${actId}`); if (zContainer) zContainer.innerHTML = `<h4>Discussion</h4>` + html;
@@ -3782,6 +4161,7 @@ window.Network = {
             case 'items:delete': payload.ids.forEach(id => msgs.push({ type: 'DELETE_NOTE', id })); break;
             case 'ink:add': msgs.push({ type: 'INK_ADD', ink: payload.ink }); break;
             case 'ink:set': case 'state:fullsync': msgs.push({ type: 'FULL_SYNC', items: State.items, ink: State.ink }); break;
+            case 'items:annos': if (!State.isCoHost) msgs.push({ type: 'ANNOS_SET', id: payload.id, annos: payload.annos }); break;
         }
         if (!msgs.length) return;
         if (State.isCoHost) { const h = State.students['HOST']; if (h) msgs.forEach(m => SafeSend(h.conn, m)); }

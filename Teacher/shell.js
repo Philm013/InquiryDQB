@@ -347,6 +347,12 @@
             add({ id: 'vote', icon: 'vote', label: 'Vote', title: 'Students vote on the notes in this zone' }, () => Network.startActivity('vote'));
             add({ id: 'rank', icon: 'rank', label: 'Rank', title: 'Students rank the notes' }, () => Network.startActivity('sort'));
             add({ id: 'disc', icon: 'discuss', label: 'Discuss', title: 'Students comment on the notes' }, () => Network.startActivity('discuss'));
+            if (!State.isCoHost && Network.setItems(it).length) {
+              const shared = (State.shared || []).includes(id);
+              sep();
+              add({ id: 'explore', icon: shared ? 'stop' : 'explore', label: shared ? 'Stop exploring' : 'Explore', keep: true, on: shared, title: shared ? 'Stop sharing this zone' : 'Share everything in this zone: each student explores it on their own device' }, () => Network.toggleShare(id));
+              if (shared) add({ id: 'progress', icon: 'checks', title: 'Exploring progress' }, () => Shell.ExploreProgress.open(id));
+            }
             sep();
             add({ id: 'colour', icon: 'palette', title: 'Zone colour' }, () => Shell.ColorPick.open(id));
           }
@@ -360,7 +366,12 @@
           const shared = (State.shared || []).includes(id);
           if (!State.isCoHost) add({ id: 'share', icon: shared ? 'stop' : 'send', label: shared ? 'Stop sharing' : 'Share', keep: true, accent: !shared, on: shared, title: shared ? 'Stop sharing with students' : 'Share with students: it appears on every student’s device' }, () => Network.toggleShare(id));
           add({ id: 'open', icon: 'link', label: 'Open', title: 'Open the link in a new tab' }, () => Actions.openLink(id));
+          add({ id: 'cmts', icon: 'comment', title: 'Comments' }, () => Actions.openMedia(id));
           if (it.kind === 'link') add({ id: 'edit', icon: 'pencil', title: 'Edit link' }, () => Actions.promptLink(it));
+        } else if (it.type === 'media') {
+          const shared = (State.shared || []).includes(id);
+          if (!State.isCoHost) add({ id: 'share', icon: shared ? 'stop' : 'send', label: shared ? 'Stop sharing' : 'Share', keep: true, accent: !shared, on: shared, title: shared ? 'Stop sharing with students' : 'Share with students: each student can look closely, comment and draw on it' }, () => Network.toggleShare(id));
+          add({ id: 'view', icon: it.kind === 'video' ? 'play' : 'eye', label: it.kind === 'video' ? 'Watch' : 'View', keep: true, title: it.kind === 'video' ? 'Watch and annotate' : 'View and annotate' }, () => Actions.openMedia(id));
         }
         sep();
         add({ id: 'lock', icon: it.locked ? 'unlock' : 'lock', on: !!it.locked, title: it.locked ? 'Unlock' : 'Lock in place' }, () => Actions.toggleLock(id));
@@ -587,11 +598,12 @@
       });
       // class rules
       let rules = {}; try { rules = JSON.parse(localStorage.getItem('dqb_rules') || '{}') || {}; } catch (e) { /* ignore */ }
-      State.settings.names = rules.names !== false; State.settings.approve = !!rules.approve; State.settings.anyZone = rules.anyZone !== false;
-      const sync = () => { $('rule-names').setAttribute('aria-checked', String(State.settings.names)); $('rule-approve').setAttribute('aria-checked', String(State.settings.approve)); $('rule-anyzone').setAttribute('aria-checked', String(State.settings.anyZone)); };
+      State.settings.names = rules.names !== false; State.settings.approve = !!rules.approve; State.settings.anyZone = rules.anyZone !== false; State.settings.peers = rules.peers !== false;
+      const sync = () => { $('rule-names').setAttribute('aria-checked', String(State.settings.names)); $('rule-approve').setAttribute('aria-checked', String(State.settings.approve)); $('rule-anyzone').setAttribute('aria-checked', String(State.settings.anyZone)); if ($('rule-peers')) $('rule-peers').setAttribute('aria-checked', String(State.settings.peers)); };
       sync();
-      const save = () => { try { localStorage.setItem('dqb_rules', JSON.stringify(State.settings)); } catch (e) { /* ignore */ } sync(); Network.broadcast({ type: 'RULES', rules: { names: State.settings.names, approve: State.settings.approve } }); };
-      on($('rule-names'), 'click', () => { State.settings.names = !State.settings.names; save(); });
+      const save = () => { try { localStorage.setItem('dqb_rules', JSON.stringify(State.settings)); } catch (e) { /* ignore */ } sync(); Network.broadcast({ type: 'RULES', rules: { names: State.settings.names, approve: State.settings.approve, peers: State.settings.peers } }); };
+      on($('rule-names'), 'click', () => { State.settings.names = !State.settings.names; save(); Network.pushAllItems(); });
+      on($('rule-peers'), 'click', () => { State.settings.peers = !State.settings.peers; save(); Network.pushAllItems(); });
       on($('rule-approve'), 'click', () => { State.settings.approve = !State.settings.approve; save(); if (State.settings.approve) Toast.info('New notes will wait in Approvals until you accept them'); else if (State.pending.length) Toast.info(`${State.pending.length} notes are still waiting in Approvals`); });
       on($('rule-anyzone'), 'click', () => { State.settings.anyZone = !State.settings.anyZone; save(); Network.pushZones(); });
       Shell.Panel.hostRules();

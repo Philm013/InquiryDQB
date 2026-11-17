@@ -169,3 +169,74 @@ for (const scheme of ['light', 'dark']) {
     }
   });
 }
+
+/* Pictures, videos and exploring: the viewer on the console, and a student's set, explorer and viewer. */
+for (const scheme of ['light', 'dark']) {
+  test(`pictures, videos and exploring (${scheme})`, async () => {
+    const c = await env.context('desktop', { colorScheme: scheme, bypassCSP: true });
+    const p = await c.newPage();
+    await p.goto(env.origin + '/Teacher/');
+    await p.click('#btn-new-board');
+    await p.waitForFunction(() => window.Network && Network.status === 'ready');
+    const ids = await p.evaluate(async () => {
+      const cv = document.createElement('canvas'); cv.width = 900; cv.height = 600; const g = cv.getContext('2d'); g.fillStyle = '#0ea5e9'; g.fillRect(0, 0, 900, 600); g.fillStyle = '#15803d'; g.fillRect(0, 400, 900, 200);
+      const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+      const pic = await Actions.addImageFile(new File([blob], 'pond.png', { type: 'image/png' }));
+      Actions.addAnno(pic.id, { k: 'comment', text: 'What lives here?', x: 0.3, y: 0.7 });
+      Actions.addAnno(pic.id, { k: 'callout', text: 'The water line', x: 0.5, y: 0.6 });
+      Actions.addAnno(pic.id, { k: 'hotspot', text: 'Reeds', x: 0.15, y: 0.8 });
+      Actions.addAnno(pic.id, { k: 'ink', pts: [[0.6, 0.2], [0.8, 0.3]], c: '#ef4444', w: 0.006, tool: 'arrow' });
+      Actions.addLinkZone('Pond life', [{ url: 'https://example.org/frog', title: 'Frog life cycle', desc: 'From spawn to frog.', kind: 'resource' }, { url: 'https://example.org/pond', title: 'Pond dipping', kind: 'resource' }]);
+      const zone = State.items.find((i) => i.type === 'zone');
+      const vid = Actions.addMedia({ kind: 'video', title: 'Pond clip', video: { p: 'file', url: '/tests/fixtures/clip.webm' } });
+      HierarchyManager.link(vid.id, zone.id); LayoutSystem.update(zone.id);
+      Network.toggleShare(pic.id); Network.toggleShare(zone.id);
+      DQBUI.Overlay.closeAll(); StateManager.setSelection([]); document.activeElement && document.activeElement.blur(); Viewport.fit(false);
+      return { pic: pic.id, vid: vid.id, zone: zone.id };
+    });
+    await p.waitForTimeout(500);
+    await clean(p, `teacher board with pictures, videos and a shared set ${scheme}`);
+    await p.evaluate((id) => Actions.openMedia(id), ids.pic);
+    await p.waitForSelector('.mv-stage img.mv-img'); await p.waitForTimeout(400);
+    await clean(p, `teacher picture viewer ${scheme}`);
+    await p.evaluate(() => DQBUI.Overlay.closeAll());
+    await p.evaluate((id) => Actions.openMedia(id), ids.vid);
+    await p.waitForSelector('.mv-stage video'); await p.waitForTimeout(400);
+    await clean(p, `teacher video viewer ${scheme}`);
+    await p.evaluate(() => DQBUI.Overlay.closeAll());
+    await p.evaluate((id) => Shell.ExploreProgress.open(id), ids.zone);
+    await p.waitForTimeout(400);
+    await clean(p, `teacher exploring progress ${scheme}`);
+    await p.evaluate(() => DQBUI.Overlay.closeAll());
+    // a teacher on a phone: the same viewer as a full-height sheet
+    const pp = await (await env.context('phone', { colorScheme: scheme, bypassCSP: true })).newPage();
+    await pp.goto(env.origin + '/Teacher/');
+    await pp.click('#btn-new-board');
+    await pp.waitForFunction(() => window.Network && Network.status === 'ready');
+    await pp.evaluate(() => { const it = Actions.addMedia({ kind: 'video', title: 'Pond clip', video: { p: 'file', url: '/tests/fixtures/clip.webm' } }); Actions.addAnno(it.id, { k: 'comment', text: 'At this moment', t: 3 }); Actions.openMedia(it.id); });
+    await pp.waitForSelector('.mv-stage video'); await pp.waitForTimeout(500);
+    await clean(pp, `teacher phone video viewer ${scheme}`);
+    // the student's side
+    const code2 = await p.evaluate(() => Network.getCode());
+    const s = await (await env.context('phone', { colorScheme: scheme, bypassCSP: true })).newPage();
+    await s.goto(env.origin + '/Student/?join=' + code2);
+    await s.waitForSelector('body[data-ready="1"]');
+    await s.fill('#inp-name', 'Maya');
+    await s.click('#btn-setup');
+    await s.waitForSelector('.shared-item.set');
+    await s.waitForTimeout(2600);                                                   // let the welcome toast clear
+    await clean(s, `student shared picture and set ${scheme}`);
+    await s.click('.shared-item.set');
+    await s.waitForSelector('#p-explore .xp-item'); await s.waitForTimeout(400);
+    await s.click('#p-explore .xp-item >> nth=0 >> [data-x="done"]');
+    await clean(s, `student explorer ${scheme}`);
+    await s.click('#p-explore [data-close]');
+    await s.waitForSelector('#p-explore', { state: 'hidden' });
+    await s.click('.shared-item.media');
+    await s.waitForSelector('#p-media .mv-stage img.mv-img'); await s.waitForTimeout(500);
+    await clean(s, `student picture viewer ${scheme}`);
+    await s.click('#p-media .mv-hot');
+    await s.waitForTimeout(200);
+    await clean(s, `student hotspot revealed ${scheme}`);
+  });
+}

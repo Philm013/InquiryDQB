@@ -35,7 +35,8 @@ function teacherHost(arg) {
         ? [{ id: 7, kind: 'collection', title: 'Pond life', desc: 'Three tools', url: 'https://example.org/collection/7', meta: '3 resources' }]
         : [
           { id: 11, kind: 'resource', title: 'Water cycle simulator', desc: 'Move the sun and watch evaporation.', url: 'https://example.org/sim', thumb: '/icons/icon-192.png', meta: 'Interactive' },
-          { id: 12, kind: 'resource', title: 'Bad link', url: 'javascript:alert(1)' }
+          { id: 12, kind: 'resource', title: 'Bad link', url: 'javascript:alert(1)' },
+          { id: 14, kind: 'resource', title: 'Tadpoles hatching', desc: 'Time-lapse.', url: 'https://youtu.be/dQw4w9WgXcQ?t=42', meta: 'Video' }
         ].filter((r) => !q || r.title.toLowerCase().includes(q.toLowerCase()))),
       items: async () => [
         { id: 21, title: 'Frog life cycle', url: 'https://example.org/frog' },
@@ -121,7 +122,8 @@ test('boards are saved to the host account and open from it on another device', 
 test('the library adds resource cards, pictures and whole collections; unsafe links never become cards', async () => {
   await T(() => Shell.Library.open());
   await teacher.waitForSelector('.lib-row');
-  assert.equal(await teacher.locator('.lib-row').count(), 1, 'the javascript: result is filtered out');
+  assert.equal(await teacher.locator('.lib-row').count(), 2, 'the javascript: result is filtered out');
+  assert.equal(await teacher.locator('.lib-row [data-lib="video"]').count(), 1, 'only the video resource offers “Video”');
   await teacher.click('.lib-row [data-lib="card"]');
   await teacher.waitForFunction(() => State.items.some((i) => i.type === 'link' && i.title === 'Water cycle simulator'));
   const card = await T(() => State.items.find((i) => i.type === 'link'));
@@ -131,8 +133,11 @@ test('the library adds resource cards, pictures and whole collections; unsafe li
   assert.equal(card.ref, '11');
   await teacher.waitForFunction((id) => { const el = document.getElementById(id); return el && el.querySelector('.lc-title').textContent === 'Water cycle simulator' && !el.querySelector('.lc-thumb').hidden; }, card.id);
 
+  // "Picture" adds a picture students can annotate (re-encoded into the board), "Video" a playable video
   await teacher.click('.lib-row [data-lib="image"]');
-  await teacher.waitForFunction(() => State.items.some((i) => i.type === 'note' && /^data:image\/jpeg;base64,/.test(i.src || '') && i.text === 'Water cycle simulator'));
+  await teacher.waitForFunction(() => State.items.some((i) => i.type === 'media' && i.kind === 'image' && /^data:image\/jpeg;base64,/.test(i.src || '') && i.title === 'Water cycle simulator' && i.ref === '11'));
+  await teacher.click('.lib-row [data-lib="video"]');
+  await teacher.waitForFunction(() => State.items.some((i) => i.type === 'media' && i.kind === 'video' && i.video.p === 'youtube' && i.video.id === 'dQw4w9WgXcQ' && i.video.start === 42 && i.ref === '14'));
 
   await teacher.click('[data-lk="collection"]');
   await teacher.waitForSelector('.lib-row [data-lib="all"]');
@@ -229,7 +234,7 @@ test('shared links reach every student, late joiners included, and can be withdr
   assert.equal(await leo.locator('.shared-item img').count(), 0, 'a picture from another site is not shown');
 
   await T((x) => { Network.toggleShare(x); Network.toggleShare(x); }, id);   // back to the real list (shared again)
-  await leo.waitForFunction(() => /Water cycle simulator/.test(document.querySelector('.shared-item').textContent));
+  await leo.waitForFunction(() => /Water cycle simulator/.test((document.querySelector('.shared-item') || {}).textContent || ''));   // an empty list comes first
   await T((x) => Network.toggleShare(x), id);
   await leo.waitForFunction(() => !document.querySelector('.shared-item'));
   // deleting a shared card withdraws it too

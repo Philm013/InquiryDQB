@@ -74,16 +74,19 @@ cards, and exploring a shared zone work as in class; class activities (polls, vo
 |---|---|
 | `list()` | `[{id, title, teacher, lesson, until}]` (an ISO time or `null`) |
 | `view(id)` | `{board: {id, title}, until, teacher, lesson, notes: {open, zone: {id, title} \| null}, rules: {names, approve, peers}, shared, wall, mine}`, or `{gone: true, msg}` when the board is closed or not for this student. `shared` has the `SHARED` entries below; `wall` is `{zones: [{id, title, notes}], loose: [notes]}` with notes `{id, sub, text, author, mine, sketch, waiting}` (`waiting`: not on the board yet), or `null`; `mine` maps the student's note ids to `on`, `queued` (kept for the teacher), `pending` (the teacher checks it first) or `removed` (declined or taken off) |
-| `item(id, itemId)` | `{id, src, annos}` like `ITEM` (the picture, and the annotations this student may see), `{id, gone: true}`, or `{closed: true, msg}` |
+| `item(id, itemId, {src})` | `{id, src, annos}` like `ITEM` (the picture, and the annotations this student may see), `{id, gone: true}`, or `{closed: true, msg}`. `src: false` when the app has the picture already: only the annotations are needed |
 | `send(id, msg)` | `{status}`: `queued`, `pending`, `locked` (notes are off), `limit`, `bad`, `gone` (not shared with them) or `closed` (with `msg`). Messages are `NOTE`, `IMG_NOTE`, `DELETE_NOTE`, `ANNO_ADD`, `ANNO_DEL` and `EXPLORE`, as on a live board |
 
 A rejected promise means the host could not be reached: the message stays in the outbox and is sent again in order, and the app
 checks the host every 20 seconds (and at once when the page is shown again or the device comes back online). The board tab is
 redrawn only when something changed, and keyboard focus stays where it was.
 
-**Console (`DQB_HOST.inbox`).** When a board opens, and every 15 seconds while it is open, the console calls `pull(boardId)`,
-which resolves with `{open: {session, until, settings} | null, sessions: {<session>: settings}, entries: [{id, session, sid, name,
-msg, ts}]}` (`settings`: `{notes, zone, see, names, approve, shared}`). Every message is checked again as a live one would be:
+**Console (`DQB_HOST.inbox`).** When a board opens, and every 15 seconds while it is open, the console calls
+`pull(boardId, {have})`, which resolves with `{open: {session, until, settings} | null, sessions: {<session>: settings}, entries:
+[{id, session, sid, name, msg, ts}], more}` (`settings`: `{notes, zone, see, names, approve, shared}`). A host may hand entries
+over a part at a time, oldest first, with `more` when there are others after them. `have` lists the entries already in the
+console's approval queue: a host lists those as `{id, held: true}` without the message, and one no longer listed was taken back by
+its student. Every message is checked again as a live one would be:
 
 * Notes go into the zone the teacher chose (`settings.zone`), otherwise into a "From students" zone made the first time. With
   `approve` they wait in the approval queue and stay in the inbox until the teacher decides.

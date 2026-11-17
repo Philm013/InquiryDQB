@@ -260,7 +260,7 @@
       if (v.gone) { Box.closed(v.msg); return; }
       Box.fails = 0;
       Box.apply(v);
-      if (Box.viewing) Box.item(Box.viewing);
+      if (Box.viewing) Box.item(Box.viewing, !MediaPage.src);       // new comments; the picture itself only if it is not here yet
       Box.drain();
       Box.later(document.hidden ? 90000 : 20000);
     },
@@ -324,7 +324,7 @@
     /** Sends a message through the host, in order, one at a time. Everything waits in the outbox while offline. */
     send(msg, durable) {
       if (!msg || !Box.id) return false;
-      if (msg.type === 'VIEW') { Box.viewing = msg.item ? safeId(msg.item) : null; if (Box.viewing) Box.item(Box.viewing); return true; }
+      if (msg.type === 'VIEW') { Box.viewing = msg.item ? safeId(msg.item) : null; if (Box.viewing) Box.item(Box.viewing, true); return true; }
       if (!Box.TYPES.includes(msg.type)) return false;               // class activities (votes, polls, …) need the teacher there
       State.outbox = State.outbox.filter(m => !(m.id && m.id === msg.id && m.type === msg.type));
       State.outbox.push(msg);
@@ -359,11 +359,11 @@
         Store.saveNote(n);
       } else if (msg.type === 'ANNO_ADD' && status !== 'queued') MediaPage.onStatus({ aid: msg.id, status });
     },
-    /** One picture, video or card with the comments and drawings this student may see. */
-    async item(itemId) {
+    /** One picture, video or card with the comments and drawings this student may see (withSrc: the picture too). */
+    async item(itemId, withSrc) {
       const api = Box.api(), id = Box.id, gen = Box.gen;
       if (!api || typeof api.item !== 'function' || !id) return;
-      let d; try { d = await api.item(id, itemId); } catch (e) { return; }
+      let d; try { d = await api.item(id, itemId, { src: !!withSrc }); } catch (e) { return; }
       if (gen !== Box.gen || !d || typeof d !== 'object') return;
       if (d.closed) { Box.closed(d.msg); return; }
       MediaPage.onItem(Object.assign({}, d, { id: itemId }));

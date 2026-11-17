@@ -17,7 +17,7 @@ let env, PNG;
 /* ---- the fake site ---------------------------------------------------------------------------------------------------- */
 const site = {
   board: null, settings: null, until: '2031-06-01T15:00:00Z', closed: false,
-  inbox: [], nextId: 1, failSends: 0, acks: [], views: 0, saves: 0
+  inbox: [], nextId: 1, failSends: 0, acks: [], views: 0, saves: 0, part: 0, pulls: [], itemCalls: []
 };
 const copy = (x) => JSON.parse(JSON.stringify(x));
 const byId = () => Object.fromEntries(site.board.items.map((i) => [i.id, i]));
@@ -43,13 +43,14 @@ function view(sid) {
   }
   return { session: 7, board: { id: site.board.id, title: site.board.name }, until: site.until, teacher: 'Ms Rivera', lesson: 'Pond life', notes: { open: set.notes, zone: null }, rules: { names: set.names, approve: set.approve, peers: set.see }, shared, wall, mine };
 }
-function item(sid, itemId) {
+function item(sid, itemId, o) {
+  site.itemCalls.push(!!(o && o.src));
   if (site.closed) return { closed: true };
   const it = byId()[itemId];
   if (!it || !site.settings.shared.includes(itemId)) return { id: itemId, gone: true };
   const annos = (it.annos || []).slice();
   site.inbox.filter((r) => !r.merged && r.msg.type === 'ANNO_ADD' && r.msg.item === itemId).forEach((r) => { if (!annos.some((a) => a.id === r.msg.a.id)) annos.push({ ...r.msg.a, by: { n: r.name, r: 's', sid: r.sid }, ts: r.ts }); });
-  return { id: itemId, src: it.src, annos: annos.filter((a) => a.by.r === 't' || a.by.sid === sid || site.settings.see).map((a) => { const c = { ...a, by: { n: a.by.n, r: a.by.r } }; if (a.by.sid === sid) c.mine = true; return c; }) };
+  return { id: itemId, src: o && o.src ? it.src : null, annos: annos.filter((a) => a.by.r === 't' || a.by.sid === sid || site.settings.see).map((a) => { const c = { ...a, by: { n: a.by.n, r: a.by.r } }; if (a.by.sid === sid) c.mine = true; return c; }) };
 }
 function send(sid, name, msg) {
   if (site.closed) return { status: 'closed', msg: 'Your teacher closed this board.' };
@@ -63,21 +64,26 @@ function send(sid, name, msg) {
   site.inbox.push({ id: site.nextId++, sid, name, msg: copy(msg), ts: Date.now(), merged: false });
   return { status: site.settings.approve && ['NOTE', 'IMG_NOTE', 'ANNO_ADD'].includes(msg.type) ? 'pending' : 'queued' };
 }
-function pull() {
-  return {
-    open: site.closed ? null : { session: 7, until: site.until, settings: site.settings },
-    sessions: { 7: site.settings },
-    entries: site.inbox.filter((r) => !r.merged).map((r) => ({ id: r.id, session: 7, sid: r.sid, name: r.name, msg: r.msg, ts: r.ts }))
-  };
+/** As the site does it: oldest first, `part` new entries at a time (0: all), and the ones the console holds by id only. */
+function pull(have) {
+  const held = new Set(have || []);
+  site.pulls.push([...held]);
+  const entries = []; let n = 0, more = false;
+  for (const r of site.inbox.filter((x) => !x.merged)) {
+    if (held.has(r.id)) { entries.push({ id: r.id, held: true }); continue; }
+    if (more || (site.part && n >= site.part)) { more = true; continue; }
+    n++; entries.push({ id: r.id, session: 7, sid: r.sid, name: r.name, msg: r.msg, ts: r.ts });
+  }
+  return { open: site.closed ? null : { session: 7, until: site.until, settings: site.settings }, sessions: { 7: site.settings }, entries, more };
 }
 function siteCall(action, a) {
   a = a || {};
   switch (action) {
     case 'list': return site.closed ? [] : [{ id: 7, title: site.board.name, teacher: 'Ms Rivera', lesson: 'Pond life', until: site.until }];
     case 'view': return view(a.sid);
-    case 'item': return item(a.sid, a.itemId);
+    case 'item': return item(a.sid, a.itemId, a.o);
     case 'send': return send(a.sid, a.name, a.msg);
-    case 'pull': return pull();
+    case 'pull': return pull(a.have);
     case 'ack': { const ids = new Set(a.ids); site.inbox.forEach((r) => { if (ids.has(r.id)) r.merged = true; }); site.acks.push(a.ids.slice()); return { merged: a.ids.length }; }
     case 'boards': return [{ id: site.board.id, name: site.board.name, ts: site.board.ts, notes: site.board.items.filter((i) => i.type === 'note').length, preview: [] }];
     case 'load': return a.id === site.board.id ? copy(site.board) : null;
@@ -93,7 +99,7 @@ function studentHost(arg) {
     mailbox: {
       list: () => window.siteCall('list'),
       view: (id) => window.siteCall('view', { id, sid: arg.sid }),
-      item: (id, itemId) => window.siteCall('item', { id, itemId, sid: arg.sid }),
+      item: (id, itemId, o) => window.siteCall('item', { id, itemId, o, sid: arg.sid }),
       send: (id, msg) => window.siteCall('send', { id, msg, sid: arg.sid, name: arg.name })
     }
   };
@@ -106,7 +112,7 @@ function teacherHost() {
       list: () => window.siteCall('boards'), load: (id) => window.siteCall('load', { id }), save: (b) => window.siteCall('save', { board: b }),
       remove: async () => {}, rename: async () => {}
     },
-    inbox: { pull: (id) => window.siteCall('pull', { id }), ack: (id, ids) => window.siteCall('ack', { id, ids }), manageUrl: (id) => '/manage?open=' + id }
+    inbox: { pull: (id, o) => window.siteCall('pull', { id, have: o && o.have }), ack: (id, ids) => window.siteCall('ack', { id, ids }), manageUrl: (id) => '/manage?open=' + id }
   };
 }
 async function page(device, urlPath, init, arg) {
@@ -125,6 +131,8 @@ async function student(sid, name, urlPath) {
   if (await p.isVisible('#v-setup')) await p.click('#btn-setup');                 // the avatar, the first time
   return p;
 }
+/** The console asks the site now (after any pull already on its way). */
+const pullNow = (t) => t.evaluate(async () => { while (Inbox.busy) await new Promise((r) => setTimeout(r, 50)); await Inbox.pull(); });
 /** Asks the student app to check the site now (as when the page is shown again). */
 const refresh = (p) => p.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
 async function stageBox(p) {
@@ -200,6 +208,10 @@ test('a student works on a board open without the teacher: a note, a comment on 
   assert.equal(anno.msg.a.k, 'comment');
   assert.equal(anno.msg.a.text, 'Green algae near the edge');
   assert.equal(anno.msg.a.by, undefined, 'the student app never says who it is in the message: the site knows');
+  await refresh(maya);
+  for (let k = 0; k < 50 && site.itemCalls.length < 2; k++) await maya.waitForTimeout(100);
+  assert.deepEqual(site.itemCalls.slice(0, 2), [true, false], 'the picture is asked for once, then only the comments');
+  assert.equal(await maya.locator('#p-media .mv-stage img.mv-img').count(), 1, 'and it stays');
   await maya.click('#p-media [data-close]');
   await maya.context().close();
 });
@@ -263,6 +275,7 @@ test('with approval first, a note waits in the console’s queue and stays in th
   assert.equal(await teacher.evaluate(() => State.items.some((i) => i.text === 'The water is cloudy after rain')), false);
   await teacher.evaluate(() => Inbox.pull());
   assert.equal(await teacher.evaluate(() => State.pending.filter((p) => p.text === 'The water is cloudy after rain').length), 1, 'not queued twice');
+  assert.deepEqual(site.pulls[site.pulls.length - 1], [row.id], 'the console says it holds it, so it is listed without the message');
 
   await teacher.evaluate(() => Network.approve(State.pending.find((p) => p.text === 'The water is cloudy after rain').id, true));
   await teacher.waitForFunction(() => State.items.some((i) => i.text === 'The water is cloudy after rain' && i.parentZone), null, { timeout: 10000 });
@@ -285,6 +298,33 @@ test('with approval first, a note waits in the console’s queue and stays in th
   await ana.waitForFunction(() => [...document.querySelectorAll('.note-card')].some((c) => c.querySelector('.txt').textContent === 'lol' && c.querySelector('.status-rejected')), null, { timeout: 15000 });
   site.settings = { ...site.settings, approve: false };
   await ana.context().close();
+  await teacher.context().close();
+});
+
+test('a big inbox comes a part at a time; notes waiting for approval never hold up newer work', async () => {
+  site.settings = { ...site.settings, approve: true };
+  const add = (sid, name, text) => site.inbox.push({ id: site.nextId++, sid, name, msg: { type: 'NOTE', id: 'p' + site.nextId, sub: 'idea', text }, ts: Date.now(), merged: false });
+  for (let k = 0; k < 3; k++) add('tt-sam0Account0000001', 'Sam', 'Waiting ' + k);
+  site.part = 2;
+  const teacher = await page('desktop', '/Teacher/', teacherHost);
+  await teacher.waitForFunction(() => State.id === 'bOpen1' && State.pending.filter((p) => /^Waiting /.test(p.text)).length === 2, null, { timeout: 20000 });
+  // the next pull lists those two by id only, so the third fits in the part
+  await pullNow(teacher);
+  await teacher.waitForFunction(() => State.pending.filter((p) => /^Waiting /.test(p.text)).length === 3, null, { timeout: 10000 });
+  site.settings = { ...site.settings, approve: false };
+  for (let k = 0; k < 3; k++) add('tt-sam0Account0000001', 'Sam', 'Straight on ' + k);
+  await pullNow(teacher);
+  await teacher.waitForFunction(() => State.items.filter((i) => /^Straight on /.test(i.text)).length >= 2, null, { timeout: 10000 });
+  await teacher.waitForFunction(() => State.items.filter((i) => /^Straight on /.test(i.text)).length === 3, null, { timeout: 25000 });   // the rest follows by itself
+  assert.equal(await teacher.evaluate(() => State.pending.filter((p) => /^Waiting /.test(p.text)).length), 3, 'the queue is unchanged');
+  // a student takes one back: it leaves the queue
+  site.inbox = site.inbox.filter((r) => r.msg.text !== 'Waiting 1');
+  await pullNow(teacher);
+  assert.deepEqual(await teacher.evaluate(() => State.pending.filter((p) => /^Waiting /.test(p.text)).map((p) => p.text)), ['Waiting 0', 'Waiting 2']);
+  await teacher.evaluate(() => Network.approveAll());
+  for (let k = 0; k < 80 && site.inbox.some((r) => !r.merged); k++) await teacher.waitForTimeout(100);
+  assert.ok(site.inbox.every((r) => r.merged), 'all taken in');
+  site.part = 0;
   await teacher.context().close();
 });
 

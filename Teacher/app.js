@@ -4199,7 +4199,8 @@ window.Inbox = {
         Inbox.busy = true;
         try {
             let res;
-            try { res = await api.pull(board); } catch (e) { return; }                // offline: next time
+            const have = State.pending.filter(p => p.inbox).map(p => p.inbox);         // already in the approval queue: listed, not sent again
+            try { res = await api.pull(board, { have }); } catch (e) { return; }      // offline: next time
             if (State.id !== board || !res || typeof res !== 'object') return;
             Inbox.setOpen(res.open);
             const sessions = res.sessions && typeof res.sessions === 'object' ? res.sessions : {};
@@ -4208,15 +4209,15 @@ window.Inbox = {
             let changed = false;
             entries.forEach(e => {
                 const id = Number(e && e.id);
-                if (!(id > 0) || Inbox.taken.has(id)) return;
+                if (!(id > 0) || Inbox.taken.has(id) || e.held) return;
                 let r = {};
                 try { r = Inbox.merge(e, Inbox.settings(sessions[e.session])); } catch (err) { console.warn('Inbox: could not take in', err); }
                 if (r.kind) { counts[r.kind]++; if (r.kind !== 'explore') changed = true; }
                 if (r.wait) return;                                                      // a note waiting for approval stays in the inbox
                 Inbox.taken.add(id); done.push(id);
             });
-            // notes in the approval queue that their student took back (the host no longer has them)
-            if (entries.length < 500) {
+            // notes in the approval queue that their student took back (the host no longer lists them)
+            if (entries.length < 1000) {
                 const there = new Set(entries.map(e => Number(e && e.id)));
                 const before = State.pending.length;
                 State.pending = State.pending.filter(p => !p.inbox || there.has(p.inbox));
@@ -4226,6 +4227,7 @@ window.Inbox = {
             if (done.length) { if (changed) Board.save(true); Inbox.toAck.push({ ids: done, rev: Board.rev }); }
             Inbox.toast(counts);
             Inbox.flushAcks();
+            if (res.more && done.length) setTimeout(() => Inbox.pull(), 6000);       // the rest, once these are saved and acknowledged
         } finally { Inbox.busy = false; }
     },
     /** One message, checked like a live one. Returns { kind } when it added something, { wait: true } for a note waiting for approval. */

@@ -77,3 +77,25 @@ test('dialogs that follow each other (Insert › Link) stay on the board, with r
     await p.context().close();
   }
 });
+
+test('a sheet that opens while the browser is still going back for the last one keeps its place in history', async () => {
+  const p = await phoneTeacher();
+  for (let k = 0; k < 3; k++) {
+    await p.evaluate(async () => {
+      const a = DQBUI.Overlay.open({ title: 'First', content: 'x' });
+      a.close();
+      await new Promise((r) => setTimeout(r, 0));                     // the batched "back" is on its way now
+      const b = DQBUI.Overlay.open({ title: 'Second', content: 'y' });    // …and this sheet opens before the browser gets there
+      b.close();
+    });
+    await p.waitForTimeout(500);
+    await onBoard(p);
+  }
+  // the back gesture still closes exactly one sheet
+  await p.evaluate(() => { DQBUI.Overlay.open({ title: 'Third', content: 'z' }); });
+  await p.goBack({ waitUntil: 'commit' }).catch(() => {});
+  await p.waitForTimeout(500);
+  assert.equal(await p.locator('.ov').count(), 0);
+  await onBoard(p);
+  await p.context().close();
+});

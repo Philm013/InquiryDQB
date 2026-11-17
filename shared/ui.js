@@ -123,16 +123,27 @@
     // same moment (a menu sheet handing over to another sheet, or chained dialogs) used to leave the browser one entry below
     // the app: the next close then went back a page too far and left the board. Closes are therefore batched until the next
     // task, an entry that opens meanwhile takes over the one a closing sheet left, and the rest go back in one step.
-    var stack = [], ignore = 0, pendingBack = 0, timer = null;
+    // While the browser is still on its way back (`travelling`), new entries are pushed only once it arrives (`deferred`):
+    // a pushState in between would be left above the entry the browser lands on.
+    var stack = [], ignore = 0, pendingBack = 0, timer = null, travelling = false, deferred = 0, travelT = null;
+    function pushState() { try { global.history.pushState({ dqb: stack.length }, ''); return true; } catch (e) { return false; } }
+    function arrived() {
+      travelling = false; clearTimeout(travelT);
+      while (deferred > 0) { deferred--; pushState(); }
+    }
     function flush() {
       timer = null;
       var n = pendingBack; pendingBack = 0;
-      if (n > 0) { ignore++; try { global.history.go(-n); } catch (e) { ignore--; } }   // one traversal, one popstate
+      if (n <= 0) return;
+      ignore++; travelling = true;
+      clearTimeout(travelT); travelT = setTimeout(function () { if (travelling) { ignore = Math.max(0, ignore - 1); arrived(); } }, 1500);  // no popstate came
+      try { global.history.go(-n); } catch (e) { ignore--; arrived(); }                    // one traversal, one popstate
     }
     function push(entry) {
       if (pendingBack > 0) { pendingBack--; stack.push(entry); return; }                 // reuse the entry just left behind
-      try { global.history.pushState({ dqb: stack.length + 1 }, ''); } catch (e) { entry.noHist = true; }
       stack.push(entry);
+      if (travelling) { deferred++; return; }
+      if (!pushState()) entry.noHist = true;
     }
     /** Called when a sheet/page closes by itself (button, programmatic) rather than via the back button. */
     function remove(entry) {
@@ -140,6 +151,7 @@
       if (i < 0 || entry.noHist) { if (i > -1) stack.splice(i, 1); return; }
       if (i === stack.length - 1) {
         stack.pop();
+        if (deferred > 0) { deferred--; return; }  // its browser entry was never made
         while (stack.length && stack[stack.length - 1].dead) { stack.pop(); pendingBack++; }   // entries already closed under it
         pendingBack++;
         if (!timer) timer = setTimeout(flush, 0);
@@ -147,7 +159,7 @@
       else entry.dead = true;                       // not on top: leave the browser entry, ignore it later
     }
     global.addEventListener('popstate', function () {
-      if (ignore > 0) { ignore--; return; }
+      if (ignore > 0) { ignore--; arrived(); return; }
       var e = stack.pop();
       if (e && !e.dead && e.onPop) e.onPop();
     });

@@ -823,6 +823,7 @@ window.Board = {
         Render.start();
         if (window.Shell) Shell.enterBoard(opts);
         if (!State.isCoHost) Network.host();
+        if (window.Inbox) Inbox.start();       // what students added while the board was open without the console
         if (State.id) {
             if (window._autoSaveInterval) clearInterval(window._autoSaveInterval);
             window._autoSaveInterval = setInterval(() => Board.save(true, true), 30000);   // a safety net: writes only what changed
@@ -849,6 +850,7 @@ window.Board = {
         try {
             if (changed || !Board._ts) await DB.save({ id: State.id, name: State.name, items: State.items, ink: State.ink, view: State.view, ts });
             Board._ts = ts; Board._localRev = rev;
+            if (!Board.cloud() && window.Inbox) Inbox.flushAcks();
             if (Board.cloud() && rev !== Board._cloudRev) { Board._cloudDirty = true; Board.cloudSave(); }
             else if (window.Shell && !Board._cloudBusy && !Board._cloudDirty) Shell.setSave('saved');
         } catch (error) {
@@ -874,7 +876,7 @@ window.Board = {
         const id = State.id, rev = Board.rev;
         try {
             await Board.within(cloud.save({ id, name: State.name, items: State.items, ink: State.ink, view: State.view, ts: Board._ts || Date.now() }), 30000);
-            if (State.id === id) Board._cloudRev = rev;
+            if (State.id === id) { Board._cloudRev = rev; if (window.Inbox) Inbox.flushAcks(); }
             if (State.id === id && Board.rev !== rev) Board._cloudAgain = true;                // changed while it was on its way
             else if (window.Shell && State.id === id) Shell.setSave('saved', null, true);
             return true;
@@ -4106,9 +4108,10 @@ window.Network = {
         const p = State.pending.splice(k, 1)[0];
         const stu = Object.values(State.students).find(s => s.sid === p.sid);
         if (ok) {
-            const { zoneId, ts, studentName, avatar, ...item } = p;
-            Network._placeNote(item, zoneId);
+            const { zoneId, ts, studentName, avatar, inbox, openSet, ...item } = p;
+            Network._placeNote(item, inbox ? Inbox.zoneFor(openSet) : zoneId);
         }
+        if (p.inbox) Inbox.decided(p.inbox);                // from the board's inbox: the host can let it go
         if (stu) SafeSend(stu.conn, { type: 'NOTE_STATUS', id, status: ok ? 'approved' : 'rejected', reason: ok ? undefined : 'declined' });
         Shell.syncQueue();
     },
@@ -4168,6 +4171,211 @@ window.Network = {
         else Object.values(State.students).forEach(s => { if (s.role === 'cohost') msgs.forEach(m => SafeSend(s.conn, m)); });
     }
 };
+
+/* --- STUDENTS' WORK FROM WHILE THE BOARD WAS CLOSED (DQB_HOST.inbox) ---
+   A host site can leave a board open for its students without the console: it keeps what they add (the messages a live board
+   gets) in an inbox. The console takes the inbox in when the board opens, and every few seconds while it is open, checks every
+   message again as it would a live one, and tells the host what it took in once the board is saved, so nothing is lost or
+   added twice. Notes waiting for approval stay in the inbox until the teacher decides. What students did is counted by the host
+   when they did it, so nothing here is counted again. */
+window.Inbox = {
+    timer: null, busy: false, board: null, taken: new Set(), toAck: [], open: null,
+    api: () => { const b = DQBUI.host().inbox; return b && typeof b.pull === 'function' && typeof b.ack === 'function' ? b : null; },
+    start: () => {
+        clearInterval(Inbox.timer); Inbox.timer = null;
+        Inbox.board = State.id; Inbox.taken = new Set(); Inbox.toAck = []; Inbox.setOpen(null);
+        if (!Inbox.api() || State.isCoHost || !State.id) return;
+        Inbox.pull();
+        Inbox.timer = setInterval(() => { if (!document.hidden) Inbox.pull(); }, 15000);
+    },
+    /** How the host opened the board for the session a message came from. */
+    settings: (s) => {
+        s = s && typeof s === 'object' ? s : {};
+        return { notes: !!s.notes, zone: safeId(s.zone) || '', see: !!s.see, names: s.names !== false, approve: !!s.approve, shared: (Array.isArray(s.shared) ? s.shared : []).slice(0, 50).map(safeId).filter(Boolean) };
+    },
+    pull: async () => {
+        const api = Inbox.api(), board = State.id;
+        if (!api || Inbox.busy || !board || board !== Inbox.board || State.isCoHost) return;
+        Inbox.busy = true;
+        try {
+            let res;
+            try { res = await api.pull(board); } catch (e) { return; }                // offline: next time
+            if (State.id !== board || !res || typeof res !== 'object') return;
+            Inbox.setOpen(res.open);
+            const sessions = res.sessions && typeof res.sessions === 'object' ? res.sessions : {};
+            const entries = (Array.isArray(res.entries) ? res.entries : []).slice(0, 1000);
+            const counts = { note: 0, comment: 0, markup: 0, explore: 0 }, done = [];
+            let changed = false;
+            entries.forEach(e => {
+                const id = Number(e && e.id);
+                if (!(id > 0) || Inbox.taken.has(id)) return;
+                let r = {};
+                try { r = Inbox.merge(e, Inbox.settings(sessions[e.session])); } catch (err) { console.warn('Inbox: could not take in', err); }
+                if (r.kind) { counts[r.kind]++; if (r.kind !== 'explore') changed = true; }
+                if (r.wait) return;                                                      // a note waiting for approval stays in the inbox
+                Inbox.taken.add(id); done.push(id);
+            });
+            // notes in the approval queue that their student took back (the host no longer has them)
+            if (entries.length < 500) {
+                const there = new Set(entries.map(e => Number(e && e.id)));
+                const before = State.pending.length;
+                State.pending = State.pending.filter(p => !p.inbox || there.has(p.inbox));
+                if (State.pending.length !== before) Shell.syncQueue();
+            }
+            if (counts.explore) Network._exploreChanged();
+            if (done.length) { if (changed) Board.save(true); Inbox.toAck.push({ ids: done, rev: Board.rev }); }
+            Inbox.toast(counts);
+            Inbox.flushAcks();
+        } finally { Inbox.busy = false; }
+    },
+    /** One message, checked like a live one. Returns { kind } when it added something, { wait: true } for a note waiting for approval. */
+    merge: (e, set) => {
+        const sid = safeId(e.sid), d = e.msg && typeof e.msg === 'object' ? e.msg : null;
+        if (!sid || !d || State.blocked[sid]) return {};
+        const name = clampStr(String(e.name || '').replace(/[\u0000-\u001f<>]/g, ''), 24).trim() || 'Student';
+        switch (d.type) {
+            case 'NOTE': case 'IMG_NOTE': return Inbox.note(e, d, sid, name, set);
+            case 'DELETE_NOTE': {
+                const id = safeId(d.id); if (!id) return {};
+                const k = State.pending.findIndex(p => p.id === id && p.sid === sid);
+                if (k > -1) { const p = State.pending.splice(k, 1)[0]; if (p.inbox) Inbox.decided(p.inbox); Shell.syncQueue(); }
+                const it = State.items.find(x => x.id === id);
+                if (it && it.sid === sid) HierarchyManager.delete([id]);
+                return {};
+            }
+            case 'ANNO_ADD': return Inbox.anno(e, d, sid, name, set);
+            case 'ANNO_DEL': {
+                const it = Inbox.visible(set, safeId(d.item));
+                if (!it || !Array.isArray(it.annos)) return {};
+                const ids = (Array.isArray(d.ids) ? d.ids : []).map(safeId).filter(Boolean).slice(0, 800);
+                const gone = new Set(ids.filter(x => it.annos.some(a => a.id === x && a.by && a.by.sid === sid)));
+                if (!gone.size) return {};
+                it.annos.forEach(a => { if (a.re && gone.has(a.re)) gone.add(a.id); });
+                StateManager.setAnnos(it.id, it.annos.filter(a => !gone.has(a.id)));
+                return {};
+            }
+            case 'EXPLORE': {
+                // progress shows on a zone the console is sharing now; the host has counted it either way
+                const z = State.items.find(i => i.id === safeId(d.set) && i.type === 'zone');
+                if (!z || !set.shared.includes(z.id) || !State.shared.includes(z.id)) return {};
+                const id = safeId(d.id); if (!id || !Network.setItems(z).some(i => i.id === id)) return {};
+                const bySid = State.explore[z.id] || (State.explore[z.id] = {});
+                const rec = bySid[sid] || (bySid[sid] = {});
+                const cur = rec[id] || {};
+                rec[id] = { o: !!(cur.o || d.open || d.done), d: typeof d.done === 'boolean' ? d.done : !!cur.d, s: typeof d.star === 'boolean' ? d.star : !!cur.s };
+                return { kind: 'explore' };
+            }
+        }
+        return {};
+    },
+    note: (e, d, sid, name, set) => {
+        const id = safeId(d.id);
+        if (!id || !set.notes) return {};
+        const existing = State.items.find(x => x.id === id);
+        if (existing && existing.sid !== sid) return {};                               // someone else's note
+        if (!existing && State.items.filter(x => x.sid === sid).length >= 80) return {};
+        const author = set.names ? name : 'Student';
+        let item;
+        if (d.type === 'NOTE') {
+            const text = clampStr(d.text, 1000); if (!text.trim()) return {};
+            const sub = NOTE_SUBS_STUDENT.includes(d.sub) ? d.sub : 'notice';
+            if (existing) { if (existing.text !== text || existing.sub !== sub) StateManager.updateItem(id, { text, sub }); return {}; }
+            item = { id, type: 'note', sub, text, author, sid, w: 220, h: 170, votes: 0, groupId: null };
+        } else {
+            const src = safeImg(d.src, 1500000); if (!src || existing) return {};
+            item = { id, type: 'note', sub: 'sketch', src, text: clampStr(d.text, 120), author, sid, w: 240, h: 240, votes: 0, groupId: null };
+        }
+        if (set.approve) {
+            if (State.pending.some(p => p.id === id)) return { wait: true };
+            State.pending.push({ ...item, zoneId: null, ts: Number(e.ts) || Date.now(), studentName: name, avatar: '📬', inbox: Number(e.id), openSet: set });
+            Shell.syncQueue(true);
+            return { wait: true, kind: 'note' };
+        }
+        Network._placeNote(item, Inbox.zoneFor(set));
+        return { kind: 'note' };
+    },
+    anno: (e, d, sid, name, set) => {
+        const it = Inbox.visible(set, safeId(d.item));
+        if (!it) return {};
+        const list = it.annos || [];
+        const aid = safeId(d.a && d.a.id) || safeId(d.id);
+        if (!aid || list.some(a => a.id === aid)) return {};
+        if (list.length >= DQBMedia.LIMITS.perItem || list.filter(a => a.by && a.by.sid === sid).length >= DQBMedia.LIMITS.perStudent) return {};
+        const a = DQBMedia.cleanAnno({ ...(d.a && typeof d.a === 'object' ? d.a : {}), id: aid, by: { n: name, r: 's', sid }, ts: Number(e.ts) || Date.now(), pend: !!set.approve, mine: false }, { student: true, video: it.kind === 'video' });
+        if (!a || (it.type === 'link' && a.k !== 'comment')) return {};
+        if (it.type === 'link') { delete a.x; delete a.y; delete a.t; delete a.t2; }
+        if (a.re && !list.some(x => x.id === a.re && x.k === 'comment' && !x.re)) delete a.re;
+        StateManager.setAnnos(it.id, list.concat([a]));
+        return { kind: a.k === 'ink' ? 'markup' : 'comment' };
+    },
+    /** A card, picture or video the opening shared: on its own, or in a shared zone. */
+    visible: (set, id) => {
+        const it = id && State.items.find(i => i.id === id && (i.type === 'media' || i.type === 'link'));
+        if (!it) return null;
+        if (set.shared.includes(id)) return it;
+        return set.shared.some(zid => { const z = State.items.find(i => i.id === zid && i.type === 'zone'); return z && (z.children || []).includes(id); }) ? it : null;
+    },
+    /** Where the opening's notes go: the zone the teacher chose, or a "From students" zone (made the first time it is needed). */
+    zoneFor: (set) => {
+        const want = set && set.zone ? State.items.find(z => z.id === set.zone && z.type === 'zone' && !z.zoneType) : null;
+        if (want) return want.id;
+        let z = State.items.find(i => i.type === 'zone' && !i.zoneType && i.title === 'From students');
+        if (!z) {
+            const w = 400, h = 440, b = Viewport.contentBounds(), c = Viewport.centerWorld();
+            const pos = b ? Board.getFreeSpace(b.maxX + 80, b.minY + 30, w, h) : Board.getFreeSpace(c.x - w / 2, c.y - h / 2, w, h);
+            z = { id: genId(), type: 'zone', title: 'From students', x: pos.x, y: pos.y, w, h, children: [] };
+            StateManager.addItem(z);
+        }
+        return z.id;
+    },
+    /** The teacher approved or declined a note from the inbox: the host can let it go once the board is saved. */
+    decided: (inboxId) => {
+        if (!(inboxId > 0)) return;
+        Inbox.taken.add(inboxId);
+        Board.save(true);
+        Inbox.toAck.push({ ids: [inboxId], rev: Board.rev });
+    },
+    /** Tells the host which messages are in the board, once the board holding them is saved (in the account, if there is one). */
+    flushAcks: async () => {
+        const api = Inbox.api(), board = Inbox.board;
+        if (!api || !board || State.id !== board || !Inbox.toAck.length) return;
+        const saved = Board.cloud() ? Board._cloudRev : Board._localRev;
+        const ready = Inbox.toAck.filter(a => saved >= a.rev);
+        if (!ready.length) return;
+        Inbox.toAck = Inbox.toAck.filter(a => saved < a.rev);
+        try { await api.ack(board, [].concat(...ready.map(a => a.ids))); }
+        catch (e) { if (State.id === board) Inbox.toAck = ready.concat(Inbox.toAck); }   // asked again after the next save or pull
+    },
+    toast: (c) => {
+        const parts = [];
+        if (c.note) parts.push(`${c.note} note${c.note === 1 ? '' : 's'}`);
+        if (c.comment) parts.push(`${c.comment} comment${c.comment === 1 ? '' : 's'}`);
+        if (c.markup) parts.push(`${c.markup} drawing${c.markup === 1 ? '' : 's'}`);
+        if (parts.length) UI.toast(`From students: ${parts.join(', ')}`, 'success');
+    },
+    /** The board is open for students now (the host says so): a chip in the top bar, with when it closes. */
+    setOpen: (o) => {
+        const el = $('open-chip');
+        Inbox.open = o && typeof o === 'object' ? { until: o.until ? new Date(o.until) : null } : null;
+        if (!el) return;
+        el.hidden = !Inbox.open;
+        if (!Inbox.open) return;
+        const u = Inbox.open.until && !isNaN(Inbox.open.until.getTime()) ? Inbox.open.until : null;
+        let when = '';
+        try { when = u ? u.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : ''; } catch (e) { when = ''; }
+        const label = when ? `Open until ${when}` : 'Open for students';
+        const txt = $('open-label'); if (txt && txt.textContent !== label) txt.textContent = label;
+        el.setAttribute('aria-label', `${label}: students can add to this board without you`);
+    },
+    explain: async () => {
+        const api = Inbox.api(), url = api && typeof api.manageUrl === 'function' ? String(api.manageUrl(State.id) || '') : '';
+        const msg = 'The students you chose can add to this board while you are not running it. What they add appears here: when you open the board, and within a few seconds while it is open.';
+        if (!/^(https?:\/\/|\/)/.test(url)) { DQBUI.Dialog.alert({ title: 'Open for students', message: msg, icon: 'exit' }); return; }
+        const ok = await DQBUI.Dialog.confirm({ title: 'Open for students', message: msg + ' Change who can join, or close it, on the website.', confirmLabel: 'Change or close', icon: 'exit' });
+        if (ok) window.open(url, '_blank', 'noopener');
+    }
+};
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('#open-chip')) Inbox.explain(); });
 
 /* --- WORKSPACE ROUTER: the same top bar / rail / bottom nav drive the board, a consensus model, or a breakout room --- */
 window.Workspace = {

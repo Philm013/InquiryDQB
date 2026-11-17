@@ -96,6 +96,17 @@ A student note's `zoneId` is honoured only if that zone is in the student's own 
 
 Strokes are picked by geometry (`InkTools.hit`, a fixed number of screen pixels, wider for fingers), not by their thin painted paths. Each canvas has an `InkSel` controller (`InkSel.board`, `.consensus`, `.breakout`) holding the selected stroke ids and an adapter for that canvas's storage, history and network sync, so recolour, thickness, move, duplicate, delete and "make one note" behave the same everywhere. On the board a box selection, Shift-click, Ctrl/⌘A, arrow keys and Delete act on notes and ink together, as one undo step (`StateManager.batch`). "Make one note" renders the selected strokes into a single transparent PNG (`InkTools.toImage`, capped so it syncs to students) and places the note where the drawing was; "Pin ink as notes" makes one note per drawing (strokes within 60 px of each other).
 
+### Boards open without the teacher
+
+A host site can keep a board open for students while no console runs it (`DQB_HOST.mailbox` in the student app,
+`DQB_HOST.inbox` in the console; see [EMBEDDING.md](EMBEDDING.md#boards-open-without-the-teacher)). In the student app, `Box`
+replaces the peer connection: `Conn.start({open: id})` hands over to `Box.start`, and `Conn.send` goes to `Box.send`, which keeps
+the durable messages in the same outbox and sends them to the host one at a time, in order. A view from the host
+(`Box.apply`) sets the activity (`OPEN` when notes are allowed), what is shared, the class rules and each note's status
+(`sent`: kept for the teacher). On the console, `Inbox` takes the host's inbox in with the same checks as `Network.handle`. It puts
+notes in a zone (or the approval queue), annotations on their items, exploring on shared zones, and acknowledges messages only
+after `Board.flush` / `Board.cloudFlush` have saved the board that holds them.
+
 ### Connection behaviour
 
 - The host sends `HEARTBEAT` every 3 s. A student that hears nothing for 10 s closes the connection and reconnects with exponential back-off (1 s doubling to 15 s, with jitter). Visibility and `online` events retry immediately.
@@ -141,13 +152,14 @@ See [EMBEDDING.md](EMBEDDING.md). **Link cards** (`type: 'link'`) and **sharing*
 | `security.test.js` | A hostile client: injected names and text, forbidden messages, spoofed ids, bad images, wrong co-host key, oversize and flood |
 | `teacher-ui.test.js` | Pointer and keyboard editing on desktop, changing type and locking several notes at once, exports, co-host (including live zones and deletions mirrored from the host), persistence; phone navigation and back button |
 | `site.test.js` | Landing page, no third-party requests, manifests and precache list, offline start-up, all-or-nothing install with a retry, slow replies |
-| `a11y.test.js` | axe-core audit (WCAG 2.0/2.1 A + AA, best practices) of the landing page, teacher console (including selected ink, the Groups sheet and open zones) and student app (including choosing a zone) in light and dark themes, on desktop and phone |
+| `a11y.test.js` | axe-core audit (WCAG 2.0/2.1 A + AA, best practices) of the landing page, teacher console (including selected ink, the Groups sheet and open zones) and student app (including choosing a zone and a board open without the teacher) in light and dark themes, on desktop and phone |
 | `load.test.js` | A full class: 30 students join at once and send 90 notes; nothing overlaps and the host stays responsive |
 | `legacy.test.js` | Boards and notes saved by earlier versions (same IndexedDB databases) still open, and hostile text inside them stays inert |
 | `touch.test.js` | Real touch input on a phone: drawing a sketch, panning, dragging a note and pinch-zooming the board |
 | `media.test.js` | Video addresses, safe media items and annotations, the viewer on the console (pins, drawing, callouts, hotspots; moments, timeline and seeking on a video file), YouTube and Vimeo stand-ins driven through their postMessage protocols and loaded only on play, students annotating over WebRTC, class rules (names, classmates' comments, approval), a hotspot pausing a student's video, hostile annotation messages and limits, undo leaving annotations alone |
 | `explore.test.js` | Collections with videos, a zone shared as a set (cards, pictures, videos, the teacher's prompt), opening / finishing / starring with progress on the console and after a reload, group-only sets, the set following the board and being withdrawn, vote and rank on resources |
 | `history.test.js` | The browser history behind sheets: a sheet handing over to another, chained dialogs (also with reduced motion) and a sheet opening while the browser is still going back never leave the board |
+| `mailbox.test.js` | A board open without the teacher, through a fake site: a student's note, a comment on a shared picture and the board's notes; the console taking the inbox in (a "From students" zone, annotations, nothing twice) and acknowledging only after saving; approval first (kept in the inbox until the teacher decides; declined notes reported); the offline outbox; a closed board; the join list and coming back after a reload; notes kept private |
 | `host.test.js` | A fake host (`DQB_HOST`): boards saved to and opened from the account on a second device, no re-upload when nothing changed, the library (cards, pictures, whole collections, unsafe results dropped), Insert › Link, signed-in students (fixed name, check mark, group, contributions), the admission rule, shared links (late joiners, hostile messages, withdrawal on delete), share / groups / join-screen additions |
 
 ## Extending

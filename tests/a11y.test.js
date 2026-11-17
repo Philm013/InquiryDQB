@@ -242,3 +242,57 @@ for (const scheme of ['light', 'dark']) {
     await clean(s, `student hotspot revealed ${scheme}`);
   });
 }
+
+/* Boards open without the teacher: the student app on the host site's mailbox, and the console's "Open for students" chip. */
+function openBoardHost() {
+  const view = {
+    session: 7, board: { id: 'b1', title: 'Pond study' }, until: '2031-06-01T15:00:00Z', teacher: 'Ms Rivera', lesson: 'Pond life',
+    notes: { open: true, zone: { id: 'z1', title: 'Our questions' } }, rules: { names: true, approve: false, peers: true },
+    shared: [{ id: 'set1', type: 'set', title: 'Pond creatures', items: [{ id: 'l1', type: 'link', title: 'Frog life cycle', url: 'https://example.org/frog' }] }],
+    wall: { zones: [{ id: 'z1', title: 'Our questions', notes: [
+      { id: 'n1', sub: 'wonder', text: 'Why is the water green?', author: 'Ms Rivera' },
+      { id: 'n2', sub: 'idea', text: 'Count the tadpoles each week', author: 'You', mine: true, waiting: true },
+      { id: 'n3', sub: 'notice', text: 'Tadpoles near the reeds', author: 'Ben', waiting: true }] }], loose: [{ id: 'n4', sub: 'test', text: '', author: 'Ana', sketch: true }] },
+    mine: { n2: 'queued' }
+  };
+  window.DQB_HOST = {
+    identity: { sid: 'tt-mayaAccount000001', name: 'Maya' }, live: async () => [],
+    mailbox: { list: async () => [{ id: 7, title: 'Pond study', teacher: 'Ms Rivera', lesson: 'Pond life', until: '2031-06-01T15:00:00Z' }], view: async () => view, item: async (id, itemId) => ({ id: itemId, annos: [] }), send: async () => ({ status: 'queued' }) }
+  };
+  try { localStorage.setItem('dqb_av:tt-mayaAccount000001', '🦊'); } catch (e) { /* ignore */ }
+}
+for (const scheme of ['light', 'dark']) {
+  test(`a board open without the teacher (${scheme})`, async () => {
+    const c = await env.context('phone', { colorScheme: scheme, bypassCSP: true });
+    await c.addInitScript(openBoardHost);
+    const s = await c.newPage();
+    await s.goto(env.origin + '/Student/');
+    await s.waitForSelector('#live-list .open-item');
+    await clean(s, `student join list with an open board ${scheme}`);
+    await s.goto(env.origin + '/Student/?open=7');
+    await s.waitForSelector('.open-card');
+    await s.waitForTimeout(2600);                                                   // let the welcome toast clear
+    await clean(s, `student open board ${scheme}`);
+    await s.click('[data-act="open-wall"]');
+    await s.waitForSelector('#p-wall .wall-note');
+    await clean(s, `student board notes ${scheme}`);
+    await s.click('#p-wall [data-close]');
+    await s.waitForSelector('#p-wall', { state: 'hidden' });
+    await s.click('.type-tile.t-idea');
+    await s.fill('#w-txt', 'Count the tadpoles each week');
+    await s.click('#w-send');
+    await s.waitForSelector('#p-write', { state: 'hidden' });
+    await s.click('#tab-notes');
+    await s.waitForSelector('.note-card .status-sent');
+    await s.waitForTimeout(2600);                                                   // the toast clears and the view fades in
+    await clean(s, `student my notes on an open board ${scheme}`);
+
+    const t = await (await env.context('desktop', { colorScheme: scheme, bypassCSP: true })).newPage();
+    await t.goto(env.origin + '/Teacher/');
+    await t.click('#btn-new-board');
+    await t.waitForFunction(() => window.Network && Network.status === 'ready');
+    await t.evaluate(() => { Inbox.setOpen({ until: '2031-06-01T15:00:00Z' }); DQBUI.Overlay.closeAll(); document.activeElement && document.activeElement.blur(); });
+    await t.waitForSelector('#open-chip:not([hidden])');
+    await clean(t, `teacher board open for students ${scheme}`);
+  });
+}

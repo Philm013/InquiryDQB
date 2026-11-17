@@ -78,6 +78,8 @@ svg { overflow: visible; }
 .save-status { display: inline-flex; align-items: center; gap: 5px; padding: 0 10px 0 4px; font-size: 0.75rem; font-weight: 600; color: var(--text-3); white-space: nowrap; }
 .save-status.saving { color: var(--warn); } .save-status.err { color: var(--danger); }
 .conn-chip { cursor: pointer; height: 34px; }
+.open-chip { cursor: pointer; height: 34px; background: var(--accent-50); color: var(--accent-ink); border-color: var(--accent-100); }
+.open-chip[hidden] { display: none; }
 .conn-chip.ready { background: var(--success-50); color: var(--success); }
 .conn-chip.error { background: var(--danger-50); color: var(--danger); }
 .conn-chip.connecting { background: var(--warn-50); color: var(--warn); }

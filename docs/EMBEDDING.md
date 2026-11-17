@@ -32,6 +32,7 @@ and boards loaded from a host are sanitised item by item like anything that arri
 | `groupActions` | `[{label, hint, run()}]` | Extra buttons in the Groups sheet (e.g. "Use my class groups") |
 | `share` | `{title, label, status(), open(info)}` | A block at the top of the Share sheet (e.g. "Send to my class"); `open` gets `{code, url, boardId, name}` |
 | `verifiedLabel` | string | Tooltip of the roster check mark |
+| `inbox` | `{pull(boardId), ack(boardId, ids), manageUrl(boardId)}` (promises) | Takes in what students added while the board was open for them without the console (see [Boards open without the teacher](#boards-open-without-the-teacher)). `manageUrl` is the host's page for changing or closing that, opened from the "Open until …" chip in the top bar |
 
 ### Events
 
@@ -55,6 +56,44 @@ participation without patching the app:
 | `identity` | `{sid, name}` | A signed-in student: the host issues the `sid` and the name (fixed; only the avatar can be chosen, remembered per account). Nothing about the account is stored for the next guest on the device, and "My notes" shows only this student's notes |
 | `identityHint` | string | Text under the fixed name |
 | `live` | `() => Promise<[{code, title, teacher, lesson}]>` | "Live now" boards on the join screen, joined with one tap |
+| `mailbox` | `{list(), view(id), item(id, itemId), send(id, msg)}` (promises) | Boards open for this student without the teacher's console: "Open for you" on the join screen, `?open=<id>` in the address (see below) |
+
+## Boards open without the teacher
+
+Normally a board is live only while its teacher has the console open: the console is the host students connect to. A host site
+can also leave a board **open for students** while nobody runs it, for homework or a station. The site then stands in for the
+console. It shows students what the teacher shared and, if the teacher allows, the notes on the board. It also keeps what they
+add (the same messages a live board gets) in an inbox until the console takes it in.
+
+**Student app (`DQB_HOST.mailbox`).** `?open=<id>` (or "Open for you" on the join screen) opens the board through the host instead
+of a peer connection. The board tab shows the board's name and closing time, what is shared and the note tiles, plus "See the
+board" (`p-wall`) when the teacher lets students see the notes. Writing, sketching, comments and drawings on pictures, videos and
+cards, and exploring a shared zone work as in class; class activities (polls, votes, exit tickets) need the teacher there.
+
+| Call | Resolves with |
+|---|---|
+| `list()` | `[{id, title, teacher, lesson, until}]` (an ISO time or `null`) |
+| `view(id)` | `{board: {id, title}, until, teacher, lesson, notes: {open, zone: {id, title} \| null}, rules: {names, approve, peers}, shared, wall, mine}`, or `{gone: true, msg}` when the board is closed or not for this student. `shared` has the `SHARED` entries below; `wall` is `{zones: [{id, title, notes}], loose: [notes]}` with notes `{id, sub, text, author, mine, sketch, waiting}` (`waiting`: not on the board yet), or `null`; `mine` maps the student's note ids to `on`, `queued` (kept for the teacher), `pending` (the teacher checks it first) or `removed` (declined or taken off) |
+| `item(id, itemId)` | `{id, src, annos}` like `ITEM` (the picture, and the annotations this student may see), `{id, gone: true}`, or `{closed: true, msg}` |
+| `send(id, msg)` | `{status}`: `queued`, `pending`, `locked` (notes are off), `limit`, `bad`, `gone` (not shared with them) or `closed` (with `msg`). Messages are `NOTE`, `IMG_NOTE`, `DELETE_NOTE`, `ANNO_ADD`, `ANNO_DEL` and `EXPLORE`, as on a live board |
+
+A rejected promise means the host could not be reached: the message stays in the outbox and is sent again in order, and the app
+checks the host every 20 seconds (and at once when the page is shown again or the device comes back online). The board tab is
+redrawn only when something changed, and keyboard focus stays where it was.
+
+**Console (`DQB_HOST.inbox`).** When a board opens, and every 15 seconds while it is open, the console calls `pull(boardId)`,
+which resolves with `{open: {session, until, settings} | null, sessions: {<session>: settings}, entries: [{id, session, sid, name,
+msg, ts}]}` (`settings`: `{notes, zone, see, names, approve, shared}`). Every message is checked again as a live one would be:
+
+* Notes go into the zone the teacher chose (`settings.zone`), otherwise into a "From students" zone made the first time. With
+  `approve` they wait in the approval queue and stay in the inbox until the teacher decides.
+* Comments and drawings go onto the shared picture, video or card (`pend` with `approve`). Withdrawn ones come off.
+* Exploring shows on a zone the console is sharing at the time.
+* Nothing counts as a contribution here: the host counted it when the student sent it.
+
+The console calls `ack(boardId, ids)` only once the board holding the messages is saved (to the host account when there is one),
+so a closed tab or a failed upload loses nothing; taking a message in twice changes nothing (notes and annotations keep their ids).
+The "Open until …" chip in the top bar shows while the board is open for students.
 
 ## Messages added for hosts and link cards
 

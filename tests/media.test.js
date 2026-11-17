@@ -55,7 +55,17 @@ const addPicture = (page, name) => page.evaluate(async (n) => {
   const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
   return (await Actions.addImageFile(new File([blob], n + '.png', { type: 'image/png' }))).id;
 }, name);
-const stageBox = (page, scope) => page.locator((scope || '') + ' .mv-stage').boundingBox();
+/** Where the viewer's picture is, once the sheet or page has finished animating in (a box read mid-animation is scaled). */
+async function stageBox(page, scope) {
+  const loc = page.locator((scope || '') + ' .mv-stage');
+  let last = null;
+  for (let k = 0; k < 40; k++) {
+    const b = await loc.boundingBox();
+    if (b && last && Math.abs(b.x - last.x) < 0.5 && Math.abs(b.y - last.y) < 0.5 && Math.abs(b.width - last.width) < 0.5 && Math.abs(b.height - last.height) < 0.5) return b;
+    last = b; await page.waitForTimeout(80);
+  }
+  return last;
+}
 
 before(async () => {
   env = await boot();
@@ -328,9 +338,10 @@ test('hostile students: no callouts or hotspots, nothing on items not shared wit
   await send({ type: 'VIEW', item: ytId });
   await rogue.waitForFunction((id) => window.__rogue.log.some((m) => m.type === 'ITEM' && m.id === id && m.gone), ytId);
   // what a student receives about others: no ids
+  const from = (await received()).length;
   await send({ type: 'VIEW', item: imgId });
-  await rogue.waitForFunction((id) => window.__rogue.log.some((m) => m.type === 'ITEM' && m.id === id && m.annos), imgId);
-  const item = (await received()).filter((m) => m.type === 'ITEM' && m.id === imgId).pop();
+  await rogue.waitForFunction(({ id, from }) => window.__rogue.log.slice(from).some((m) => m.type === 'ITEM' && m.id === id && typeof m.src === 'string'), { id: imgId, from });
+  const item = (await received()).slice(from).find((m) => m.type === 'ITEM' && m.id === imgId && typeof m.src === 'string');   // later ones carry annotations only
   assert.ok(typeof item.src === 'string' && item.src.startsWith('data:image/jpeg'), 'the picture comes with the first ITEM');
   assert.ok(item.annos.every((a) => !a.by.sid), 'no student ids are sent to students');
   assert.ok(item.annos.some((a) => a.id === 'ev2' && a.mine));

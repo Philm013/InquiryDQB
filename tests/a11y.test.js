@@ -18,7 +18,9 @@ async function violations(page) {
     return res.violations.map((v) => `${v.id} (${v.impact}) ×${v.nodes.length}: ${v.help} → ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(' | ')}`);
   });
 }
-const clean = async (page, label) => assert.deepEqual(await violations(page), [], `${label} has accessibility violations`);
+/** Waits for sheets and pages to finish animating in: contrast measured mid-fade is wrong (looping animations are ignored). */
+const settled = (page) => page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running' || !a.effect || a.effect.getTiming().iterations === Infinity), null, { timeout: 5000 }).catch(() => {});
+const clean = async (page, label) => { await settled(page); assert.deepEqual(await violations(page), [], `${label} has accessibility violations`); };
 
 before(async () => {
   env = await boot();

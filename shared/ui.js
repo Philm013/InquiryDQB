@@ -119,8 +119,18 @@
   /* Hist: one history entry per open sheet / page so the back gesture closes them */
   /* ---------------------------------------------------------------------- */
   var Hist = (function () {
-    var stack = [], ignore = 0;
+    // `history.back()` is asynchronous, so going back for a sheet that closes and pushing an entry for one that opens in the
+    // same moment (a menu sheet handing over to another sheet, or chained dialogs) used to leave the browser one entry below
+    // the app: the next close then went back a page too far and left the board. Closes are therefore batched until the next
+    // task, an entry that opens meanwhile takes over the one a closing sheet left, and the rest go back in one step.
+    var stack = [], ignore = 0, pendingBack = 0, timer = null;
+    function flush() {
+      timer = null;
+      var n = pendingBack; pendingBack = 0;
+      if (n > 0) { ignore++; try { global.history.go(-n); } catch (e) { ignore--; } }   // one traversal, one popstate
+    }
     function push(entry) {
+      if (pendingBack > 0) { pendingBack--; stack.push(entry); return; }                 // reuse the entry just left behind
       try { global.history.pushState({ dqb: stack.length + 1 }, ''); } catch (e) { entry.noHist = true; }
       stack.push(entry);
     }
@@ -128,7 +138,12 @@
     function remove(entry) {
       var i = stack.lastIndexOf(entry);
       if (i < 0 || entry.noHist) { if (i > -1) stack.splice(i, 1); return; }
-      if (i === stack.length - 1) { stack.pop(); ignore++; try { global.history.back(); } catch (e) { ignore--; } }
+      if (i === stack.length - 1) {
+        stack.pop();
+        while (stack.length && stack[stack.length - 1].dead) { stack.pop(); pendingBack++; }   // entries already closed under it
+        pendingBack++;
+        if (!timer) timer = setTimeout(flush, 0);
+      }
       else entry.dead = true;                       // not on top: leave the browser entry, ignore it later
     }
     global.addEventListener('popstate', function () {

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https: wss: http: ws:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob: https:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; font-src 'self'; connect-src 'self' https: wss: http: ws:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#ffffff">
 <meta name="color-scheme" content="light dark">
@@ -18,6 +18,7 @@
 <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
 <script src="../shared/boot.js"></script>
 <link rel="stylesheet" href="../shared/ui.css">
+<link rel="stylesheet" href="../shared/media.css">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -44,7 +45,7 @@
       <div class="card form">
         <div class="join-chip" id="join-chip" hidden><i data-i="link" class="sm"></i><span>Joining class <b id="join-chip-code"></b></span></div>
         <div class="field"><label id="l-av">Avatar</label><div id="av-grid" class="av-grid" role="radiogroup" aria-labelledby="l-av"></div></div>
-        <div class="field"><label for="inp-name">Your name</label><input id="inp-name" class="input" maxlength="24" autocomplete="given-name" autocapitalize="words" enterkeyhint="go" placeholder="First name"><div class="error" id="name-err" hidden></div></div>
+        <div class="field"><label for="inp-name">Your name</label><input id="inp-name" class="input" maxlength="24" autocomplete="given-name" autocapitalize="words" enterkeyhint="go" placeholder="First name"><div class="hint" id="name-hint" hidden></div><div class="error" id="name-err" hidden></div></div>
         <button type="button" id="btn-setup" class="btn btn-primary btn-lg btn-block">Continue</button>
       </div>
     </section>
@@ -56,6 +57,7 @@
         <h1 id="h-join">Join a class</h1>
         <p class="text-2">Type the code on your teacher’s screen, or scan the QR code.</p>
       </div>
+      <div id="live-list" class="live-list" hidden></div>
       <div class="card form">
         <div class="field"><label for="inp-code">Class code</label><input id="inp-code" class="input code-input" inputmode="text" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="40" enterkeyhint="go" placeholder="ABC-123"><div class="error" id="code-err" hidden></div></div>
         <button type="button" id="btn-connect" class="btn btn-primary btn-lg btn-block">Join class</button>
@@ -139,6 +141,21 @@
     <footer class="page-foot"><button type="button" class="btn btn-primary btn-lg btn-block" id="exit-send"><i data-i="send"></i>Submit</button></footer>
   </section>
 
+  <section class="page" id="p-explore" hidden role="dialog" aria-modal="true" aria-labelledby="xp-title">
+    <header class="page-bar"><button type="button" class="icon-btn" data-close aria-label="Back"><i data-i="back"></i></button><div class="grow"><h2 id="xp-title">Explore</h2><div class="sub" id="xp-sub"></div></div></header>
+    <div class="page-body xp-body"><div class="xp-head" id="xp-head"></div><div id="xp-list" class="xp-list"></div></div>
+  </section>
+
+  <section class="page" id="p-media" hidden role="dialog" aria-modal="true" aria-labelledby="md-title">
+    <header class="page-bar"><button type="button" class="icon-btn" data-close aria-label="Back"><i data-i="back"></i></button><div class="grow"><h2 id="md-title">Picture</h2><div class="sub" id="md-sub"></div></div><span id="md-acts" class="md-acts"></span></header>
+    <div class="page-body md-body" id="md-body"></div>
+  </section>
+
+  <section class="page" id="p-wall" hidden role="dialog" aria-modal="true" aria-labelledby="wall-title">
+    <header class="page-bar"><button type="button" class="icon-btn" data-close aria-label="Back"><i data-i="back"></i></button><div class="grow"><h2 id="wall-title">The board</h2><div class="sub" id="wall-sub"></div></div></header>
+    <div class="page-body wall-body" id="wall-list"></div>
+  </section>
+
   <section class="page" id="p-consensus" hidden role="dialog" aria-modal="true" aria-labelledby="cm-title">
     <header class="page-bar"><button type="button" class="icon-btn" data-close aria-label="Leave the model"><i data-i="back"></i></button><div><h2 id="cm-title">Class model</h2><div class="sub" id="cm-sub">Watching</div></div><span class="grow"></span><button type="button" class="chip" id="cm-follow" aria-pressed="true"><i data-i="eye" class="sm"></i>Following teacher</button></header>
     <div class="page-body cm-body"><div id="cm-view" aria-label="Shared model canvas"><div id="cm-world"><div id="cm-items"></div><svg id="cm-ink" style="overflow:visible"></svg></div><svg id="cm-temp" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible"></svg></div></div>
@@ -151,6 +168,7 @@
 <script src="../shared/icons.js"></script>
 <script src="../shared/ui.js"></script>
 <script src="../shared/net.js"></script>
+<script src="../shared/media.js"></script>
 <script src="app.js"></script>
 <script src="../shared/sw-register.js"></script>
 </body>

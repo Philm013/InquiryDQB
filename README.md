@@ -16,8 +16,12 @@ InquiryDQB is a static website: HTML, CSS and vanilla JavaScript, with no build 
 - **Purposeful content:** Notice, Wonder, Idea and Test notes; zones that auto-arrange their notes; a Claim · Evidence · Reasoning builder; a shared class model; breakout rooms.
 - **Group work:** split the class into colour groups (balanced, in one tap), give each group a colour zone and open several zones at once. Every student writes into their own group's zone; students without a group can pick any open zone or wait until you place them, and you can see who still needs a group.
 - **Ink tools everywhere:** on the board, the class model and breakout rooms, pick strokes one at a time or with a box, move, recolour, duplicate or delete them, and turn several strokes into one sketch note.
-- **Live activities:** poll, live graph, spinner; vote, rank and discuss on any set of notes; five exit-ticket formats (short answer, rating, multiple choice, multi-select, learn / wonder).
+- **Live activities:** poll, live graph, spinner; vote, rank and discuss on any set of notes, cards, pictures or videos; five exit-ticket formats (short answer, rating, multiple choice, multi-select, learn / wonder).
 - **Classroom control:** approve notes before they appear, pause or remove a student, hide names, class timer, co-host on a second device, lock or open the board.
+- **Resources:** put a link card for any web page on the board and share it: it appears on every student's device with an Open button.
+- **Pictures and videos to look at closely:** add a picture from the device, or a YouTube, Vimeo or video-file link. In the viewer you and your students pin numbered comments to a spot, draw with a pen, marker or arrow, and comment at a moment of a video; you add callouts (labels on the picture or at a moment of the video) and hotspots students tap to reveal (on a video they can pause it at that moment). YouTube and Vimeo load nothing until someone presses play.
+- **Open without you (on a host site):** a site that embeds InquiryDQB can leave a board open for students while no one runs it, for homework or a station. Students add notes and sketches, comment on and draw over what you shared, explore, and (if you allow it) read the board's notes. Everything they add lands on the board the next time you open it, with approval first if you want it.
+- **Explore on their own:** share a whole zone (for example a collection of resources) and every student gets it as a set to work through on their own device: open each thing, comment, star favourites and tick it off. You see who has opened, finished and starred what, live. A zone with a group colour goes only to that group (jigsaw, gallery walk).
 - **Yours to keep:** boards autosave on the device; export as a board file (JSON), a picture (PNG) or a printable outline; text-only accessibility view; templates (See-Think-Wonder, K-W-L, Frayer, Venn, Four Corners, Compass Points) and your own.
 - Desktop feels like a whiteboard app (tool rail, floating bars, docked class panel, keyboard shortcuts: press `?`). On phones it becomes a bottom-navigation app with sheets and a selection toolbar.
 
@@ -25,7 +29,7 @@ InquiryDQB is a static website: HTML, CSS and vanilla JavaScript, with no build 
 
 - Join by typing the six-character code, scanning the QR code, or opening the join link. Pick an avatar and a first name.
 - Board tab shows only what the teacher is running now; when several zones are open to them, students choose where each note goes. **My notes** keeps everything the student wrote, with delivery status (sending, on the board, waiting for the teacher, not added).
-- Full-screen task pages for writing, sketching, polls, graphs, exit tickets and the shared model.
+- Full-screen task pages for writing, sketching, polls, graphs, exit tickets and the shared model, and for exploring a shared set or looking closely at a shared picture or video (comments, pins, drawing).
 - Survives flaky Wi-Fi: reconnects automatically, queues notes while offline, restores drafts.
 - Installable on a home screen (PWA); light and dark themes.
 
@@ -52,6 +56,11 @@ npm test
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for what is covered.
+
+### Embedding it in another site
+
+InquiryDQB can run inside a learning platform as a built-in tool, using the platform's accounts, storage and resource library
+(TechieTeaching does this). A host defines `window.DQB_HOST`; see [docs/EMBEDDING.md](docs/EMBEDDING.md).
 
 ### Connection service and school networks
 

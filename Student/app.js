@@ -28,13 +28,15 @@
   /* State + persistence                                                     */
   /* ====================================================================== */
   const State = {
-    me: { sid: '', name: '', av: '😀', color: null, group: '' },
-    target: null,            // { peerId, code }
+    me: { sid: '', name: '', av: '😀', color: null, group: '', locked: false },
+    shared: [],              // what the teacher shared: links, pictures and videos, and sets to explore ({ id, type: 'link' | 'media' | 'set', … })
+    target: null,            // { peerId, code } for a live board, or { open: id } for a board open without the teacher
+    open: null,              // a board open without the teacher (Box): { id, title, until, teacher, lesson, notes, zone, wall }
     boardId: null, notes: [],
     // zones: the open zones this student may write into ({ id, title, zoneType, color, group }); zonePick: the one they chose
     activity: { type: 'LOCKED', id: null, rid: null, sub: null, title: '', zoneType: null, items: [], payload: null, zones: [], waiting: false, unplaced: false },
     zonePick: null,
-    rules: { names: true, approve: false }, muted: false,
+    rules: { names: true, approve: false, peers: true }, muted: false,
     responded: {}, everConnected: false, tab: 'board', view: 'setup',
     timer: { running: false, endsAt: 0, remainingMs: 0, totalMs: 0 },
     outbox: []
@@ -45,13 +47,30 @@
   const isDone = () => !!State.responded[actKey()];
   const markDone = () => { State.responded[actKey()] = true; };
 
+  /** A signed-in student's identity from the host site ({ sid, name }): the name is theirs and the sid is issued by the site. */
+  function hostIdentity() {
+    const id = DQBUI.host().identity;
+    if (!id || typeof id !== 'object' || !safeId(String(id.sid || ''))) return null;
+    const name = clampStr(String(id.name || '').replace(/[<>\u0000-\u001f]/g, '').trim(), 24);
+    return name ? { sid: String(id.sid), name } : null;
+  }
+  /** Notes written on this device by the person using it now (a shared school device keeps each student's notes apart). */
+  const isMine = (n) => (State.me.locked ? n.sid === State.me.sid : (!n.sid || n.sid === State.me.sid));
+
   const Store = {
     db: null,
     init() {
       return new Promise(resolve => {
-        // profile: localStorage first (always available), IndexedDB for notes
-        try { const p = JSON.parse(localStorage.getItem('dqb_profile') || 'null'); if (p) Object.assign(State.me, p); } catch (e) { /* ignore */ }
-        if (!State.me.sid) { State.me.sid = Net.genCode(16); Store.saveProfile(); }          // crypto-random: it identifies this student to the teacher
+        const ident = hostIdentity();
+        if (ident) {
+          // signed in: the site says who this is; only the avatar choice is remembered (per account, never the name for guests)
+          Object.assign(State.me, { sid: ident.sid, name: ident.name, locked: true });
+          try { const av = localStorage.getItem('dqb_av:' + ident.sid); if (Net.AVATARS.includes(av)) State.me.av = av; } catch (e) { /* ignore */ }
+        } else {
+          // profile: localStorage first (always available), IndexedDB for notes
+          try { const p = JSON.parse(localStorage.getItem('dqb_profile') || 'null'); if (p) Object.assign(State.me, { sid: p.sid || '', name: p.name || '', av: p.av || State.me.av }); } catch (e) { /* ignore */ }
+          if (!State.me.sid) { State.me.sid = Net.genCode(16); Store.saveProfile(); }          // crypto-random: it identifies this student to the teacher
+        }
         let req;
         try { req = indexedDB.open('DQB_Student', 2); } catch (e) { resolve(); return; }
         req.onupgradeneeded = e => {
@@ -64,7 +83,7 @@
           Store.db = e.target.result;
           try {
             const tx = Store.db.transaction(['profile', 'notes'], 'readonly');
-            tx.objectStore('profile').get('me').onsuccess = ev => { const r = ev.target.result; if (r && r.val && !State.me.name) Object.assign(State.me, { name: r.val.name || '', av: r.val.av || State.me.av }); };
+            tx.objectStore('profile').get('me').onsuccess = ev => { const r = ev.target.result; if (r && r.val && !State.me.name && !State.me.locked) Object.assign(State.me, { name: r.val.name || '', av: r.val.av || State.me.av }); };
             tx.objectStore('notes').getAll().onsuccess = ev => { State.notes = ev.target.result || []; };
             tx.oncomplete = () => resolve(); tx.onerror = () => resolve();
           } catch (err) { resolve(); }
@@ -72,6 +91,7 @@
       });
     },
     saveProfile() {
+      if (State.me.locked) { try { localStorage.setItem('dqb_av:' + State.me.sid, State.me.av); } catch (e) { /* ignore */ } return; }
       try { localStorage.setItem('dqb_profile', JSON.stringify({ sid: State.me.sid, name: State.me.name, av: State.me.av })); } catch (e) { /* ignore */ }
       if (Store.db) { try { Store.db.transaction('profile', 'readwrite').objectStore('profile').put({ key: 'me', val: { name: State.me.name, av: State.me.av } }); } catch (e) { /* ignore */ } }
     },
@@ -87,7 +107,7 @@
       Views.renderNotes();
     },
     lastJoin() { try { const j = JSON.parse(localStorage.getItem('dqb_last_join') || 'null'); return j && Date.now() - j.ts < 8 * 3600 * 1000 ? j : null; } catch (e) { return null; } },
-    setLastJoin(t) { try { if (t) localStorage.setItem('dqb_last_join', JSON.stringify({ peerId: t.peerId, code: t.code, ts: Date.now() })); else localStorage.removeItem('dqb_last_join'); } catch (e) { /* ignore */ } }
+    setLastJoin(t) { try { if (t) localStorage.setItem('dqb_last_join', JSON.stringify(t.open ? { open: t.open, sid: State.me.sid, ts: Date.now() } : { peerId: t.peerId, code: t.code, ts: Date.now() })); else localStorage.removeItem('dqb_last_join'); } catch (e) { /* ignore */ } }
   };
 
   /* ====================================================================== */
@@ -116,6 +136,7 @@
       Conn.target = State.target = target; Conn.intentional = false; Conn.attempts = 0; Conn.first = true;
       State.boardId = null;
       Conn.setState('connecting');
+      if (target.open) { Box.start(target.open); return; }     // no teacher to connect to: the host site keeps the board
       Conn.dial();
     },
     async ensurePeer() {
@@ -179,8 +200,9 @@
       if (Conn.attempts > 6 && Conn.state !== 'offline') Conn.setState('offline');
       Conn.timer = setTimeout(() => Conn.dial(), Net.backoff(Conn.attempts++));
     },
-    retryNow() { if (!Conn.target || Conn.intentional) return; Conn.attempts = 0; Conn.setState(State.everConnected ? 'reconnecting' : 'connecting'); Conn.dial(); },
+    retryNow() { if (!Conn.target || Conn.intentional) return; if (Box.id) { Box.kick(); return; } Conn.attempts = 0; Conn.setState(State.everConnected ? 'reconnecting' : 'connecting'); Conn.dial(); },
     stop() {
+      Box.stop();
       Conn.intentional = true; clearTimeout(Conn.timer); clearInterval(Conn.wd); State.outbox = [];
       if (Conn.conn) { try { Conn.raw({ type: 'LEAVE' }); Conn.conn.close(); } catch (e) { /* ignore */ } Conn.conn = null; }
       if (Conn.peer) { try { Conn.peer.destroy(); } catch (e) { /* ignore */ } Conn.peer = null; }
@@ -189,6 +211,7 @@
     raw(msg) { try { if (Conn.conn && Conn.conn.open) { Conn.conn.send(JSON.stringify(msg)); return true; } } catch (e) { console.warn('send failed', e); } return false; },
     /** Sends a message; durable messages wait in the outbox while offline. */
     send(msg, durable) {
+      if (Box.id) return Box.send(msg, durable);
       if (Conn.state === 'online' && Conn.raw(msg)) return true;
       if (durable) { State.outbox = State.outbox.filter(m => !(m.id && m.id === msg.id && m.type === msg.type)); State.outbox.push(msg); }
       return false;
@@ -197,10 +220,157 @@
       const q = State.outbox; State.outbox = [];
       q.forEach(m => Conn.send(m, true));
       // anything we saved as "sending" in an earlier session
-      State.notes.filter(n => n.status === 'sending' && n.boardId === State.boardId && !q.some(m => m.id === n.id)).forEach(n => Conn.send(noteMsg(n), true));
+      State.notes.filter(n => n.status === 'sending' && n.boardId === State.boardId && isMine(n) && !q.some(m => m.id === n.id)).forEach(n => Conn.send(noteMsg(n), true));
     }
   };
   function noteMsg(n) { return n.src ? { type: 'IMG_NOTE', id: n.id, src: n.src, text: n.text, zoneId: n.zoneId || null } : { type: 'NOTE', id: n.id, sub: n.sub, text: n.text, zoneId: n.zoneId || null }; }
+  /* ====================================================================== */
+  /* Boards open without the teacher (DQB_HOST.mailbox)                      */
+  /* ====================================================================== */
+  /* A teacher can leave a board open for their students without running it. The host site stands in for the teacher's app: it
+     says what the student can do, shows what is shared (and the notes on the board, if the teacher allows it), and keeps what the
+     student adds. The teacher's app takes it all in the next time it opens the board. The messages are the ones a live board
+     gets, so writing, sketching, comments, drawings and exploring work as they do in class. The host checks every message and
+     the teacher's app checks it again. */
+  const Box = {
+    TYPES: ['NOTE', 'IMG_NOTE', 'DELETE_NOTE', 'ANNO_ADD', 'ANNO_DEL', 'EXPLORE'],
+    id: null, gen: 0, timer: null, polling: false, draining: null, fails: 0, viewing: null,
+    api() { const m = DQBUI.host().mailbox; return m && typeof m.view === 'function' && typeof m.send === 'function' ? m : null; },
+    validId(v) { return /^\d{1,10}$/.test(String(v)) && Number(v) > 0 ? Number(v) : 0; },
+    date(v) { const d = v ? new Date(v) : null; return d && !isNaN(d.getTime()) ? d : null; },
+    when(d) { try { return d.toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }); } catch (e) { return d.toISOString().slice(0, 16).replace('T', ' '); } },
+    start(id) {
+      Box.stop();
+      Box.id = id; Box.fails = 0;
+      Box.poll();
+    },
+    stop() { clearTimeout(Box.timer); Box.timer = null; Box.id = null; Box.viewing = null; Box.draining = null; Box.polling = false; Box.sig = null; Box.gen++; State.open = null; },
+    /** Asks again now: back online, the page shown again, or Retry. */
+    kick() { if (!Box.id) return; clearTimeout(Box.timer); Box.poll(); },
+    later(ms) { clearTimeout(Box.timer); if (Box.id) Box.timer = setTimeout(() => Box.poll(), ms); },
+    async poll() {
+      const api = Box.api(), id = Box.id, gen = Box.gen;
+      if (!api || !id || Box.polling) return;
+      Box.polling = true;
+      let v = null, failed = false;
+      try { v = await api.view(id); } catch (e) { failed = true; }
+      if (gen !== Box.gen) return;                                   // left, or opened another board meanwhile
+      Box.polling = false;
+      if (failed || !v || typeof v !== 'object') { Box.offline(); return; }
+      if (v.gone) { Box.closed(v.msg); return; }
+      Box.fails = 0;
+      Box.apply(v);
+      if (Box.viewing) Box.item(Box.viewing, !MediaPage.src);       // new comments; the picture itself only if it is not here yet
+      Box.drain();
+      Box.later(document.hidden ? 90000 : 20000);
+    },
+    offline() {
+      Box.fails++;
+      Conn.setState(Box.fails > 6 ? 'offline' : (State.everConnected ? 'reconnecting' : 'connecting'));
+      Box.later(Net.backoff(Box.fails));
+    },
+    /** The board closed (or was never open for this student). */
+    closed(msg) {
+      const was = !!State.open;
+      Conn.stop(); Store.setLastJoin(null); State.target = null; State.everConnected = false; Pages.closeAll(); Shared.set([], true);
+      Views.ended(was ? 'This board is closed now' : 'This board isn’t open', clampStr(msg, 200) || (was ? 'Your teacher closed it. Everything you added is kept for them, and your notes stay in My notes.' : 'It may have closed, or it isn’t for your class. Ask your teacher.'));
+    },
+    /** The board as the host shows it to this student. */
+    apply(v) {
+      const first = !State.open;
+      const sig = JSON.stringify([v.board, v.until, v.teacher, v.lesson, v.notes, v.rules, v.shared, v.wall]);
+      const same = !first && sig === Box.sig; Box.sig = sig;
+      const z = v.notes && v.notes.zone && safeId(v.notes.zone.id) ? { id: safeId(v.notes.zone.id), title: clampStr(v.notes.zone.title, 80) || 'Zone' } : null;
+      State.open = {
+        id: Box.id, title: clampStr(v.board && v.board.title, 80) || 'Class board', until: Box.date(v.until),
+        teacher: clampStr(v.teacher, 60), lesson: clampStr(v.lesson, 80), notes: !!(v.notes && v.notes.open), zone: z, wall: Box.wall(v.wall)
+      };
+      State.boardId = safeId(v.board && v.board.id) || ('open-' + Box.id);
+      if (v.rules) State.rules = { names: v.rules.names !== false, approve: !!v.rules.approve, peers: v.rules.peers !== false };
+      State.muted = false; State.me.color = null; State.me.group = '';
+      State.activity = { type: State.open.notes ? 'OPEN' : 'LOCKED', id: null, rid: null, sub: null, title: '', zoneType: null, items: [], payload: null, zones: [], waiting: false, unplaced: false };
+      // where this student's notes are: on the board, kept for the teacher, waiting to be checked, or not kept
+      const mine = v.mine && typeof v.mine === 'object' ? v.mine : {};
+      State.notes.filter(n => n.boardId === State.boardId && isMine(n)).forEach(n => {
+        const st = { on: 'approved', queued: 'sent', pending: 'pending', removed: 'rejected' }[mine[n.id]];
+        if (!st || (n.status === st && (st !== 'rejected' || n.reason === 'removed'))) return;
+        n.status = st; n.reason = st === 'rejected' ? 'removed' : null; Store.saveNote(n);
+      });
+      if (first) {
+        State.everConnected = true; Store.setLastJoin(Conn.target);
+        Shared.set(v.shared, true);
+        Conn.setState('online');
+        Views.show('board', true); Views.setTab('board'); Views.renderNotes(); Views.renderMe();
+        Toast.success('You’re in!', { duration: 1800 });
+        // notes saved as "sending" on this device earlier
+        State.notes.filter(n => n.status === 'sending' && n.boardId === State.boardId && isMine(n) && !State.outbox.some(m => m.id === n.id)).forEach(n => Box.send(noteMsg(n), true));
+      } else {
+        if (Conn.state !== 'online') Conn.setState('online');
+        if (same) return;
+        Shared.set(v.shared);
+      }
+      Views.renderBoard(); Views.syncChrome(); Write.sync(); Sketch.sync(); MediaPage.sync(); Wall.render();
+    },
+    /** The notes on the board, re-checked (the host leaves it out when the teacher keeps notes private). */
+    wall(w) {
+      if (!w || typeof w !== 'object') return null;
+      let left = 600;
+      const note = (n) => (n && typeof n === 'object' && safeId(n.id) ? { id: safeId(n.id), sub: TYPES[n.sub] ? n.sub : 'notice', text: clampStr(n.text, 1000), author: clampStr(n.author, 40) || 'Classmate', mine: !!n.mine, sketch: !!n.sketch, waiting: !!n.waiting } : null);
+      const take = (list) => { const out = (Array.isArray(list) ? list : []).slice(0, Math.max(0, left)).map(note).filter(Boolean); left -= out.length; return out; };
+      const zones = (Array.isArray(w.zones) ? w.zones : []).slice(0, 100).map(z => ({ id: safeId(z && z.id) || '', title: clampStr(z && z.title, 80) || 'Zone', notes: take(z && z.notes) })).filter(z => z.notes.length);
+      const loose = take(w.loose);
+      return { zones, loose, count: zones.reduce((t, z) => t + z.notes.length, 0) + loose.length };
+    },
+    /** Sends a message through the host, in order, one at a time. Everything waits in the outbox while offline. */
+    send(msg, durable) {
+      if (!msg || !Box.id) return false;
+      if (msg.type === 'VIEW') { Box.viewing = msg.item ? safeId(msg.item) : null; if (Box.viewing) Box.item(Box.viewing, true); return true; }
+      if (!Box.TYPES.includes(msg.type)) return false;               // class activities (votes, polls, …) need the teacher there
+      State.outbox = State.outbox.filter(m => !(m.id && m.id === msg.id && m.type === msg.type));
+      State.outbox.push(msg);
+      Box.drain();
+      return true;
+    },
+    async drain() {
+      const api = Box.api(), id = Box.id, gen = Box.gen;
+      if (!api || !id || Box.draining || !State.open) return;       // sent once the board is open
+      const token = Box.draining = {};
+      let changed = false;
+      try {
+        while (State.outbox.length) {
+          const msg = State.outbox[0];
+          let res;
+          try { res = await api.send(id, msg); } catch (e) { if (gen === Box.gen) Box.offline(); return; }   // kept; sent later
+          if (gen !== Box.gen) return;
+          const k = State.outbox.indexOf(msg); if (k >= 0) State.outbox.splice(k, 1);
+          const status = res && typeof res.status === 'string' ? res.status : 'bad';
+          if (status === 'closed') { Box.closed(res.msg); return; }
+          Box.result(msg, status);
+          if (/NOTE$/.test(msg.type)) changed = true;
+        }
+      } finally { if (Box.draining === token) Box.draining = null; }
+      if (changed) Box.later(1500);                                 // show the board with it soon
+    },
+    result(msg, status) {
+      if (msg.type === 'NOTE' || msg.type === 'IMG_NOTE') {
+        const n = State.notes.find(x => x.id === msg.id); if (!n) return;
+        if (status === 'queued' || status === 'pending') { n.status = status === 'pending' ? 'pending' : 'sent'; n.reason = null; }
+        else { n.status = 'rejected'; n.reason = status === 'limit' || status === 'locked' ? status : (msg.type === 'IMG_NOTE' && status === 'bad' ? 'image' : null); Toast.warn(rejectMsg(n.reason)); }
+        Store.saveNote(n);
+      } else if (msg.type === 'ANNO_ADD' && status !== 'queued') MediaPage.onStatus({ aid: msg.id, status });
+    },
+    /** One picture, video or card with the comments and drawings this student may see (withSrc: the picture too). */
+    async item(itemId, withSrc) {
+      const api = Box.api(), id = Box.id, gen = Box.gen;
+      if (!api || typeof api.item !== 'function' || !id) return;
+      let d; try { d = await api.item(id, itemId, { src: !!withSrc }); } catch (e) { return; }
+      if (gen !== Box.gen || !d || typeof d !== 'object') return;
+      if (d.closed) { Box.closed(d.msg); return; }
+      MediaPage.onItem(Object.assign({}, d, { id: itemId }));
+    }
+  };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && Box.id) Box.kick(); });
+
   window.addEventListener('online', () => { if (Conn.state !== 'online') Conn.retryNow(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && Conn.target && !Conn.intentional && Conn.state !== 'online') Conn.retryNow(); });
 
@@ -225,10 +395,11 @@
   function autoOpenTask() {
     const a = State.activity;
     if (isDone()) return;
-    if (a.type === 'POLL') { Pages.closeAll(['p-poll']); Poll.open(); }
-    else if (a.type === 'GRAPH') { Pages.closeAll(['p-graph']); Graph.open(); }
-    else if (a.type === 'EXIT') { Pages.closeAll(['p-exit']); Exit.open(); }
+    if (a.type === 'POLL') { Pages.closeAll(['p-poll'].concat(KEEP_PAGES)); Poll.open(); }
+    else if (a.type === 'GRAPH') { Pages.closeAll(['p-graph'].concat(KEEP_PAGES)); Graph.open(); }
+    else if (a.type === 'EXIT') { Pages.closeAll(['p-exit'].concat(KEEP_PAGES)); Exit.open(); }
   }
+  const KEEP_PAGES = ['p-explore', 'p-media'];
 
   function Handle(d) {
     if (!d || typeof d.type !== 'string') return;
@@ -237,12 +408,13 @@
       case 'WELCOME': {
         const first = !State.everConnected;
         State.boardId = d.boardId || 'board'; State.everConnected = true; Conn.attempts = 0;
-        if (d.rules) State.rules = { names: d.rules.names !== false, approve: !!d.rules.approve };
+        if (d.rules) State.rules = { names: d.rules.names !== false, approve: !!d.rules.approve, peers: d.rules.peers !== false };
         State.muted = !!d.muted; State.me.color = d.color || null;
         Store.setLastJoin(Conn.target);
         (d.sync || []).forEach(n => { const l = State.notes.find(x => x.id === n.id); if (l) { l.text = clampStr(n.text, 1000); l.sub = n.sub; if (l.status !== 'approved') { l.status = 'approved'; } Store.saveNote(l); } });
         (d.pending || []).forEach(id => { const l = State.notes.find(x => x.id === id); if (l && l.status !== 'pending') { l.status = 'pending'; Store.saveNote(l); } });
         if (d.timer) Timer.set(d.timer);
+        Shared.set(d.shared, true);
         Conn.setState('online');
         State.activity = { type: 'LOCKED', id: null, rid: null, sub: null, title: '', zoneType: null, items: [], payload: null };
         if (d.payload) Handle(d.payload); else if (d.mode) Handle({ type: 'MODE', val: d.mode });
@@ -250,13 +422,14 @@
         Views.show('board', true); Views.setTab('board'); Views.renderNotes(); Views.renderMe();
         if (first) Toast.success('You’re in!', { duration: 1800 });
         Conn.flush();
+        MediaPage.resume();
         break;
       }
-      case 'MODE': { Pages.closeAll(['p-write', 'p-sketch']); setActivity({ type: d.val === 'OPEN' ? 'OPEN' : 'LOCKED' }); break; }
+      case 'MODE': { Pages.closeAll(['p-write', 'p-sketch'].concat(KEEP_PAGES)); setActivity({ type: d.val === 'OPEN' ? 'OPEN' : 'LOCKED' }); break; }
       case 'ZONE_ACT': case 'OPEN_ZONE': case 'ACT_VOTE': case 'ACT_SORT': case 'ACT_DISCUSS': {
         const sub = d.type === 'ZONE_ACT' ? (d.subType || d.type) : d.type;
-        const items = (Array.isArray(d.items) ? d.items : []).slice(0, 100).map(i => ({ id: safeId(i.id), text: clampStr(i.text, 300), sub: i.sub })).filter(i => i.id);
-        if (sub !== 'OPEN_ZONE') Pages.closeAll();
+        const items = (Array.isArray(d.items) ? d.items : []).slice(0, 100).map(i => ({ id: safeId(i.id), text: clampStr(i.text, 300), sub: ['link', 'image', 'video'].includes(i.sub) ? i.sub : (TYPES[i.sub] ? i.sub : 'notice') })).filter(i => i.id);
+        if (sub !== 'OPEN_ZONE') Pages.closeAll(KEEP_PAGES);
         if (sub === 'ACT_SORT') Rank.reset(items);
         if (sub === 'ACT_VOTE') Vote.reset();
         if (sub === 'OPEN_ZONE') {
@@ -270,14 +443,14 @@
         setActivity({ type: 'ZONE', id: safeId(d.actId), rid: safeId(d.rid), sub, title: clampStr(d.title, 80), zoneType: d.zoneType === 'cer' ? 'cer' : null, items });
         break;
       }
-      case 'ACT_POLL': { const id = safeId(d.actId); Pages.closeAll(); setActivity({ type: 'POLL', id, rid: safeId(d.rid), title: clampStr(d.q, 200), payload: { q: clampStr(d.q, 200), opts: (Array.isArray(d.opts) ? d.opts : []).slice(0, 12).map(o => clampStr(o && o.lbl, 80)) } }); Poll.reset(); autoOpenTask(); break; }
-      case 'ACT_GRAPH': { const id = safeId(d.actId); Pages.closeAll(); setActivity({ type: 'GRAPH', id, rid: safeId(d.rid), title: clampStr(d.title, 120), payload: {} }); autoOpenTask(); break; }
+      case 'ACT_POLL': { const id = safeId(d.actId); Pages.closeAll(KEEP_PAGES); setActivity({ type: 'POLL', id, rid: safeId(d.rid), title: clampStr(d.q, 200), payload: { q: clampStr(d.q, 200), opts: (Array.isArray(d.opts) ? d.opts : []).slice(0, 12).map(o => clampStr(o && o.lbl, 80)) } }); Poll.reset(); autoOpenTask(); break; }
+      case 'ACT_GRAPH': { const id = safeId(d.actId); Pages.closeAll(KEEP_PAGES); setActivity({ type: 'GRAPH', id, rid: safeId(d.rid), title: clampStr(d.title, 120), payload: {} }); autoOpenTask(); break; }
       case 'EXIT_TICKET': {
-        const id = safeId(d.actId); Pages.closeAll();
+        const id = safeId(d.actId); Pages.closeAll(KEEP_PAGES);
         setActivity({ type: 'EXIT', id, rid: safeId(d.rid), title: 'Exit ticket', payload: { mode: ['short', 'smiley', 'mc', 'multi', 'lw'].includes(d.mode) ? d.mode : 'short', prompt: clampStr(d.prompt, 300), opts: (Array.isArray(d.opts) ? d.opts : []).slice(0, 12).map(o => clampStr(o, 80)) } });
         autoOpenTask(); break;
       }
-      case 'STOP_ACT': { Pages.closeAll(['p-write', 'p-sketch']); setActivity({ type: 'LOCKED' }); break; }
+      case 'STOP_ACT': { Pages.closeAll(['p-write', 'p-sketch'].concat(KEEP_PAGES)); setActivity({ type: 'LOCKED' }); break; }
       case 'SET_COLOR': {
         const had = State.me.color;
         State.me.color = safeColor(d.color) || null; State.me.group = State.me.color ? (clampStr(d.name, 24) || 'colour') : '';
@@ -285,9 +458,17 @@
         if (State.me.color && State.me.color !== had) Toast.info(`You’re in the ${State.me.group} group`, { duration: 2400 });
         break;
       }
-      case 'RULES': if (d.rules) { State.rules = { names: d.rules.names !== false, approve: !!d.rules.approve }; Write.sync(); } break;
-      case 'MUTE': State.muted = !!d.on; Views.renderBoard(); Views.syncChrome(); Write.sync(); if (State.muted) Toast.warn('Your teacher paused notes from you for now.'); else Toast.success('You can add notes again.'); break;
-      case 'KICKED': Conn.stop(); Store.setLastJoin(null); State.everConnected = false; Pages.closeAll(); Views.ended(d.reason === 'code-reset' ? 'The class code was reset' : 'You were removed from the class', d.reason === 'code-reset' ? 'Your teacher generated a new code. Ask for it to rejoin.' : 'Your teacher removed you from this session.'); break;
+      case 'RULES': if (d.rules) { State.rules = { names: d.rules.names !== false, approve: !!d.rules.approve, peers: d.rules.peers !== false }; Write.sync(); MediaPage.sync(); } break;
+      case 'MUTE': State.muted = !!d.on; Views.renderBoard(); Views.syncChrome(); Write.sync(); MediaPage.sync(); if (State.muted) Toast.warn('Your teacher paused notes from you for now.'); else Toast.success('You can add notes again.'); break;
+      case 'KICKED': {
+        Conn.stop(); Store.setLastJoin(null); State.everConnected = false; Pages.closeAll(); Shared.set([], true);
+        if (d.reason === 'restricted') { Views.ended('This board is for the teacher’s own students', clampStr(d.msg, 200) || 'Sign in with your student account, then join again.'); break; }
+        Views.ended(d.reason === 'code-reset' ? 'The class code was reset' : 'You were removed from the class', d.reason === 'code-reset' ? 'Your teacher generated a new code. Ask for it to rejoin.' : 'Your teacher removed you from this session.');
+        break;
+      }
+      case 'SHARED': Shared.set(d.items); break;
+      case 'ITEM': MediaPage.onItem(d); break;
+      case 'ANNO_STATUS': MediaPage.onStatus(d); break;
       case 'TIMER': Timer.set(d); break;
       case 'NOTE_STATUS': {
         const n = State.notes.find(x => x.id === d.id); if (!n) break;
@@ -306,7 +487,7 @@
       case 'CONSENSUS_VIEW_SYNC': CM.hostView(d); break;
     }
   }
-  function rejectMsg(r) { return ({ locked: 'The board is locked, so that note wasn’t added. It’s saved in My notes.', muted: 'Your teacher paused notes from you.', color: 'That zone is for a different group.', group: 'You’re not in a group yet, so that note wasn’t added. It’s saved in My notes.', limit: 'You’ve reached the note limit for this session.', image: 'That drawing was too large to send. Try a simpler one.', declined: 'Your teacher didn’t add that note.' })[r] || 'That note wasn’t added to the board.'; }
+  function rejectMsg(r) { return ({ removed: 'Your teacher didn’t keep that note on the board.', locked: 'The board is locked, so that note wasn’t added. It’s saved in My notes.', muted: 'Your teacher paused notes from you.', color: 'That zone is for a different group.', group: 'You’re not in a group yet, so that note wasn’t added. It’s saved in My notes.', limit: 'You’ve reached the note limit for this session.', image: 'That drawing was too large to send. Try a simpler one.', declined: 'Your teacher didn’t add that note.' })[r] || 'That note wasn’t added to the board.'; }
   const RETRY_REASONS = ['locked', 'group', 'color'];
 
   /* ====================================================================== */
@@ -366,7 +547,7 @@
       const canAdd = Write.canAdd();
       $('tab-add').classList.toggle('disabled', !canAdd);
       $('tab-add').setAttribute('aria-disabled', String(!canAdd));
-      const n = State.notes.filter(x => x.boardId === State.boardId).length;
+      const n = State.notes.filter(x => x.boardId === State.boardId && isMine(x)).length;
       const b = $('notes-badge'); b.hidden = !n; b.textContent = n;
     },
     renderMe() {
@@ -381,8 +562,17 @@
     typeTiles(types) {
       return `<div class="type-tiles">${types.map(t => `<button type="button" class="type-tile t-${t}" data-act="add" data-type="${t}"><span class="emoji" aria-hidden="true">${TYPES[t].icon}</span><b>${TYPES[t].lbl}</b><small>${esc(TYPES[t].hint)}</small></button>`).join('')}<button type="button" class="type-tile t-sketch wide" data-act="sketch"><span class="emoji" aria-hidden="true">✏️</span><span><b>Draw a sketch</b><br><small>Use your finger or a mouse to draw an idea.</small></span></button></div>`;
     },
+    /** Which control has focus, so a redraw can put it back (data-act, data-id and data-type name a control). */
+    focusKey(box) { const a = document.activeElement; return a && a !== box && box.contains(a) && a.dataset && a.dataset.act ? [a.dataset.act, a.dataset.id || '', a.dataset.type || ''].join('|') : null; },
+    refocus(box, key) {
+      if (!key) return;
+      const el = $$('[data-act]', box).find(x => [x.dataset.act, x.dataset.id || '', x.dataset.type || ''].join('|') === key);
+      if (el) { try { el.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
+    },
     renderBoard() {
       const box = $('board-content'); if (!box) return;
+      const keep = Views.focusKey(box);
+      if (State.open) { box.innerHTML = Views.openHtml(); hydrateIcons(box); Shared.fillThumbs(box); Views.refocus(box, keep); return; }
       const a = State.activity; let html = '';
       if (State.muted) html += `<div class="warn-box">${ic('volume-x', 'sm')} Your teacher paused notes from you for now.</div>`;
       if (a.type === 'LOCKED') html += Views.statusCard('👀', 'Eyes on the board', 'Your teacher will open the board when it’s time to share ideas. Hang tight!');
@@ -408,23 +598,271 @@
         html += done ? `<div class="card done-card"><div class="ok">${ic('check', 'lg')}</div><div><b>Response sent</b><div class="text-2">Thanks! Wait for your teacher to move on.</div></div></div>`
           : `<div class="card act-card"><div class="act-head"><span class="act-tag">${label}</span></div><h2>${esc(a.title || '')}</h2><button type="button" class="btn btn-primary btn-lg" data-act="open-task">Answer now</button></div>`;
       }
-      box.innerHTML = html; hydrateIcons(box);
+      box.innerHTML = Shared.html() + html; hydrateIcons(box);
+      Shared.fillThumbs(box);
       if (a.type === 'ZONE' && a.sub === 'ACT_SORT') Rank.mount();
+      Views.refocus(box, keep);
+    },
+
+    /** A board open without the teacher: what it is and until when, what is shared, adding notes and the notes on it. */
+    openHtml() {
+      const o = State.open;
+      const text = o.notes ? (o.zone ? `Add your notices, wonders and ideas. They go into “${o.zone.title}” on the board.` : 'Add your notices, wonders and ideas to the board.') : 'Look at what your teacher shared, comment on it and explore.';
+      const meta = [o.teacher, o.lesson, o.until ? 'Open until ' + Box.when(o.until) : ''].filter(Boolean).join(' · ');
+      let html = `<div class="card status-card open-card"><span class="open-tag">${ic('exit', 'sm')}Open for you</span><div class="big" aria-hidden="true">${o.notes ? '📬' : '🔎'}</div><h2>${esc(o.title)}</h2><p>${esc(text)}</p>${meta ? `<p class="open-meta">${esc(meta)}</p>` : ''}</div>`;
+      html += Shared.html();
+      if (o.notes) html += `<h2 class="section-label">Add to the board</h2>` + Views.typeTiles(OPEN_TYPES);
+      if (o.wall) html += Wall.card();
+      else if (o.notes) html += `<div class="info-box">${ic('eye-off', 'sm')}<span>Only your teacher sees what you add.</span></div>`;
+      return html;
     },
 
     /* ---- my notes tab ---- */
     renderNotes() {
       const list = $('notes-list'); if (!list) return;
-      const notes = State.notes.filter(n => n.boardId === State.boardId || (!State.boardId && false)).sort((a, b) => b.ts - a.ts);
+      const notes = State.notes.filter(n => n.boardId === State.boardId && isMine(n)).sort((a, b) => b.ts - a.ts);
       $('notes-count').textContent = notes.length ? `${notes.length} note${notes.length === 1 ? '' : 's'}` : '';
       if (!notes.length) { list.innerHTML = `<div class="card empty"><div class="em-ico">${ic('note', 'lg')}</div><div class="em-t">No notes yet</div><div>Tap the <b>+</b> button when your teacher opens the board.</div></div>`; Views.syncChrome(); return; }
-      const label = { sending: ['Sending…', 'status-sending'], approved: ['On the board', 'status-approved'], pending: ['Waiting for your teacher', 'status-pending'], rejected: ['Not added', 'status-rejected'] };
+      const label = { sending: ['Sending…', 'status-sending'], sent: ['Sent to your teacher', 'status-sent'], approved: ['On the board', 'status-approved'], pending: ['Waiting for your teacher', 'status-pending'], rejected: ['Not added', 'status-rejected'] };
       list.innerHTML = notes.map(n => {
         const t = TYPES[n.sub] || TYPES.notice, st = label[n.status || 'approved'];
         return `<article class="note-card t-${esc(TYPES[n.sub] ? n.sub : 'notice')}" data-id="${esc(n.id)}">${n.src ? `<img alt="Your drawing" data-img="${esc(n.id)}">${n.text ? `<div class="txt" style="margin-top:8px;font-size:1.05rem">${esc(n.text)}</div>` : ''}` : `<div class="txt">${esc(n.text)}</div>`}<div class="meta"><span class="chip">${t.icon} ${t.lbl}</span><span class="chip ${st[1]}">${st[0]}</span><span class="grow"></span>${n.status === 'rejected' && RETRY_REASONS.includes(n.reason) ? `<button type="button" class="btn btn-soft btn-sm" data-act="retry" data-id="${esc(n.id)}">${ic('refresh', 'sm')}Try again</button>` : ''}<button type="button" class="icon-btn sm" data-act="del" data-id="${esc(n.id)}" aria-label="Delete this note">${ic('trash', 'sm')}</button></div></article>`;
       }).join('');
       $$('img[data-img]', list).forEach(img => { const n = State.notes.find(x => x.id === img.dataset.img); const s = n && safeImg(n.src, 3000000); if (s) img.src = s; });
       Views.syncChrome();
+    }
+  };
+
+  /* ---- links the teacher shared with the class ---- */
+  const Shared = {
+    /** One entry, re-checked: a link, a picture or video, a teacher's note (inside a set) or a set to explore. */
+    entry(x, inSet) {
+      if (!x || typeof x !== 'object') return null;
+      const id = safeId(x.id); if (!id) return null;
+      const type = ['media', 'set', 'text'].includes(x.type) ? x.type : 'link';
+      if (type === 'link') {
+        const url = DQBUI.safeUrl(x.url); if (!url) return null;
+        return { id, type, title: clampStr(x.title, 200) || 'Link', desc: clampStr(x.desc, 500), url, thumb: DQBUI.safeThumb(x.thumb), kind: ['resource', 'collection', 'link'].includes(x.kind) ? x.kind : 'link', source: clampStr(x.source, 60) };
+      }
+      if (type === 'media') {
+        const kind = x.kind === 'video' ? 'video' : 'image';
+        const o = { id, type, kind, title: clampStr(x.title, 200) || (kind === 'video' ? 'Video' : 'Picture'), desc: clampStr(x.desc, 500), thumb: safeImg(x.thumb, 150000) || DQBUI.safeThumb(x.thumb), source: clampStr(x.source, 60), aspect: Number(x.aspect) > 0.1 && Number(x.aspect) < 10 ? Number(x.aspect) : 0 };
+        if (kind === 'video') { o.video = DQBMedia.cleanVideo(x.video); if (!o.video) return null; }
+        return o;
+      }
+      if (type === 'text') { const text = clampStr(x.text, 600).trim(); return inSet && text ? { id, type, text } : null; }
+      if (inSet) return null;
+      const items = (Array.isArray(x.items) ? x.items : []).slice(0, 40).map(i => Shared.entry(i, true)).filter(Boolean);
+      return items.some(i => i.type !== 'text') ? { id, type: 'set', title: clampStr(x.title, 80) || 'Explore', color: safeColor(x.color), group: clampStr(x.group, 24), items } : null;
+    },
+    clean(list) { return (Array.isArray(list) ? list : []).slice(0, 12).map(x => Shared.entry(x, false)).filter(Boolean); },
+    /** Finds an item anywhere in what is shared: {item, set} (set: the set it is in, or null). */
+    find(id) {
+      for (const x of State.shared) {
+        if (x.id === id) return { item: x, set: null };
+        if (x.type === 'set') { const i = x.items.find(y => y.id === id); if (i) return { item: i, set: x }; }
+      }
+      return null;
+    },
+    set(list, quiet) {
+      const before = new Set(State.shared.map(x => x.id));
+      State.shared = Shared.clean(list);
+      const added = State.shared.filter(x => !before.has(x.id));
+      if (!quiet && added.length) {
+        const one = added[0];
+        Toast.show(added.length === 1 ? (one.type === 'set' ? `Your teacher shared “${one.title}” to explore` : `Your teacher shared “${one.title}”`) : `Your teacher shared ${added.length} things`, { icon: one.type === 'set' ? 'explore' : (one.type === 'media' ? (one.kind === 'video' ? 'video' : 'image') : 'link'), duration: 3200 });
+        DQBUI.haptic(15); DQBUI.announce('Your teacher shared something with the class.');
+      }
+      if (State.view === 'board') Views.renderBoard();
+      Explore.sync(); MediaPage.check();
+    },
+    html() {
+      if (!State.shared.length) return '';
+      const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
+      const row = (x) => {
+        if (x.type === 'set') {
+          const p = Explore.progress(x), n = x.items.filter(i => i.type !== 'text').length;
+          return `<button type="button" class="shared-item set" data-act="open-set" data-id="${esc(x.id)}"${x.color ? ` style="--zc:${esc(x.color)}"` : ''}><span class="ph set" aria-hidden="true">${ic('explore')}</span><span class="tx"><b>${esc(x.title)}</b><small>${n} thing${n === 1 ? '' : 's'} to explore${x.group ? ` · ${esc(x.group)} group` : ''}</small><span class="xp-bar" aria-hidden="true"><i style="width:${p.pct}%"></i></span><span class="src">${p.done ? `${p.done} of ${p.total} done` : (p.opened ? 'Started' : 'Not started yet')}</span></span><span class="go" aria-hidden="true">${ic('chev-right', 'sm')}</span></button>`;
+        }
+        if (x.type === 'media') return `<button type="button" class="shared-item media" data-act="open-media" data-id="${esc(x.id)}">${x.thumb ? `<img alt="" data-thumb="${esc(x.id)}" loading="lazy">` : `<span class="ph" aria-hidden="true">${ic(x.kind === 'video' ? 'video' : 'image')}</span>`}<span class="tx"><b>${esc(x.title)}</b><small>${x.kind === 'video' ? 'Video · watch it and comment at moments' : 'Picture · look closely, comment and draw on it'}</small></span><span class="go" aria-hidden="true">${ic(x.kind === 'video' ? 'play' : 'eye', 'sm')}</span></button>`;
+        return `<div class="shared-row"><a class="shared-item" href="${esc(x.url)}" target="_blank" rel="noopener noreferrer" data-act="follow" data-id="${esc(x.id)}">${x.thumb ? `<img alt="" data-thumb="${esc(x.id)}" loading="lazy">` : `<span class="ph" aria-hidden="true">${ic(x.kind === 'link' ? 'link' : 'book')}</span>`}<span class="tx"><b>${esc(x.title)}</b>${x.desc ? `<small>${esc(x.desc)}</small>` : ''}<span class="src">${esc(x.source || host(x.url))}</span></span><span class="go" aria-hidden="true">${ic('chev-right', 'sm')}</span><span class="sr-only"> (opens in a new tab)</span></a><button type="button" class="icon-btn sm shared-cmt" data-act="link-comments" data-id="${esc(x.id)}" aria-label="Comments on ${esc(x.title)}">${ic('comment', 'sm')}</button></div>`;
+      };
+      return `<section class="shared card" aria-labelledby="shared-h"><div class="shared-head"><span class="ico">${ic('link', 'sm')}</span><h2 id="shared-h">Shared with you</h2><span class="muted">${State.shared.length}</span></div><div class="shared-list">${State.shared.map(row).join('')}</div></section>`;
+    },
+    fillThumbs(box) { $$('img[data-thumb]', box).forEach(img => { const f = Shared.find(img.dataset.thumb); if (f && f.item.thumb) img.src = f.item.thumb; }); }
+  };
+
+  /* ---- exploring a set: every card, picture and video in a zone the teacher shared ---- */
+  const Explore = {
+    id: null,
+    key(setId) { return 'dqb_explore:' + (State.me.sid || '') + ':' + (State.boardId || '') + ':' + setId; },
+    get(setId) { try { const r = JSON.parse(localStorage.getItem(Explore.key(setId)) || '{}'); return r && typeof r === 'object' ? r : {}; } catch (e) { return {}; } },
+    put(setId, rec) { try { localStorage.setItem(Explore.key(setId), JSON.stringify(rec)); } catch (e) { /* ignore */ } },
+    progress(set) {
+      const rec = Explore.get(set.id), list = set.items.filter(i => i.type !== 'text');
+      const done = list.filter(i => rec[i.id] && rec[i.id].d).length, opened = list.filter(i => rec[i.id] && rec[i.id].o).length;
+      return { done, opened, total: list.length, pct: list.length ? Math.round((done / list.length) * 100) : 0 };
+    },
+    /** Remembers progress on this device and tells the teacher (it waits in the outbox while offline). */
+    mark(setId, id, patch) {
+      const rec = Explore.get(setId), before = rec[id] || {};
+      const next = Object.assign({}, before, patch);
+      if (next.d) next.o = true;
+      rec[id] = next; Explore.put(setId, rec);
+      Conn.send({ type: 'EXPLORE', set: setId, id, open: !!next.o, done: !!next.d, star: !!next.s }, true);
+      if (Explore.id === setId) Explore.render();
+      if (State.view === 'board') Views.renderBoard();
+      const set = State.shared.find(s => s.id === setId);
+      if (set && patch.d && !before.d) { const p = Explore.progress(set); if (p.done === p.total) { Toast.success('You explored everything in this set!'); DQBUI.haptic(20); } }
+    },
+    open(id) {
+      const set = State.shared.find(s => s.id === id && s.type === 'set'); if (!set) return;
+      Explore.id = id;
+      Explore.render();
+      if (!Pages.isOpen('p-explore')) Pages.open('p-explore', { focus: '.page-bar [data-close]', onClose: () => { Explore.id = null; } });
+    },
+    /** The shared list changed: keep the page in step (or close it if the set was withdrawn). */
+    sync() {
+      if (!Explore.id) return;
+      if (!State.shared.some(s => s.id === Explore.id && s.type === 'set')) { Pages.close('p-explore'); Explore.id = null; Toast.info('Your teacher stopped sharing that set.'); return; }
+      Explore.render();
+    },
+    render() {
+      const set = State.shared.find(s => s.id === Explore.id && s.type === 'set'); if (!set) return;
+      const rec = Explore.get(set.id), p = Explore.progress(set);
+      $('xp-title').textContent = set.title;
+      $('xp-sub').textContent = `${p.done} of ${p.total} done`;
+      const prompts = set.items.filter(i => i.type === 'text');
+      $('xp-head').innerHTML = `<div class="xp-meter" role="progressbar" aria-label="Your progress" aria-valuemin="0" aria-valuemax="${p.total}" aria-valuenow="${p.done}" aria-valuetext="${p.done} of ${p.total} done"><i style="width:${p.pct}%"></i></div>`
+        + (prompts.length ? prompts.map(t => `<div class="xp-prompt">${ic('megaphone', 'sm')}<span></span></div>`).join('') : `<p class="text-2 xp-hint">Open each one, take a look, then tick it off. Star the ones you found most useful.</p>`);
+      $$('.xp-prompt span', $('xp-head')).forEach((el, k) => { el.textContent = prompts[k].text; });
+      const list = $('xp-list');
+      list.innerHTML = set.items.filter(i => i.type !== 'text').map((i, k) => {
+        const r = rec[i.id] || {}, kind = i.type === 'link' ? (i.kind === 'link' ? 'Link' : 'Resource') : (i.kind === 'video' ? 'Video' : 'Picture');
+        const main = i.type === 'link'
+          ? `<a class="btn btn-primary btn-sm" href="${esc(i.url)}" target="_blank" rel="noopener noreferrer" data-x="open" data-id="${esc(i.id)}">${ic('link', 'sm')}<span>Open</span><span class="sr-only"> ${esc(i.title)} (opens in a new tab)</span></a><button type="button" class="btn btn-secondary btn-sm" data-x="look" data-id="${esc(i.id)}" aria-label="Comment on ${esc(i.title)}">${ic('comment', 'sm')}<span>Comment</span></button>`
+          : `<button type="button" class="btn btn-primary btn-sm" data-x="look" data-id="${esc(i.id)}" aria-label="${i.kind === 'video' ? 'Watch' : 'Look at'} ${esc(i.title)}">${ic(i.kind === 'video' ? 'play' : 'eye', 'sm')}<span>${i.kind === 'video' ? 'Watch' : 'Look closely'}</span></button>`;
+        return `<article class="xp-item${r.d ? ' done' : ''}" data-id="${esc(i.id)}"><div class="xp-top">${i.thumb ? `<img alt="" data-xthumb="${esc(i.id)}" loading="lazy">` : `<span class="ph" aria-hidden="true">${ic(i.type === 'link' ? 'book' : (i.kind === 'video' ? 'video' : 'image'))}</span>`}<div class="xp-tx"><span class="xp-kind">${k + 1} · ${kind}${r.o && !r.d ? ' · opened' : ''}</span><b></b><small></small></div></div><div class="xp-acts">${main}<span class="grow"></span><button type="button" class="icon-btn sm xp-star" data-x="star" data-id="${esc(i.id)}" aria-pressed="${!!r.s}" aria-label="Star ${esc(i.title)}">${ic('star', 'sm')}</button><button type="button" class="btn btn-sm xp-done${r.d ? ' on' : ''}" data-x="done" data-id="${esc(i.id)}" aria-pressed="${!!r.d}">${ic('check', 'sm')}<span>${r.d ? 'Done' : 'Mark done'}</span></button></div></article>`;
+      }).join('');
+      $$('.xp-item', list).forEach(el => { const i = set.items.find(x => x.id === el.dataset.id); el.querySelector('.xp-tx b').textContent = i.title; const s = el.querySelector('.xp-tx small'); if (i.desc) s.textContent = i.desc; else s.remove(); });
+      $$('img[data-xthumb]', list).forEach(img => { const i = set.items.find(x => x.id === img.dataset.xthumb); if (i && i.thumb) img.src = i.thumb; });
+      hydrateIcons(list); hydrateIcons($('xp-head'));
+    }
+  };
+  on($('xp-list'), 'click', e => {
+    const b = e.target.closest('[data-x]'); if (!b || !Explore.id) return;
+    const set = State.shared.find(s => s.id === Explore.id); if (!set) return;
+    const i = set.items.find(x => x.id === b.dataset.id); if (!i) return;
+    const rec = Explore.get(set.id)[i.id] || {};
+    if (b.dataset.x === 'open') Explore.mark(set.id, i.id, { o: true });                      // the link itself opens in a new tab
+    else if (b.dataset.x === 'look') { Explore.mark(set.id, i.id, { o: true }); MediaPage.open(i, set.id); }
+    else if (b.dataset.x === 'star') { Explore.mark(set.id, i.id, { s: !rec.s }); }
+    else if (b.dataset.x === 'done') { Explore.mark(set.id, i.id, { d: !rec.d }); DQBUI.announce(rec.d ? 'Marked as not done' : 'Marked as done'); }
+  });
+
+  /* ---- one picture, video or card: the viewer (shared/media.js), with comments and markup ---- */
+  const MediaPage = {
+    id: null, setId: null, item: null, viewer: null, src: null, annos: [], local: [],
+    viewItem() {
+      const e = MediaPage.item;
+      return e.type === 'link' ? { id: e.id, kind: 'link', title: e.title, desc: e.desc, url: e.url, thumb: e.thumb, source: e.source }
+        : { id: e.id, kind: e.kind, title: e.title, desc: e.desc, src: MediaPage.src, thumb: e.thumb, video: e.video, aspect: e.aspect, source: e.source };
+    },
+    notice() {
+      if (State.muted) return 'Your teacher paused comments from you for now.';
+      if (Conn.state !== 'online') return 'You’re offline. What you add is sent when you reconnect.';
+      if (State.rules.approve) return 'Your teacher checks comments before classmates see them.';
+      if (!State.rules.peers) return 'Only your teacher sees your comments and drawings.';
+      return '';
+    },
+    open(entry, setId) {
+      if (MediaPage.viewer) { MediaPage.viewer.destroy(); MediaPage.viewer = null; }
+      Object.assign(MediaPage, { id: entry.id, setId: setId || null, item: entry, src: null, annos: [], local: [] });
+      $('md-title').textContent = entry.title || (entry.type === 'link' ? 'Link' : (entry.kind === 'video' ? 'Video' : 'Picture'));
+      $('md-sub').textContent = entry.type === 'link' ? 'Comments' : (entry.kind === 'video' ? 'Video · ' + DQBMedia.providerName(entry.video) : 'Picture');
+      const body = $('md-body'); body.textContent = '';
+      MediaPage.viewer = DQBMedia.Viewer(body, {
+        item: MediaPage.viewItem(), annos: [], me: { sid: State.me.sid, name: State.me.name, role: 's' },
+        canAdd: !State.muted, notice: MediaPage.notice(),
+        onAdd: (a) => MediaPage.add(a), onDelete: (ids) => MediaPage.del(ids),
+        onOpenLink: () => { if (MediaPage.setId) Explore.mark(MediaPage.setId, MediaPage.id, { o: true }); }
+      });
+      if (!Pages.isOpen('p-media')) Pages.open('p-media', { focus: '.page-bar [data-close]', onClose: () => MediaPage.closed() });
+      Conn.send({ type: 'VIEW', item: entry.id });
+    },
+    closed() {
+      if (MediaPage.viewer) { MediaPage.viewer.destroy(); MediaPage.viewer = null; }
+      if (MediaPage.id) Conn.send({ type: 'VIEW', item: null });
+      MediaPage.id = null; MediaPage.item = null;
+    },
+    resume() { if (MediaPage.id) { Conn.send({ type: 'VIEW', item: MediaPage.id }); MediaPage.sync(); } },
+    /** The shared list changed: the item may have been withdrawn or renamed. */
+    check() {
+      if (!MediaPage.id) return;
+      const f = Shared.find(MediaPage.id);
+      if (!f) { Toast.info('Your teacher stopped sharing this.'); Pages.close('p-media'); return; }
+      if (f.item.title !== MediaPage.item.title) { MediaPage.item = f.item; $('md-title').textContent = f.item.title; if (MediaPage.viewer) MediaPage.viewer.setItem(MediaPage.viewItem()); }
+    },
+    sync() { if (MediaPage.viewer) MediaPage.viewer.setCanAdd(!State.muted, MediaPage.notice()); },
+    render() { if (MediaPage.viewer) MediaPage.viewer.setAnnos(MediaPage.annos.concat(MediaPage.local)); },
+    onItem(d) {
+      if (!MediaPage.id || safeId(d.id) !== MediaPage.id) return;
+      if (d.gone) { Toast.info('Your teacher stopped sharing this.'); Pages.close('p-media'); return; }
+      if (typeof d.src === 'string' && MediaPage.item.type === 'media' && MediaPage.item.kind === 'image') {
+        const s = safeImg(d.src, 1600000) || DQBUI.safeThumb(d.src);
+        if (s && s !== MediaPage.src) { MediaPage.src = s; MediaPage.viewer.setItem(MediaPage.viewItem()); }
+      }
+      MediaPage.annos = DQBMedia.cleanAnnos(d.annos, { video: MediaPage.item.kind === 'video' });
+      MediaPage.local = MediaPage.local.filter(l => !MediaPage.annos.some(a => a.id === l.id));
+      MediaPage.render();
+    },
+    onStatus(d) {
+      const aid = safeId(d.aid), mine = MediaPage.local.find(l => l.id === aid);
+      if (d.status === 'pending' && mine) { mine.pend = true; MediaPage.render(); return; }
+      if (['limit', 'muted', 'bad', 'gone'].includes(d.status)) {
+        MediaPage.local = MediaPage.local.filter(l => l.id !== aid); MediaPage.render();
+        if (d.status === 'limit') Toast.warn('You’ve added as many comments and drawings here as you can.');
+        else if (d.status === 'muted') Toast.warn('Your teacher paused comments from you.');
+      }
+    },
+    add(a) {
+      const clean = DQBMedia.cleanAnno(Object.assign({}, a, { id: DQBUI.genId(), by: { n: State.me.name, r: 's' }, ts: Date.now() }), { student: true, video: MediaPage.item.kind === 'video' });
+      if (!clean || !MediaPage.id) return;
+      const wire = Object.assign({}, clean); delete wire.by; delete wire.mine; delete wire.pend;
+      clean.mine = true; if (State.rules.approve) clean.pend = true;
+      MediaPage.local.push(clean); MediaPage.render();
+      Conn.send({ type: 'ANNO_ADD', id: clean.id, item: MediaPage.id, a: wire }, true);    // kept in the outbox while offline
+      if (MediaPage.setId) Explore.mark(MediaPage.setId, MediaPage.id, { o: true });
+    },
+    del(ids) {
+      const gone = new Set(ids);
+      MediaPage.local = MediaPage.local.filter(l => !gone.has(l.id) && !gone.has(l.re));
+      MediaPage.annos = MediaPage.annos.filter(a => !gone.has(a.id) && !gone.has(a.re));
+      MediaPage.render();
+      Conn.send({ type: 'ANNO_DEL', item: MediaPage.id, ids: ids.slice(0, 50) }, true);
+    }
+  };
+
+  /* ---- the notes on a board open without the teacher (when the teacher lets students see them) ---- */
+  const Wall = {
+    card() {
+      const w = State.open.wall, z = w.zones.length;
+      return `<button type="button" class="card wall-card" data-act="open-wall"><span class="ph" aria-hidden="true">${ic('grid')}</span><span class="tx"><b>See the board</b><small>${w.count ? `${w.count} note${w.count === 1 ? '' : 's'}${z ? ` in ${z} zone${z === 1 ? '' : 's'}` : ''} from your class` : 'No notes yet. Be the first to add one!'}</small></span><span class="go" aria-hidden="true">${ic('chev-right', 'sm')}</span></button>`;
+    },
+    sig: null,
+    open() { if (!State.open || !State.open.wall) return; Wall.sig = null; Pages.open('p-wall', { focus: '.page-bar [data-close]' }); Wall.render(); },
+    render() {
+      if (!Pages.isOpen('p-wall')) return;
+      const w = State.open && State.open.wall;
+      if (!w) { Pages.close('p-wall'); return; }
+      const sig = JSON.stringify(w); if (sig === Wall.sig) return; Wall.sig = sig;
+      $('wall-sub').textContent = `${w.count} note${w.count === 1 ? '' : 's'}`;
+      const note = (n) => { const t = TYPES[n.sub] || TYPES.notice; return `<article class="note-card wall-note t-${esc(n.sub)}${n.mine ? ' mine' : ''}">${n.sketch ? `<div class="wall-sketch">${ic('pen', 'sm')}<span>Sketch</span></div>` : ''}${n.text ? `<div class="txt">${esc(n.text)}</div>` : ''}<div class="meta"><span class="chip">${t.icon} ${t.lbl}</span><span class="chip">${esc(n.author)}</span>${n.waiting ? `<span class="chip wall-new">${n.mine ? 'Sent' : 'New'}</span>` : ''}</div></article>`; };
+      const section = (title, notes) => `<section class="wall-zone"><h3>${esc(title)} <span class="muted">${notes.length}</span></h3><div class="wall-grid">${notes.map(note).join('')}</div></section>`;
+      const list = $('wall-list');
+      list.innerHTML = w.count ? w.zones.map(z => section(z.title, z.notes)).join('') + (w.loose.length ? section(w.zones.length ? 'Around the board' : 'On the board', w.loose) : '')
+        : `<div class="card empty"><div class="em-ico">${ic('note', 'lg')}</div><div class="em-t">No notes on the board yet</div><div>${State.open.notes ? 'Add the first one!' : 'Check back later.'}</div></div>`;
+      hydrateIcons(list);
     }
   };
 
@@ -440,6 +878,10 @@
     else if (act === 'send-rank') Rank.send();
     else if (act === 'comment') Discuss.open(b.dataset.id);
     else if (act === 'pick-zone') ZonePick.choose(b.dataset.id);
+    else if (act === 'open-set') Explore.open(b.dataset.id);
+    else if (act === 'open-wall') Wall.open();
+    else if (act === 'open-media') { const x = State.shared.find(s => s.id === b.dataset.id); if (x) MediaPage.open(x, null); }
+    else if (act === 'link-comments') { const x = State.shared.find(s => s.id === b.dataset.id); if (x) MediaPage.open(x, null); }
   });
   function autoOpenTaskForce() { const a = State.activity; if (a.type === 'POLL') Poll.open(); else if (a.type === 'GRAPH') Graph.open(); else if (a.type === 'EXIT') Exit.open(); }
   on($('notes-list'), 'click', async e => {
@@ -626,7 +1068,7 @@
     send() {
       const text = $('w-txt').value.trim();
       if (!text || !Write.canAdd()) return;
-      const n = { id: DQBUI.genId(), sub: Write.type, text: clampStr(text, MAX_TEXT), ts: Date.now(), boardId: State.boardId || 'board', status: 'sending', zoneId: Write.targetZoneId() };
+      const n = { id: DQBUI.genId(), sub: Write.type, text: clampStr(text, MAX_TEXT), ts: Date.now(), boardId: State.boardId || 'board', status: 'sending', zoneId: Write.targetZoneId(), sid: State.me.sid };
       Store.saveNote(n); Conn.send(noteMsg(n), true);
       try { localStorage.removeItem('dqb_draft'); } catch (e) { /* ignore */ }
       $('w-txt').value = ''; Pages.close('p-write'); DQBUI.haptic(15);
@@ -703,7 +1145,7 @@
     send() {
       if (!Sketch.dirty || !Write.canAdd()) return;
       const src = Sketch.exportData();
-      const n = { id: DQBUI.genId(), sub: 'sketch', text: clampStr($('s-caption').value.trim(), 80), src, ts: Date.now(), boardId: State.boardId || 'board', status: 'sending', zoneId: Write.targetZoneId() };
+      const n = { id: DQBUI.genId(), sub: 'sketch', text: clampStr($('s-caption').value.trim(), 80), src, ts: Date.now(), boardId: State.boardId || 'board', status: 'sending', zoneId: Write.targetZoneId(), sid: State.me.sid };
       Store.saveNote(n); Conn.send(noteMsg(n), true);
       Sketch.ctx.clearRect(0, 0, $('s-canvas').width, $('s-canvas').height); Sketch.dirty = false; Sketch.history = []; $('s-caption').value = '';
       Pages.close('p-sketch'); DQBUI.haptic(15); Toast.success(State.rules.approve ? 'Sent — waiting for your teacher' : 'Drawing sent', { duration: 2000 });
@@ -927,24 +1369,41 @@
       on($('inp-code'), 'keydown', e => { if (e.key === 'Enter') connect(); });
       on($('inp-code'), 'input', e => { $('code-err').hidden = true; $('inp-code').classList.remove('invalid'); const v = e.target.value; if (/^https?:|join=/.test(v)) { const p = Net.parseJoinInput(v); if (p) { Onboard.begin(p); } } });
       on($('btn-scan'), 'click', Onboard.scan);
+      on($('live-list'), 'click', e => { const o = e.target.closest('[data-open]'); if (o) { const id = Box.validId(o.dataset.open); if (id) { Onboard.stopScan(); Onboard.begin({ open: id }); } return; } const b = e.target.closest('[data-live]'); if (!b) return; const p = Net.parseJoinInput(b.dataset.live); if (p) { Onboard.stopScan(); Onboard.begin(p); } });
       on($('btn-edit-me'), 'click', () => { Views.show('setup'); $('inp-name').value = State.me.name; Onboard.pick(State.me.av); });
-      on($('btn-rejoin'), 'click', () => { Views.show('join'); });
+      on($('btn-rejoin'), 'click', () => { Views.show('join'); Onboard.live(); });
       on($('me-btn'), 'click', Profile.open);
     },
     pick(a) { Onboard.av = a; $$('#av-grid .av').forEach(b => b.setAttribute('aria-checked', String(b.dataset.av === a))); },
     afterProfile() {
       if (State.target) { Onboard.begin(State.target); return; }
-      const lj = Store.lastJoin(); if (lj) { Onboard.begin({ peerId: lj.peerId, code: lj.code }); return; }
-      Views.show('join'); setTimeout(() => $('inp-code').focus({ preventScroll: true }), 100);
+      const lj = Store.lastJoin();
+      if (lj && lj.open) { if (Box.api() && Box.validId(lj.open) && lj.sid === State.me.sid) { Onboard.begin({ open: Box.validId(lj.open) }); return; } }
+      else if (lj) { Onboard.begin({ peerId: lj.peerId, code: lj.code }); return; }
+      Views.show('join'); Onboard.live(); setTimeout(() => $('inp-code').focus({ preventScroll: true }), 100);
+    },
+    /** Boards the host says are live for this student right now (DQB_HOST.live() -> [{code, title, teacher}]), and boards open
+        for them without the teacher (DQB_HOST.mailbox.list() -> [{id, title, teacher, lesson, until}]). */
+    async live() {
+      const fn = DQBUI.host().live, mb = Box.api(), box = $('live-list');
+      if (!box || (typeof fn !== 'function' && !(mb && typeof mb.list === 'function'))) return;
+      const ask = (f) => (typeof f === 'function' ? Promise.resolve().then(f).catch(() => []) : Promise.resolve([]));
+      let [list, open] = await Promise.all([ask(fn), ask(mb && typeof mb.list === 'function' ? () => mb.list() : null)]);
+      list = (Array.isArray(list) ? list : []).map(x => ({ code: String(x && x.code || '').toUpperCase(), title: clampStr(x && x.title, 80) || 'Class board', teacher: clampStr(x && x.teacher, 60), lesson: clampStr(x && x.lesson, 80) })).filter(x => Net.parseJoinInput(x.code)).slice(0, 6);
+      open = (Array.isArray(open) ? open : []).map(x => ({ id: Box.validId(x && x.id), title: clampStr(x && x.title, 80) || 'Class board', teacher: clampStr(x && x.teacher, 60), lesson: clampStr(x && x.lesson, 80), until: Box.date(x && x.until) })).filter(x => x.id).slice(0, 10);
+      if ((!list.length && !open.length) || State.view !== 'join') { box.hidden = true; box.innerHTML = ''; return; }
+      box.innerHTML = (list.length ? `<div class="section-label">Live now</div>` + list.map(x => `<button type="button" class="live-item card" data-live="${esc(x.code)}"><span class="live-tag">LIVE</span><span class="tx"><b>${esc(x.title)}</b><small>${esc([x.teacher, x.lesson].filter(Boolean).join(' · ') || 'Your class')}</small></span><span class="btn btn-primary btn-sm" aria-hidden="true">Join</span></button>`).join('') : '')
+        + (open.length ? `<div class="section-label">Open for you</div>` + open.map(x => `<button type="button" class="live-item open-item card" data-open="${x.id}"><span class="open-tag">Open</span><span class="tx"><b>${esc(x.title)}</b><small>${esc([x.teacher, x.lesson, x.until ? 'until ' + Box.when(x.until) : ''].filter(Boolean).join(' · ') || 'Your class')}</small></span><span class="btn btn-secondary btn-sm" aria-hidden="true">Open</span></button>`).join('') : '');
+      box.hidden = false;
     },
     begin(target) {
       State.target = target; Views.show('board', true); Views.setTab('board'); Views.renderMe(); State.notes = State.notes || [];
-      $('board-content').innerHTML = Views.statusCard('📡', 'Connecting…', 'Joining your class. This takes a moment.');
+      $('board-content').innerHTML = target.open ? Views.statusCard('📬', 'Opening the board…', 'Getting your class board. This takes a moment.') : Views.statusCard('📡', 'Connecting…', 'Joining your class. This takes a moment.');
       Conn.start(target);
     },
     async scan() {
       const reader = $('reader'), err = $('scan-err'); err.hidden = true; reader.hidden = false; $('btn-scan').hidden = true;
-      try { await DQBUI.loadScript('../vendor/html5-qrcode.min.js'); } catch (e) { return Onboard.scanFail('The scanner couldn’t load. Please type the code instead.'); }
+      try { await DQBUI.loadScript(DQBUI.asset('vendor/html5-qrcode.min.js')); } catch (e) { return Onboard.scanFail('The scanner couldn’t load. Please type the code instead.'); }
       try {
         Onboard.scanner = new Html5Qrcode('reader');
         await Onboard.scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 220, height: 220 } }, txt => { const p = Net.parseJoinInput(txt); if (p) { Onboard.stopScan(); Onboard.begin(p); } }, () => {});
@@ -961,10 +1420,10 @@
     open() {
       let av = State.me.av;
       const code = State.target && State.target.code ? Net.formatCode(State.target.code) : '';
-      const wrap = DQBUI.h(`<div class="stack" style="gap:18px"><div class="field"><label>Avatar</label><div class="prof-grid" id="pf-av" role="radiogroup">${Net.AVATARS.map(a => `<button type="button" class="av" role="radio" aria-checked="${a === av}" data-av="${a}" aria-label="Avatar ${a}">${a}</button>`).join('')}</div></div><div class="field"><label for="pf-name">Name</label><input class="input" id="pf-name" maxlength="24" value="${esc(State.me.name)}"></div><div class="field"><label>Appearance</label><div class="seg" id="pf-theme" role="group">${[['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${Theme.get() === v}">${l}</button>`).join('')}</div></div>${code ? `<div class="help-box" style="background:var(--surface-2);padding:12px 14px;border-radius:12px"><div class="muted" style="font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Class code</div><div style="font-size:1.4rem;font-weight:800;letter-spacing:.14em;font-family:ui-monospace,Menlo,monospace">${esc(code)}</div></div>` : ''}<button type="button" class="btn btn-danger-soft btn-block" id="pf-leave">${ic('logout')}Leave class</button></div>`);
+      const wrap = DQBUI.h(`<div class="stack" style="gap:18px"><div class="field"><label>Avatar</label><div class="prof-grid" id="pf-av" role="radiogroup">${Net.AVATARS.map(a => `<button type="button" class="av" role="radio" aria-checked="${a === av}" data-av="${a}" aria-label="Avatar ${a}">${a}</button>`).join('')}</div></div><div class="field"><label for="pf-name">Name</label><input class="input" id="pf-name" maxlength="24" value="${esc(State.me.name)}"${State.me.locked ? ' readonly aria-describedby="pf-name-hint"' : ''}>${State.me.locked ? `<div class="hint" id="pf-name-hint">${esc(DQBUI.host().identityHint || 'This is the name on your account.')}</div>` : ''}</div><div class="field"><label>Appearance</label><div class="seg" id="pf-theme" role="group">${[['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${Theme.get() === v}">${l}</button>`).join('')}</div></div>${code ? `<div class="help-box" style="background:var(--surface-2);padding:12px 14px;border-radius:12px"><div class="muted" style="font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Class code</div><div style="font-size:1.4rem;font-weight:800;letter-spacing:.14em;font-family:ui-monospace,Menlo,monospace">${esc(code)}</div></div>` : ''}<button type="button" class="btn btn-danger-soft btn-block" id="pf-leave">${ic('logout')}${Box.id ? 'Leave this board' : 'Leave class'}</button></div>`);
       on(wrap, 'click', e => { const b = e.target.closest('[data-av]'); if (b) { av = b.dataset.av; $$('#pf-av .av', wrap).forEach(x => x.setAttribute('aria-checked', String(x === b))); } const t = e.target.closest('#pf-theme [data-v]'); if (t) { Theme.set(t.dataset.v); $$('#pf-theme button', wrap).forEach(x => x.setAttribute('aria-pressed', String(x === t))); } });
-      const ov = Overlay.open({ title: 'You', content: wrap, size: 'sm', footer: [{ label: 'Cancel', kind: 'secondary' }, { label: 'Save', kind: 'primary', close: false, onClick: () => { const n = clampStr(wrap.querySelector('#pf-name').value.replace(/[<>\u0000-\u001f]/g, '').trim(), 24); if (!n) { wrap.querySelector('#pf-name').focus(); return false; } const changed = n !== State.me.name || av !== State.me.av; State.me.name = n; State.me.av = av; Store.saveProfile(); Views.renderMe(); ov.close(); if (changed && Conn.state === 'online') { Conn.raw({ type: 'JOIN', name: n, avatar: av, sid: State.me.sid, v: 2 }); } Toast.success('Saved'); } }] });
-      on(wrap.querySelector('#pf-leave'), 'click', async () => { const ok = await Dialog.confirm({ title: 'Leave this class?', message: 'Your notes stay on this device.', confirmLabel: 'Leave', danger: true, icon: 'logout' }); if (!ok) return; ov.close(); Conn.stop(); Store.setLastJoin(null); State.target = null; State.everConnected = false; State.boardId = null; Pages.closeAll(); Views.show('join'); });
+      const ov = Overlay.open({ title: 'You', content: wrap, size: 'sm', footer: [{ label: 'Cancel', kind: 'secondary' }, { label: 'Save', kind: 'primary', close: false, onClick: () => { const n = State.me.locked ? State.me.name : clampStr(wrap.querySelector('#pf-name').value.replace(/[<>\u0000-\u001f]/g, '').trim(), 24); if (!n) { wrap.querySelector('#pf-name').focus(); return false; } const changed = n !== State.me.name || av !== State.me.av; State.me.name = n; State.me.av = av; Store.saveProfile(); Views.renderMe(); ov.close(); if (changed && Conn.state === 'online') { Conn.raw({ type: 'JOIN', name: n, avatar: av, sid: State.me.sid, v: 2 }); } Toast.success('Saved'); } }] });
+      on(wrap.querySelector('#pf-leave'), 'click', async () => { const open = !!Box.id; const ok = await Dialog.confirm({ title: open ? 'Leave this board?' : 'Leave this class?', message: open ? 'What you added is kept for your teacher, and your notes stay on this device.' : 'Your notes stay on this device.', confirmLabel: 'Leave', danger: true, icon: 'logout' }); if (!ok) return; ov.close(); Conn.stop(); Store.setLastJoin(null); State.target = null; State.everConnected = false; State.boardId = null; Pages.closeAll(); Shared.set([], true); Views.show('join'); Onboard.live(); });
     }
   };
 
@@ -976,12 +1435,15 @@
     await Store.init();
     Onboard.init(); Write.init(); Sketch.init(); Poll.init(); Graph.init(); Exit.init(); CM.init(); ZonePick.init();
     Views.renderMe(); Views.renderNotes();
-    const params = new URLSearchParams(location.search), jp = params.get('join');
+    const params = new URLSearchParams(location.search), jp = params.get('join'), op = Box.validId(params.get('open') || '');
     if (jp) State.target = Net.parseJoinInput(jp);
+    else if (op && Box.api()) State.target = { open: op };          // a board open without the teacher (signed-in students)
     Net.peerOptions();                                  // persists ?peerHost=… before the query string is cleaned
     if (location.search) history.replaceState(history.state, '', location.pathname);
     $('inp-name').value = State.me.name || '';
-    if (State.me.name) Onboard.afterProfile(); else Views.show('setup');
+    if (State.me.locked) { $('inp-name').readOnly = true; const h = $('name-hint'); if (h) { h.textContent = DQBUI.host().identityHint || 'This is the name on your account.'; h.hidden = false; } }
+    const avatarChosen = !State.me.locked || (function () { try { return !!localStorage.getItem('dqb_av:' + State.me.sid); } catch (e) { return true; } })();
+    if (State.me.name && avatarChosen) Onboard.afterProfile(); else Views.show('setup');
     document.body.dataset.ready = '1';
   }
   boot();

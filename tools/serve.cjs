@@ -13,7 +13,8 @@ const ROOT = path.resolve(__dirname, '..');
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp',
-  '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.xml': 'application/xml', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8'
+  '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.xml': 'application/xml', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8',
+  '.webm': 'video/webm', '.mp4': 'video/mp4', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg'
 };
 
 function createServer() {
@@ -25,7 +26,15 @@ function createServer() {
     try { if (fs.statSync(file).isDirectory()) file = path.join(file, 'index.html'); } catch (e) { /* 404 below */ }
     fs.readFile(file, (err, buf) => {
       if (err) { res.writeHead(404, { 'content-type': 'text/plain' }).end('Not found'); return; }
-      res.writeHead(200, { 'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-cache' }).end(buf);
+      const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
+      const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+      if (m && (m[1] || m[2])) {                  // byte ranges, so a <video> can seek
+        let start = m[1] ? +m[1] : Math.max(0, buf.length - +m[2]), end = m[1] && m[2] ? Math.min(+m[2], buf.length - 1) : buf.length - 1;
+        if (start >= buf.length || start > end) { res.writeHead(416, { 'content-range': `bytes */${buf.length}` }).end(); return; }
+        res.writeHead(206, { 'content-type': type, 'content-range': `bytes ${start}-${end}/${buf.length}`, 'accept-ranges': 'bytes', 'content-length': end - start + 1, 'cache-control': 'no-cache' }).end(buf.subarray(start, end + 1));
+        return;
+      }
+      res.writeHead(200, { 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'no-cache' }).end(buf);
     });
   });
 }

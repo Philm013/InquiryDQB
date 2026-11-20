@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https: wss: http: ws:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob: https:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; font-src 'self'; connect-src 'self' https: wss: http: ws:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#ffffff">
 <meta name="color-scheme" content="light dark">
@@ -18,6 +18,7 @@
 <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
 <script src="../shared/boot.js"></script>
 <link rel="stylesheet" href="../shared/ui.css">
+<link rel="stylesheet" href="../shared/media.css">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -101,16 +102,16 @@
   </div>
 
   <!-- Empty-board welcome -->
-  <div id="empty-state" class="empty-card" hidden>
+  <section id="empty-state" class="empty-card" hidden aria-labelledby="empty-title">
     <div class="em-ico"><i data-i="sparkles" class="lg"></i></div>
-    <h2>Start your question board</h2>
+    <h2 id="empty-title">Start your question board</h2>
     <p class="text-2">Add a few prompts, then open the board for students.</p>
     <div class="empty-actions">
       <button type="button" class="btn btn-primary" data-empty="note"><i data-i="note"></i>Add a note</button>
       <button type="button" class="btn btn-secondary" data-empty="template"><i data-i="template"></i>Use a template</button>
       <button type="button" class="btn btn-secondary" data-empty="share"><i data-i="qr"></i>Invite students</button>
     </div>
-  </div>
+  </section>
 
   <!-- Top bar -->
   <header id="topbar">
@@ -123,6 +124,7 @@
       <span id="save-status" class="save-status" role="status" aria-live="polite"><i data-i="check" class="sm"></i><span>Saved</span></span>
     </div>
     <div class="tb-group tb-right">
+      <button type="button" class="chip open-chip" id="open-chip" hidden aria-label="Open for students"><i data-i="exit" class="sm"></i><span class="hide-mobile" id="open-label">Open for students</span></button>
       <button type="button" class="chip conn-chip" id="conn-chip" aria-label="Connection status"><span class="dot" id="conn-dot"></span><span id="conn-label">Connecting…</span></button>
       <button type="button" class="btn btn-primary btn-sm" id="btn-share" aria-label="Share"><i data-i="share"></i><span class="hide-mobile">Share</span></button>
       <button type="button" class="icon-btn hide-mobile" id="btn-panel" aria-label="Class panel" aria-pressed="false" data-tip="Class panel" data-tip-pos="bottom"><i data-i="users"></i><span class="badge badge-count" id="conn-badge" hidden>0</span></button>
@@ -196,6 +198,13 @@
       <button type="button" class="tile wide" data-add="cer"><i data-i="cer"></i><span><b>CER builder</b><small>Claim · Evidence · Reasoning</small></span></button>
       <button type="button" class="tile wide" data-add="consensus"><i data-i="consensus"></i><span><b>Consensus model</b><small>Draw one model together</small></span></button>
       <button type="button" class="tile wide" data-add="breakout"><i data-i="rocket"></i><span><b>Breakout board</b><small>A private room for a group</small></span></button>
+    </div>
+    <div class="section-label res-section">Resources</div>
+    <div class="tile-grid cols-2 res-section">
+      <button type="button" class="tile wide" data-act="library" hidden><i data-i="book"></i><span><b>Library</b><small>Resources and collections</small></span></button>
+      <button type="button" class="tile wide" data-add="link"><i data-i="link"></i><span><b>Link</b><small>A web page students can open</small></span></button>
+      <button type="button" class="tile wide" data-add="media:image"><i data-i="image"></i><span><b>Picture</b><small>Comment, mark up, add hotspots</small></span></button>
+      <button type="button" class="tile wide" data-add="media:video"><i data-i="video"></i><span><b>Video</b><small>YouTube, Vimeo or a video file</small></span></button>
     </div>
     <div class="section-label">Interactive</div>
     <div class="tile-grid cols-3">
@@ -314,6 +323,7 @@
         <div class="card rules">
           <div class="rule-row"><div class="grow"><div class="t">Show student names</div><div class="s">Notes display who wrote them.</div></div><button type="button" class="switch" role="switch" id="rule-names" aria-checked="true" aria-label="Show student names on notes"></button></div>
           <div class="rule-row"><div class="grow"><div class="t">Approve notes first</div><div class="s">New notes wait in Approvals.</div></div><button type="button" class="switch" role="switch" id="rule-approve" aria-checked="false" aria-label="Require approval for student notes"></button></div>
+          <div class="rule-row"><div class="grow"><div class="t">Students see each other’s comments</div><div class="s">On pictures, videos and cards you share. Off: each student sees yours and their own.</div></div><button type="button" class="switch" role="switch" id="rule-peers" aria-checked="true" aria-label="Students see each other’s comments and drawings"></button></div>
           <div class="rule-row"><div class="grow"><div class="t">Students without a group pick a zone</div><div class="s">When only colour zones are open. Off: they wait until you put them in a group.</div></div><button type="button" class="switch" role="switch" id="rule-anyzone" aria-checked="true" aria-label="Students without a group can pick any open zone"></button></div>
         </div>
       </section>
@@ -353,6 +363,7 @@
 <script src="../shared/icons.js"></script>
 <script src="../shared/ui.js"></script>
 <script src="../shared/net.js"></script>
+<script src="../shared/media.js"></script>
 <script src="app.js"></script>
 <script src="shell.js"></script>
 <script src="shell-sheets.js"></script>

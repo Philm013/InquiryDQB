@@ -84,7 +84,8 @@
   }
   /** Absolute URL of the Student app pre-filled with a join code (and custom peer server, if any). */
   function joinUrl(code, studentBase) {
-    var base = studentBase || new URL('../Student/', global.location.href).href;
+    var hostUrl = global.DQB_HOST && typeof global.DQB_HOST.studentUrl === 'string' ? global.DQB_HOST.studentUrl : '';
+    var base = studentBase || hostUrl || new URL('../Student/', global.location.href).href;
     var u = new URL(base);
     u.searchParams.set('join', code);
     var o = peerOptions();
